@@ -418,7 +418,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             val shown = (if (longAlt != null) longAlt!! else live.v).let { if (up) it.uppercase() else it }
             val bx = centre[0] + dx; val by = centre[1] + dy
             fill.color = col.accent; c.drawCircle(bx, by, 26 * density, fill)
-            label(c, if (live.isSpace) "·" else shown, bx, by, 28f, col.accentFg, true)
+            label(c, if (live.isSpace) "·" else if (svc.isSecure) "•" else shown, bx, by, 28f, col.accentFg, true)
         }
     }
 
@@ -550,7 +550,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val h = heard
         if (h != null && h.petal == s.petal && h.kind == s.kind) return
         heard = s
-        svc.feedback.compass(s, if (svc.shiftActive()) s.v.uppercase() else s.v, svc.lang)
+        svc.feedback.compass(s, if (svc.shiftActive()) s.v.uppercase() else s.v, svc.lang, svc.isSecure)
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {

@@ -432,4 +432,35 @@ class KeyboardTest {
         println("reads per keystroke=$perKey")
         assertTrue("reads per keystroke $perKey", perKey <= 3.0)
     }
+
+    @Test fun passwordsSoundAndFeelTheSameForEveryLetter() {
+        svc.prefs.haptics = true; svc.prefs.sound = "voice"; svc.prefs.compass = "voice"
+        val log = ArrayList<String>(); svc.feedback.trace = { log.add(it) }
+        fun traceOf(ch: String): List<String> { log.clear(); letter(ch); idle(400); return log.toList() }
+        try {
+            // an ordinary field: letters are told apart by ear and by hand (otherwise this test would prove nothing)
+            assertTrue(traceOf("а") != traceOf("м"))
+            svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD })
+            // a password: a straight stroke, a turn left, a turn right, out and back — all the same
+            val a = traceOf("а")
+            for (ch in listOf("м", "ь", "ю", "т", "щ")) assertEquals("«$ch» must sound and feel like «а»", a, traceOf(ch))
+            assertTrue("compass silent, nothing spoken: $a", a.none { it == "tick" || it.startsWith("say") })
+            assertTrue("there is a click", a.any { it.startsWith("tone") } && a.any { it.startsWith("buzz 14") })
+            // with TalkBack: no letter of a password is announced
+            val am = svc.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+            org.robolectric.Shadows.shadowOf(am).setEnabled(true); org.robolectric.Shadows.shadowOf(am).setTouchExplorationEnabled(true)
+            val said = ArrayList<String>(); svc.feedback.announcer = { said.add(it) }
+            val o = doubleArrayOf(Pulse.PH[0] + 12, Pulse.PH[1] - 8)
+            fun hv(action: Int, b: DoubleArray) { val p = px(b[0], b[1]); t0 += 16; view.onHoverEvent(MotionEvent.obtain(t0, t0, action, p[0], p[1], 0)) }
+            log.clear()
+            hv(MotionEvent.ACTION_HOVER_ENTER, o)
+            for (i in 1..6) hv(MotionEvent.ACTION_HOVER_MOVE, doubleArrayOf(o[0], o[1] + 7.5 * i))
+            idle(400)
+            hv(MotionEvent.ACTION_HOVER_EXIT, doubleArrayOf(o[0], o[1] + 45))
+            idle(400)
+            assertTrue("nothing announced: $said", said.isEmpty())
+            assertEquals(a, log.toList())
+            org.robolectric.Shadows.shadowOf(am).setTouchExplorationEnabled(false)
+        } finally { svc.feedback.trace = null; svc.prefs.compass = "off"; svc.prefs.sound = "off"; svc.prefs.haptics = false }
+    }
 }

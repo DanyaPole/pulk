@@ -31,9 +31,13 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     private var ttsReady = false
     private var ttsLang = ""
 
+    /** For tests: every vibration, sound and spoken word, as text. */
+    var trace: ((String) -> Unit)? = null
+
     // ---- vibration ----
     private fun buzz(vararg pattern: Long) {
         if (!prefs.haptics) return
+        trace?.invoke("buzz " + pattern.joinToString(","))
         val v = vib ?: return
         if (!v.hasVibrator()) return
         try {
@@ -51,8 +55,11 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     // ---- the sound compass: while the finger moves, what it would type if lifted now ----
     private var pendingName: Runnable? = null
-    fun compass(slot: Pulse.Slot, text: String, lang: String) {
+    fun compass(slot: Pulse.Slot, text: String, lang: String, secure: Boolean) {
+        // a password: nothing at all, not even the tick — how often it ticks would show the way the finger went
+        if (secure) return
         if (prefs.haptics) {
+            trace?.invoke("tick")
             val v = vib
             if (v != null && v.hasVibrator()) try {
                 v.vibrate(if (Build.VERSION.SDK_INT >= 29) VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK) else VibrationEffect.createOneShot(4, 60))
@@ -74,6 +81,12 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     fun hush() { pendingName?.let { handler.removeCallbacks(it) }; pendingName = null }
 
     fun letter(slot: Pulse.Slot, text: String, lang: String, secure: Boolean) {
+        if (secure) {
+            // a password: every letter feels and sounds the same, so neither the gesture nor the direction can be heard
+            buzz(14)
+            if (prefs.sound != "off" || exploring()) tone(listOf(Triple(SECURE_CLICK, 0.0, 0.03)), 0.18)
+            return
+        }
         when (slot.kind) {
             'l' -> buzz(0, 10, 40, 22)
             'r' -> buzz(0, 22, 40, 10)
@@ -83,9 +96,10 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
         // with TalkBack every letter is spoken through it; otherwise as the sound setting says
         when (if (exploring()) "voice" else prefs.sound) {
             "clicks" -> note(slot)
-            "voice" -> if (secure) note(slot) else say(letterName(text, lang), 1.5f)
+            "voice" -> say(letterName(text, lang), 1.5f)
         }
     }
+    private val SECURE_CLICK = 600.0   // Hz: one neutral click for every letter of a password
 
     fun space(lastWord: String?, secure: Boolean) {
         buzz(28)
@@ -153,6 +167,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     /** Plays notes (frequency, start, length in seconds) as one short sound. */
     private fun tone(notes: List<Triple<Double, Double, Double>>, vol: Double) {
+        trace?.invoke("tone " + notes.joinToString(";") { "${it.first}/${it.second}/${it.third}" } + " @" + vol)
         val rate = 22050
         val total = notes.maxOf { it.second + it.third } + 0.03
         val buf = ShortArray((total * rate).toInt())
@@ -185,6 +200,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     // ---- voice ----
     fun say(text: String, rate: Float = 1.2f) {
         if (text.isBlank()) return
+        trace?.invoke("say " + text)
         if (exploring()) { announcer?.invoke(text); return }
         val lang = if (text.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }) "ru" else ttsLang.ifEmpty { prefs.lang }
         if (tts == null) {
