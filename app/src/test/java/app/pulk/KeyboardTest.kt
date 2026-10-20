@@ -31,11 +31,12 @@ class KeyboardTest {
     private class Field : TextSink {
         val sb = StringBuilder()
         var cur = 0
+        var reads = 0   // calls that on a phone go to the app being typed in
         var caps = true
         override fun commit(s: String) { sb.insert(cur, s); cur += s.length }
         override fun deleteBefore(n: Int) { val k = minOf(n, cur); sb.delete(cur - k, cur); cur -= k }
-        override fun before(n: Int) = sb.substring(maxOf(0, cur - n), cur)
-        override fun after(n: Int) = sb.substring(cur, minOf(sb.length, cur + n))
+        override fun before(n: Int): String { reads++; return sb.substring(maxOf(0, cur - n), cur) }
+        override fun after(n: Int): String { reads++; return sb.substring(cur, minOf(sb.length, cur + n)) }
         override fun key(code: Int) { if (code == KeyEvent.KEYCODE_DEL) deleteBefore(1) else if (code == KeyEvent.KEYCODE_ENTER) commit("\n") }
         override fun action(a: Int) { commit("<action$a>") }
         override fun moveCursor(delta: Int) { cur = (cur + delta).coerceIn(0, sb.length) }
@@ -421,5 +422,14 @@ class KeyboardTest {
         for (c in "мама") letter(c.toString())
         assertEquals("Мама", field.sb.toString())
         svc.prefs.compass = "off"
+    }
+
+    @Test fun fewReadsFromTheAppPerLetter() {
+        for (c in "привет") letter(c.toString()); spaceTap()
+        field.reads = 0
+        for (c in "как дела") if (c == ' ') spaceTap() else letter(c.toString())
+        val perKey = field.reads / 8.0
+        println("reads per keystroke=$perKey")
+        assertTrue("reads per keystroke $perKey", perKey <= 3.0)
     }
 }

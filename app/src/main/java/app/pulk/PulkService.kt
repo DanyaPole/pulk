@@ -69,6 +69,9 @@ class PulkService : InputMethodService() {
     private var selStart = -1
     private var selEnd = -1
     var sink: TextSink = realSink
+        set(v) { field = v; io = CachedText(v) }
+    /** Every question about the text goes through here: the app is read once per change, not once per question. */
+    private var io = CachedText(realSink)
 
     override fun onCreate() {
         super.onCreate()
@@ -146,6 +149,7 @@ class PulkService : InputMethodService() {
         learnHere = suggestHere && prefs.learn && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         editor = info
         selStart = info.initialSelStart; selEnd = info.initialSelEnd
+        io.drop(); io.expect = if (selStart == selEnd) selStart else -1
         shiftOnce = false; undo = null
         updateAutoCap(); refreshCands(); refreshText()
         view?.refresh()
@@ -156,12 +160,15 @@ class PulkService : InputMethodService() {
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
         super.onUpdateSelection(a, b, c, d, e, f)
         selStart = c; selEnd = d
+        // our own typing moves the cursor exactly where we expect it: then what we know of the text is still right
+        if (c != d || c != io.expect) io.drop()
+        io.expect = if (c == d) c else -1
         updateAutoCap(); refreshCands(); refreshText(); view?.invalidate()
     }
 
     private fun updateAutoCap() {
         val info = editor ?: currentInputEditorInfo
-        autoCap = info != null && (info.inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT && sink.capsOn(info.inputType)
+        autoCap = info != null && (info.inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT && io.capsOn(info.inputType)
     }
 
     fun shiftActive() = shiftLock || shiftOnce || autoCap
@@ -201,7 +208,7 @@ class PulkService : InputMethodService() {
     /** Clears the words this keyboard has learned (from the settings screen). */
     fun forget() { synchronized(this) { dicts.values.forEach { it.user.clear() } }; listOf("ru", "en").forEach { userFile(it).delete(); pairsFile(it).delete() }; synchronized(this) { dicts.values.forEach { it.pairs.clear() } } }
 
-    private fun currentWord(): String = Regex("\\p{L}[\\p{L}']*$").find(sink.before(48))?.value ?: ""
+    private fun currentWord(): String = Regex("\\p{L}[\\p{L}']*$").find(io.before(48))?.value ?: ""
 
     private fun refreshCands() {
         val w = currentWord()
@@ -216,7 +223,7 @@ class PulkService : InputMethodService() {
 
     /** Before a new word: the word before it, "^" at the start of a sentence, or null in the middle of something else. */
     private fun prevWord(): String? {
-        val b = sink.before(60)
+        val b = io.before(60)
         if (b.isBlank()) return "^"
         if (!b.last().isWhitespace()) return null
         val t = b.trimEnd()
@@ -228,7 +235,7 @@ class PulkService : InputMethodService() {
         if (!learnHere) return
         val dict = wordsIfReady(lang) ?: return
         // and what came before it, so next time it can be offered before a letter is typed
-        val before = sink.before(80).trimEnd().let { if (it.endsWith(w)) it.dropLast(w.length) else it }.trimEnd()
+        val before = io.before(80).trimEnd().let { if (it.endsWith(w)) it.dropLast(w.length) else it }.trimEnd()
         val prev = if (before.isEmpty() || before.last() in ".!?…\n") "^" else Regex("[\\p{L}']+$").find(before)?.value
         if (prev != null) dict.learnPair(prev, w)
         if (w.length >= 2) dict.learn(w)
@@ -246,7 +253,7 @@ class PulkService : InputMethodService() {
         if (correctHere && dict != null && Words.fold(w.lowercase()) !in refused) {
             val fix = dict.correction(w)
             if (fix != null && fix != w) {
-                sink.deleteBefore(w.length); sink.commit(fix)
+                io.deleteBefore(w.length); io.commit(fix)
                 undo = w to fix
                 return fix
             }
@@ -260,7 +267,7 @@ class PulkService : InputMethodService() {
         val s = if (shiftActive() && !symbols) v.uppercase() else v
         feedback.hush()
         undo = null
-        sink.commit(s)
+        io.commit(s)
         feedback.letter(slot, s, lang, secure)
         if (!shiftLock) shiftOnce = false
         after()
@@ -269,13 +276,13 @@ class PulkService : InputMethodService() {
     fun space() {
         feedback.hush()
         val now = System.currentTimeMillis()
-        val before = sink.before(2)
+        val before = io.before(2)
         if (now - lastSpace < 350 && before.length == 2 && before[1] == ' ' && before[0].isLetterOrDigit()) {
-            sink.deleteBefore(1); sink.commit(". "); lastSpace = 0; undo = null
+            io.deleteBefore(1); io.commit(". "); lastSpace = 0; undo = null
             feedback.space(null, secure)
         } else {
             val word = finishWord()
-            sink.commit(" "); lastSpace = now
+            io.commit(" "); lastSpace = now
             feedback.space(word, secure)
         }
         after()
@@ -285,7 +292,7 @@ class PulkService : InputMethodService() {
     fun pick(i: Int) {
         val w = cands.getOrNull(i) ?: return
         val typed = currentWord()
-        sink.deleteBefore(typed.length); sink.commit("$w ")
+        io.deleteBefore(typed.length); io.commit("$w ")
         undo = null
         learn(w)
         feedback.space(w, secure)
@@ -297,20 +304,20 @@ class PulkService : InputMethodService() {
 
     /** Space gesture outwards / inwards: a full stop or a comma that replaces the space before it. */
     fun punct(c: String) {
-        if (sink.before(40).isBlank()) return
+        if (io.before(40).isBlank()) return
         finishWord()
-        val before = sink.before(40)
+        val before = io.before(40)
         val spaces = before.length - before.trimEnd().length
-        if (spaces > 0) sink.deleteBefore(spaces)
-        sink.commit("$c ")
+        if (spaces > 0) io.deleteBefore(spaces)
+        io.commit("$c ")
         feedback.letter(Pulse.Slot(-1, 'c', c), c, lang, secure)
         after()
     }
 
     fun deleteWord() {
-        val before = sink.before(60)
+        val before = io.before(60)
         val m = Regex("\\S+\\s*$").find(before)?.value?.length ?: return // the word and the spaces after it
-        sink.deleteBefore(m); undo = null
+        io.deleteBefore(m); undo = null
         feedback.backspace(); after()
     }
 
@@ -320,17 +327,17 @@ class PulkService : InputMethodService() {
         undo = null
         if (u != null) {
             val (typed, fix) = u
-            val tail = sink.before(fix.length + 1)
+            val tail = io.before(fix.length + 1)
             if (tail == "$fix " || tail.endsWith(fix)) {
                 // ⌫ right after a correction: the typed word comes back and stays
-                sink.deleteBefore(if (tail.endsWith(" ")) fix.length + 1 else fix.length)
-                sink.commit(typed)
+                io.deleteBefore(if (tail.endsWith(" ")) fix.length + 1 else fix.length)
+                io.commit(typed)
                 refused.add(Words.fold(typed.lowercase()))
                 if (learnHere) { wordsIfReady(lang)?.keep(typed); unsaved++ }
                 feedback.backspace(); after(); return
             }
         }
-        sink.key(KeyEvent.KEYCODE_DEL) // deletes the selection, or one character
+        io.key(KeyEvent.KEYCODE_DEL) // deletes the selection, or one character
         feedback.backspace(); after()
     }
 
@@ -339,8 +346,8 @@ class PulkService : InputMethodService() {
         val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
         val noAction = (info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
         finishWord(); undo = null
-        if (!noAction && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) sink.action(action)
-        else sink.key(KeyEvent.KEYCODE_ENTER)
+        if (!noAction && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) io.action(action)
+        else io.key(KeyEvent.KEYCODE_ENTER)
         feedback.mode(); after()
     }
 
@@ -367,15 +374,69 @@ class PulkService : InputMethodService() {
     fun moveCursor(delta: Int) {
         if (delta == 0) return
         undo = null
-        sink.moveCursor(delta)
+        io.moveCursor(delta)
         feedback.touch(); after()
     }
 
     var textBefore = ""; private set
     var textAfter = ""; private set
     private fun refreshText() {
-        val b = sink.before(160); val a = sink.after(60)
+        if (!prefs.textWindow) return   // nobody is looking: no need to read the text
+        val b = io.before(160); val a = io.after(60)
         textBefore = if (secure) "•".repeat(minOf(b.length, 24)) else b
         textAfter = if (secure) "" else a
     }
+}
+
+/**
+ * Reads the text around the cursor once and answers from it until something changes it. Our own typing updates
+ * it in place (we know what we typed); anything else — a key whose effect we cannot know, the app changing the
+ * text, the cursor moving — drops it, and the next question reads again.
+ */
+class CachedText(private val s: TextSink) : TextSink {
+    private var b: String? = null
+    private var a: String? = null
+    private var caps: Pair<Int, Boolean>? = null
+    /** Where the cursor should be after our edits (-1: not known). */
+    var expect = -1
+
+    fun drop() { b = null; a = null; caps = null }
+
+    override fun before(n: Int): String {
+        if (n > SPAN) return s.before(n)
+        val c = b ?: s.before(SPAN).also { b = it }
+        return if (c.length > n) c.substring(c.length - n) else c
+    }
+    override fun after(n: Int): String {
+        if (n > SPAN) return s.after(n)
+        val c = a ?: s.after(SPAN).also { a = it }
+        return if (c.length > n) c.substring(0, n) else c
+    }
+    override fun capsOn(inputType: Int): Boolean {
+        caps?.let { if (it.first == inputType) return it.second }
+        return s.capsOn(inputType).also { caps = inputType to it }
+    }
+    override fun commit(s: String) {
+        b = b?.let { (it + s).takeLast(SPAN) }; caps = null
+        if (expect >= 0) expect += s.length
+        this.s.commit(s)
+    }
+    override fun deleteBefore(n: Int) {
+        val c = b
+        // only when what we know reaches back far enough; otherwise read again next time
+        b = if (c != null && (c.length >= n || c.length < SPAN)) c.dropLast(n) else null; caps = null
+        if (expect >= 0) expect = maxOf(0, expect - n)
+        s.deleteBefore(n)
+    }
+    override fun key(code: Int) {
+        // ⌫ with nothing selected (we know where the cursor is): one character goes, as we can tell ourselves
+        val c = b
+        if (code == KeyEvent.KEYCODE_DEL && expect > 0 && c != null && c.isNotEmpty()) { b = c.dropLast(1); caps = null; expect--; a = a }
+        else { drop(); expect = -1 }
+        s.key(code)
+    }
+    override fun action(a: Int) { drop(); expect = -1; s.action(a) }
+    override fun moveCursor(delta: Int) { drop(); expect = -1; s.moveCursor(delta) }
+
+    companion object { const val SPAN = 200 }
 }

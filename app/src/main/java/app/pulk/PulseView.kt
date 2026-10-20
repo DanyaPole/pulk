@@ -82,6 +82,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val h = Math.ceil(hf.toDouble()).toInt()
         cx = w + 4 * density; cy = h + 4 * density
         setMeasuredDimension(w, h)
+        forgetShapes()
     }
 
     // ---- open / hidden ----
@@ -120,11 +121,9 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     /** The parts of the view that are the keyboard; the rest belongs to the app behind. */
     fun touchRegion(out: Region) {
-        val clip = Region(0, 0, width, height)
         if (!isOpen) { out.set(handleRect()); return }
         if (screenZone()) { out.set(0, 0, width, height); return }   // all of it: the finger may start anywhere
-        val p = shape()
-        val r = Region(); r.setPath(p, clip)
+        val r = Region(shapeRegion())
         fieldRect()?.let { f -> r.op(Rect(f.left.toInt(), f.top.toInt(), f.right.toInt(), f.bottom.toInt()), Region.Op.UNION) }
         for (rc in chipRects()) r.op(Rect(rc.left.toInt(), rc.top.toInt(), rc.right.toInt(), rc.bottom.toInt()), Region.Op.UNION)
         out.set(r)
@@ -153,13 +152,26 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     /** A point in base units on screen. */
     private fun scr(bx: Double, by: Double) = floatArrayOf(mx((cx + bx * k).toFloat()), (cy - by * k).toFloat())
 
+    // ---- shapes kept between frames: they change only with the size or the hand ----
+    private var shapeReg: Region? = null
+    private val keyPaths = HashMap<Pulse.FnKey, Path>()
+    private val wedgePaths = arrayOfNulls<Path>(8)
+    private var shapesFor = 0
+    /** The keyboard's size or hand changed: everything drawn from geometry is built again. */
+    private fun forgetShapes() {
+        val stamp = java.util.Objects.hash(measuredWidth, measuredHeight, k, left)
+        if (stamp == shapesFor) return
+        shapesFor = stamp; shapeReg = null; keyPaths.clear(); wedgePaths.fill(null)
+    }
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { super.onSizeChanged(w, h, ow, oh); shapesFor = 0; forgetShapes() }
+
     /** What is the keyboard: the star (the active zone) and the keys. Everything else is the app, seen and touched. */
-    private fun shape(): Path {
+    private fun shapeRegion(): Region = shapeReg ?: run {
         val p = Path()
         val s = scr(Pulse.PH[0], Pulse.PH[1])
         p.addCircle(s[0], s[1], (Pulse.R * k).toFloat() + 10 * density, Path.Direction.CW)
         for (key in Pulse.FN_KEYS) p.op(sector((key.r0 * k).toFloat(), (key.r1 * k).toFloat(), key.a0, key.a1), Path.Op.UNION)
-        return p
+        Region().also { it.setPath(p, Region(0, 0, width, height)); shapeReg = it }
     }
 
     /** A ring sector as a polygon (works for the mirrored hand too); radii in pixels. */
@@ -170,11 +182,13 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         for (i in steps downTo 0) { val q = ptPx(r0Px, a0 + (a1 - a0) * i / steps); p.lineTo(q[0], q[1]) }
         p.close(); return p
     }
-    private fun drawKey(c: Canvas, r0: Double, r1: Double, a0: Double, a1: Double, color: Int) {
-        val gap = 2.5f * density; val cr = 6f * density * max(kDp, 0.8f)
-        val ins = gap + cr; val rm = ((r0 + r1) / 2 * k).toFloat()
-        val da = Math.toDegrees((ins / rm).toDouble())
-        val path = sector((r0 * k).toFloat() + ins, (r1 * k).toFloat() - ins, a0 + da, a1 - da)
+    private fun drawKey(c: Canvas, key: Pulse.FnKey, color: Int) {
+        val cr = 6f * density * max(kDp, 0.8f)
+        val path = keyPaths.getOrPut(key) {
+            val ins = 2.5f * density + cr; val rm = ((key.r0 + key.r1) / 2 * k).toFloat()
+            val da = Math.toDegrees((ins / rm).toDouble())
+            sector((key.r0 * k).toFloat() + ins, (key.r1 * k).toFloat() - ins, key.a0 + da, key.a1 - da)
+        }
         // one pass, so a see-through key has no darker rim
         fill.color = color; fill.style = Paint.Style.FILL_AND_STROKE; fill.strokeWidth = cr * 2; fill.strokeJoin = Paint.Join.ROUND
         c.drawPath(path, fill); fill.style = Paint.Style.FILL
@@ -257,7 +271,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         fieldLay = null
         if (before.isEmpty() && after.isEmpty()) {
             layoutPaint.color = col.muted
-            c.drawText(if (svc.lang == "ru") "здесь будет текст — перетащи окно куда удобно" else "your text shows here — drag me anywhere", r.left + pad, r.centerY() + 6 * density, layoutPaint.also { it.textSize = 13f * density })
+            val hint = if (svc.lang == "ru") "здесь будет текст — перетащи окно куда удобно" else "your text shows here — drag me anywhere"
+            layoutPaint.textSize = 13f * density
+            val w = layoutPaint.measureText(hint); if (w > tw) layoutPaint.textSize *= tw / w   // fits between the grips
+            c.drawText(hint, r.left + pad, r.centerY() + 5 * density, layoutPaint)
             return
         }
         val text = before + after
@@ -330,7 +347,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 active || pressedFn == key.fn -> col.press
                 else -> col.fn
             }
-            drawKey(c, key.r0, key.r1, key.a0, key.a1, if (color == col.fn) glass(color) else color)
+            drawKey(c, key, if (color == col.fn) glass(color) else color)
             val rm = (key.r0 + key.r1) / 2; val am = (key.a0 + key.a1) / 2
             val p = pt(rm, am)
             val ink = if (key.fn == Pulse.Fn.SHIFT && svc.shiftLock) col.accentFg else col.fg
@@ -463,7 +480,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val a = aDeg * PI / 180
         return scr(Pulse.PH[0] + rBase * cos(a), Pulse.PH[1] + rBase * sin(a))
     }
-    private fun wedge(p: Int): Path {
+    private fun wedge(p: Int): Path = wedgePaths[p] ?: makeWedge(p).also { wedgePaths[p] = it }
+    private fun makeWedge(p: Int): Path {
         val path = Path(); val a0 = p * 45.0 - 22.5; val a1 = p * 45.0 + 22.5
         for (i in 0..8) { val q = starPt(Pulse.R - 1, a0 + (a1 - a0) * i / 8); if (i == 0) path.moveTo(q[0], q[1]) else path.lineTo(q[0], q[1]) }
         for (i in 8 downTo 0) { val q = starPt(15.0, a0 + (a1 - a0) * i / 8); path.lineTo(q[0], q[1]) }
@@ -495,9 +513,6 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var hold: Runnable? = null
         var repeat: Runnable? = null
         var jabs: Pulse.Jabs? = null   // «Толчки»: this touch is a word
-        var since = 0                  // letters typed since the last erase
-        var erased = false
-        var erase: Runnable? = null
         var cursorX = Float.NaN        // holding space: the cursor follows the finger from here (screen x)
         var steady: Pulse.Steady? = null  // the stroke, smoothed and measured to this hand
     }
@@ -555,7 +570,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         return true
     }
 
-    private fun stopTimers(t: Touch) { t.hold?.let { handler.removeCallbacks(it) }; t.repeat?.let { handler.removeCallbacks(it) }; t.erase?.let { handler.removeCallbacks(it) } }
+    private fun stopTimers(t: Touch) { t.hold?.let { handler.removeCallbacks(it) }; t.repeat?.let { handler.removeCallbacks(it) } }
 
     private fun jabSlot(pts: DoubleArray) = helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
 
@@ -671,7 +686,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             val done = j.add(b[0], b[1])
             if (done != null) {
                 val s = jabSlot(done)
-                svc.typeLetter(s.v, s); t.since++
+                svc.typeLetter(s.v, s)
                 cand = null; trail = null
             } else if (j.isOut) {
                 j.current()?.let { cand = jabSlot(it); trail = it.toList(); compass(cand) }
@@ -701,9 +716,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         when {
             t.strip >= 0 -> { val s = pressedStrip; pressedStrip = -1; if (s >= 0) svc.pick(s) }
             t.fn == null && t.jabs != null -> {
-                t.jabs!!.finish()?.let { val s = jabSlot(it); svc.typeLetter(s.v, s); t.since++ }
-                // lifting the finger ends the word with a space, unless this touch only erased
-                if (!t.erased || t.since > 0) svc.space()
+                t.jabs!!.finish()?.let { val s = jabSlot(it); svc.typeLetter(s.v, s) }
+                svc.space()   // lifting the finger ends the word
             }
             t.fn == null -> {
                 // the point where the finger left is not used (it jumps as the pad lifts), unless nothing moved
