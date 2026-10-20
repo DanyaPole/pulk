@@ -73,6 +73,36 @@ class PulkService : InputMethodService() {
 
     override fun onEvaluateFullscreenMode() = false // never take over the whole screen, even in landscape
 
+    override fun onWindowShown() {
+        super.onWindowShown()
+        // the window itself is see-through: only the keyboard's shape is drawn
+        window.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        view?.open(sound = true)
+    }
+    override fun onWindowHidden() { view?.reset(open = false); super.onWindowHidden() }
+
+    private val region = android.graphics.Region()
+    /**
+     * Touches outside the keyboard's shape go to the app, and the app is laid out down to the arc's height
+     * in the middle of the screen, so what is behind the see-through parts is the app itself.
+     */
+    override fun onComputeInsets(outInsets: Insets) {
+        super.onComputeInsets(outInsets)
+        val v = view ?: return
+        if (v.width == 0) return
+        val loc = IntArray(2); v.getLocationInWindow(loc)
+        val top = loc[1] + v.contentTop()
+        outInsets.contentTopInsets = top
+        outInsets.visibleTopInsets = top
+        v.touchRegion(region)
+        region.translate(loc[0], loc[1])
+        outInsets.touchableRegion.set(region)
+        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+    }
+
+    /** The keyboard opened, hid or changed shape: Android asks for the insets again. */
+    fun insetsChanged() { view?.requestLayout() }
+
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         startInput(info)

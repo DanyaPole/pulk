@@ -54,5 +54,10 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("forget", false)
         set(v) = sp.edit().putBoolean("forget", v).apply()
 
+    /** The «пульк» drop sound when the keyboard comes out. */
+    var dropSound: Boolean
+        get() = sp.getBoolean("drop", true)
+        set(v) = sp.edit().putBoolean("drop", v).apply()
+
     val left get() = hand == "left"
 }

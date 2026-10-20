@@ -112,6 +112,22 @@ object Pulse {
         return slot(t, petalOf(ex, ey), 'c')
     }
 
+    const val LIFT_MS = 45L   // as the thumb lifts, its contact rolls back: samples this close to the lift…
+    const val LIFT_MAX = 3    // …that move back towards the start (at most this many) are not part of the stroke
+
+    /**
+     * The stroke without its lift-off: on a phone the reported point slides back a few millimetres in the last
+     * moments as the pad of the thumb leaves the glass, which made a straight stroke read as «out and back».
+     * [pts] are flat x,y pairs, [times] the time of each pair, [up] the time the finger left.
+     */
+    fun trimLift(pts: DoubleArray, times: LongArray, up: Long): DoubleArray {
+        var n = pts.size / 2
+        fun d(i: Int) = hypot(pts[2 * i] - pts[0], pts[2 * i + 1] - pts[1])
+        var cut = 0
+        while (n > 2 && cut < LIFT_MAX && up - times[n - 1] <= LIFT_MS && d(n - 1) < d(n - 2)) { n--; cut++ }
+        return pts.copyOf(n * 2)
+    }
+
     /** Direction of a drag in the polar axes of the point it started at: c (too short), cw/ccw (along the arc), out/in. */
     fun dirOf(sx: Double, sy: Double, dx: Double, dy: Double, min: Double): String {
         if (hypot(dx, dy) < min) return "c"
@@ -122,7 +138,7 @@ object Pulse {
     }
 
     // ---- the keyboard's service keys, as rings around the thumb's corner ----
-    enum class Fn { SHIFT, LANG, SYM, BKSP, SPACE, ENTER }
+    enum class Fn { SHIFT, LANG, SYM, HIDE, BKSP, SPACE, ENTER }
     data class FnKey(val fn: Fn, val r0: Double, val r1: Double, val a0: Double, val a1: Double)
     const val A0 = 91.0
     const val A1 = 179.0
@@ -133,7 +149,7 @@ object Pulse {
             var a = A0
             return items.map { (fn, w) -> val k = FnKey(fn, r0, r1, a, a + (A1 - A0) * w / tw); a = k.a1; k }
         }
-        ring(30.0, 100.0, listOf(Fn.SHIFT to 1.0, Fn.LANG to 1.0, Fn.SYM to 1.0)) +
+        ring(30.0, 100.0, listOf(Fn.SHIFT to 1.0, Fn.LANG to 1.0, Fn.SYM to 1.0, Fn.HIDE to 0.85)) +
             ring(100.0, 158.0, listOf(Fn.BKSP to 1.15, Fn.SPACE to 2.6, Fn.ENTER to 1.0))
     }
 

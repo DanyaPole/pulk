@@ -72,6 +72,28 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     fun mode() { buzz(16); if (prefs.sound != "off") tone(listOf(Triple(440.0, 0.0, 0.05)), 0.14) }
 
+    /**
+     * «Пульк»: the sound of a drop as the keyboard comes out. A short tone whose pitch jumps up fast,
+     * which is how a drop falling into water sounds. Silent when the phone is on silent or vibrate.
+     */
+    fun drop() {
+        if (!prefs.dropSound) return
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        if (am.ringerMode != android.media.AudioManager.RINGER_MODE_NORMAL) return
+        val rate = 22050; val dur = 0.16
+        val buf = ShortArray((dur * rate).toInt())
+        var phase = 0.0
+        for (i in buf.indices) {
+            val t = i.toDouble() / rate
+            val f = 380.0 + 1500.0 * (1 - Math.exp(-t / 0.018))           // the plop: pitch sweeps up
+            phase += 2 * PI * f / rate
+            val env = minOf(1.0, t / 0.003) * Math.exp(-t / 0.035)
+            val blip = if (t > 0.05) 0.35 * sin(2 * PI * 1250 * t) * Math.exp(-(t - 0.05) / 0.02) else 0.0 // a tiny second ring
+            buf[i] = ((sin(phase) * env + blip * minOf(1.0, (t - 0.05) / 0.003)) * 0.32 * 32767).toInt().coerceIn(-32768, 32767).toShort()
+        }
+        play(buf, rate, dur)
+    }
+
     // ---- sound ----
     private val scale = doubleArrayOf(262.0, 294.0, 330.0, 392.0, 440.0, 523.0, 587.0, 659.0)
 
@@ -100,6 +122,10 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
                 if (idx < buf.size) buf[idx] = (buf[idx] + sin(2 * PI * f * t) * env * vol * 32767).toInt().coerceIn(-32768, 32767).toShort()
             }
         }
+        play(buf, rate, total)
+    }
+
+    private fun play(buf: ShortArray, rate: Int, total: Double) {
         try {
             val track = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)

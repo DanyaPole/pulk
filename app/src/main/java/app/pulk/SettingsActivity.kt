@@ -73,6 +73,8 @@ class SettingsActivity : Activity() {
             if (prefs.blind && prefs.sound == "off") prefs.sound = "voice" // eyes-free needs sound
         })
         col.addView(text("Вслепую: звезда крупнее, касание без движения в любом месте — пробел, включается голос.", 13f, muted))
+        col.addView(segmented("Звук «пульк» при появлении", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.dropSound) "on" else "off" }) { prefs.dropSound = it == "on" })
+        col.addView(text("Клавиатура выдвигается из угла со звуком капли. ⌄ у самого угла прячет её, касание кружка в углу — возвращает. Где нет клавиатуры, видно приложение и касания идут в него. Без звука, если телефон в беззвучном режиме.", 13f, muted))
         col.addView(segmented("Подсказки слов", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.suggest) "on" else "off" }) { prefs.suggest = it == "on" })
         col.addView(segmented("Автоисправление", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.autocorrect) "on" else "off" }) { prefs.autocorrect = it == "on" })
         col.addView(text("Пробел меняет незнакомое слово на ближайшее из словаря, учитывая типичные промахи «Пульса». ⌫ сразу после — вернуть своё; такое слово клавиатура запомнит.", 13f, muted))

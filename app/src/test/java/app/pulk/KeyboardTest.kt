@@ -52,6 +52,7 @@ class KeyboardTest {
         svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES })
         view = svc.onCreateInputView() as PulseView
         measure()
+        view.reset(open = true)
     }
 
     private fun measure() {
@@ -197,9 +198,8 @@ class KeyboardTest {
     }
 
     private fun stripTap(slot: Int) {
-        val w = view.width / 3f
-        val x = view.width - w * (slot + 0.5f)
-        val y = PulseView.STRIP_DP * density / 2
+        val r = view.chipRects()[slot]
+        val x = r.centerX(); val y = r.centerY()
         view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, floatArrayOf(x, y)))
         view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, floatArrayOf(x, y)))
     }
@@ -251,5 +251,23 @@ class KeyboardTest {
         Coach.reset()
         letter("н")
         assertEquals("Мн", field.sb.toString())
+    }
+
+    @Test fun seeThroughAndSlidingOut() {
+        val reg = android.graphics.Region()
+        view.touchRegion(reg)
+        assertTrue("the star is the keyboard", reg.contains(px(Pulse.PH[0], Pulse.PH[1])[0].toInt(), px(Pulse.PH[0], Pulse.PH[1])[1].toInt()))
+        assertTrue("the far top corner is the app", !reg.contains(5, 5))
+        assertTrue(view.contentTop() > 0)
+        fnTap(Pulse.Fn.HIDE)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
+        assertTrue(!view.isOpen); assertEquals(view.height, view.contentTop())
+        picture("hidden")
+        view.touchRegion(reg)
+        assertTrue("only the handle is touchable", !reg.contains(px(Pulse.PH[0], Pulse.PH[1])[0].toInt(), px(Pulse.PH[0], Pulse.PH[1])[1].toInt()))
+        fnTap(Pulse.Fn.SHIFT)     // the handle sits where the inner ring is: a touch there brings the keyboard out
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
+        assertTrue(view.isOpen)
+        assertEquals("", field.sb.toString())
     }
 }

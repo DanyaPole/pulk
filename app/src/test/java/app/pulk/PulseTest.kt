@@ -94,8 +94,24 @@ class PulseTest {
     @Test fun serviceKeysAreFoundByPosition() {
         // a touch near the corner is in the first ring, further out in the second; the star zone is not a service key
         assertEquals(Pulse.Fn.SHIFT, Pulse.hit(5.0, 60.0)?.fn)   // top, close to the corner
-        assertEquals(Pulse.Fn.SYM, Pulse.hit(-60.0, 5.0)?.fn)    // bottom edge, close to the corner
+        assertEquals(Pulse.Fn.HIDE, Pulse.hit(-60.0, 5.0)?.fn)   // bottom edge, close to the corner
         assertEquals(Pulse.Fn.SPACE, Pulse.hit(-90.0, 90.0)?.fn)
         assertTrue(Pulse.hit(-200.0, 200.0) == null)
+    }
+
+    @Test fun liftOffDoesNotTurnAStrokeIntoOutAndBack() {
+        // a straight stroke towards «е» (225°), then the thumb rolls back 3 mm in the last 30 ms as it lifts
+        val t = Pulse.table("ru", false)
+        val o = doubleArrayOf(Pulse.PH[0] + 12, Pulse.PH[1] - 8)
+        val pts = ArrayList<Double>(); val times = ArrayList<Long>()
+        val a = 225 * PI / 180
+        for (i in 0..5) { pts.add(o[0] + cos(a) * 6.0 * i); pts.add(o[1] + sin(a) * 6.0 * i); times.add(i * 16L) }
+        for (i in 1..2) { pts.add(o[0] + cos(a) * (30.0 - 9 * i)); pts.add(o[1] + sin(a) * (30.0 - 9 * i)); times.add(80L + i * 8) }
+        val raw = pts.toDoubleArray()
+        assertEquals("the raw stroke looks like out-and-back", 'b', Pulse.resolve(t, raw).kind)
+        assertEquals("е", Pulse.resolve(t, Pulse.trimLift(raw, times.toLongArray(), 100L)).v)
+        // a real out-and-back keeps its way back
+        val back = gesture(1, 'b'); val bt = LongArray(back.size / 2) { it * 16L }
+        assertEquals("ю", Pulse.resolve(t, Pulse.trimLift(back, bt, bt.last() + 8)).v)
     }
 }
