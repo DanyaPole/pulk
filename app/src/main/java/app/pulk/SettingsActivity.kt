@@ -38,6 +38,8 @@ class SettingsActivity : Activity() {
         col.addView(text("Пульк", 32f, fg, true))
         col.addView(text("Клавиатура для набора одной рукой, большим пальцем. Режим «Пульс»: все буквы — в звезде из 8 направлений, палец почти не двигается.", 16f, muted))
 
+        col.addView(button("Обучение: 4 коротких уровня", primary = true) { startActivity(Intent(this, TutorialActivity::class.java)) })
+
         col.addView(h("1. Включи клавиатуру"))
         col.addView(button("Открыть настройки клавиатур") { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) })
         col.addView(text("В списке включи «Пульк». Android предупредит, что клавиатура видит всё, что ты печатаешь. У Пулька нет доступа к интернету, набранное не покидает телефон.", 14f, muted))
@@ -56,7 +58,9 @@ class SettingsActivity : Activity() {
             "• смахни и верни палец назад — мелкая у центра;\n" +
             "• касание в центре звезды или мимо неё — пробел.\n\n" +
             "Задержи палец в конце жеста: е → ё, ь → ъ, ? → !.\n" +
-            "Смах по пробелу наружу — точка, внутрь — запятая, вдоль дуги вниз — стереть слово.\n" +
+            "Смах по пробелу наружу — точка, внутрь — запятая, вдоль дуги вниз — стереть слово, вдоль дуги вверх — взять лучшую подсказку.\n" +
+            "Подсказки слов — над звездой, лучшая ближе к пальцу. Если клавиатура исправила слово, а ты хотел своё, — сразу нажми ⌫.\n" +
+            "Удержи RU/EN — список клавиатур, чтобы вернуться к другой.\n" +
             "Кнопка ?123 переключает на цифры и знаки, RU/EN — язык.", 15f, fg))
 
         col.addView(h("Настройки"))
@@ -69,6 +73,12 @@ class SettingsActivity : Activity() {
             if (prefs.blind && prefs.sound == "off") prefs.sound = "voice" // eyes-free needs sound
         })
         col.addView(text("Вслепую: звезда крупнее, касание без движения в любом месте — пробел, включается голос.", 13f, muted))
+        col.addView(segmented("Подсказки слов", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.suggest) "on" else "off" }) { prefs.suggest = it == "on" })
+        col.addView(segmented("Автоисправление", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.autocorrect) "on" else "off" }) { prefs.autocorrect = it == "on" })
+        col.addView(text("Пробел меняет незнакомое слово на ближайшее из словаря, учитывая типичные промахи «Пульса». ⌫ сразу после — вернуть своё; такое слово клавиатура запомнит.", 13f, muted))
+        col.addView(segmented("Запоминать мои слова", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.learn) "on" else "off" }) { prefs.learn = it == "on" })
+        col.addView(button("Забыть мои слова") { prefs.forget = true; (it as Button).text = "Забудет при следующем открытии клавиатуры" })
+        col.addView(text("Слова хранятся только на телефоне. В полях паролей, адресов и в режиме инкогнито клавиатура ничего не запоминает.", 13f, muted))
         col.addView(text("Размер клавиатуры", 15f, fg, true))
         col.addView(SeekBar(this).apply {
             max = 35; progress = prefs.size - 80
@@ -79,6 +89,8 @@ class SettingsActivity : Activity() {
             })
         })
         col.addView(text("Настройки применяются, когда клавиатура открывается заново.", 13f, muted))
+        col.addView(h("О программе"))
+        col.addView(text("Пульк ${packageManager.getPackageInfo(packageName, 0).versionName}. Бесплатно, без рекламы и без интернета.\nСловари: FrequencyWords (Hermit Dave), CC BY-SA 4.0.", 13f, muted))
 
         setContentView(ScrollView(this).apply { setBackgroundColor(bg); addView(col) })
     }
@@ -89,7 +101,13 @@ class SettingsActivity : Activity() {
         setPadding(0, px(6), 0, px(6))
     }
     private fun h(s: String) = text(s, 19f, fg, true).apply { setPadding(0, px(22), 0, px(6)) }
-    private fun button(s: String, onClick: () -> Unit) = Button(this).apply { text = s; isAllCaps = false; textSize = 16f; setOnClickListener { onClick() } }
+    private fun button(s: String, primary: Boolean = false, onClick: (View) -> Unit) = Button(this).apply {
+        text = s; isAllCaps = false; textSize = 16f; minHeight = px(52); minimumHeight = px(52)
+        setTextColor(if (primary) accentFg else fg)
+        background = GradientDrawable().apply { cornerRadius = px(12).toFloat(); setColor(if (primary) accent else panel); setStroke(px(1), if (primary) accent else Color.parseColor("#29343A")) }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(6); bottomMargin = px(4) }
+        setOnClickListener { onClick(it) }
+    }
 
     /** A row of choices; the chosen one is highlighted. */
     private fun segmented(title: String, options: List<Pair<String, String>>, get: () -> String, set: (String) -> Unit): View {

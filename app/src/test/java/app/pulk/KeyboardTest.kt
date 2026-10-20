@@ -35,7 +35,7 @@ class KeyboardTest {
         override fun before(n: Int) = sb.takeLast(n).toString()
         override fun key(code: Int) { if (code == KeyEvent.KEYCODE_DEL && sb.isNotEmpty()) sb.setLength(sb.length - 1) else if (code == KeyEvent.KEYCODE_ENTER) sb.append('\n') }
         override fun action(a: Int) { sb.append("<action$a>") }
-        override fun capsOn(inputType: Int) = caps && (sb.isEmpty() || sb.endsWith(". ") || sb.endsWith("\n"))
+        override fun capsOn(inputType: Int) = caps && (inputType and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES != 0) && (sb.isEmpty() || sb.endsWith(". ") || sb.endsWith("\n"))
     }
 
     private lateinit var svc: PulkService
@@ -45,6 +45,9 @@ class KeyboardTest {
     @Before fun setUp() {
         svc = Robolectric.setupService(PulkService::class.java)
         svc.prefs.sound = "off"; svc.prefs.haptics = false; svc.prefs.hand = "right"; svc.prefs.lang = "ru"; svc.prefs.blind = false; svc.prefs.size = 100
+        svc.prefs.suggest = true; svc.prefs.autocorrect = true; svc.prefs.learn = true
+        svc.words("ru"); svc.words("en"); svc.forget()
+        Coach.reset()
         field = Field(); svc.sink = field
         svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES })
         view = svc.onCreateInputView() as PulseView
@@ -78,7 +81,7 @@ class KeyboardTest {
     }
 
     private var t0 = 0L
-    private fun ev(action: Int, p: FloatArray, id: Int = 0): MotionEvent {
+    private fun ev(action: Int, p: FloatArray): MotionEvent {
         t0 += 16
         return MotionEvent.obtain(t0, t0, action, p[0], p[1], 0)
     }
@@ -191,5 +194,62 @@ class KeyboardTest {
         for (c in "да") letter(c.toString())
         touch(listOf(doubleArrayOf(Pulse.spot(1, 'c')[0], Pulse.spot(1, 'c')[1])))   // on a letter: still a space
         assertEquals("Да ", field.sb.toString())
+    }
+
+    private fun stripTap(slot: Int) {
+        val w = view.width / 3f
+        val x = view.width - w * (slot + 0.5f)
+        val y = PulseView.STRIP_DP * density / 2
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, floatArrayOf(x, y)))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, floatArrayOf(x, y)))
+    }
+    private fun spaceSwipe(dir: Double) { // along the space key: +1 up the arc, -1 down
+        val k = Pulse.FN_KEYS.first { it.fn == Pulse.Fn.SPACE }
+        val am = (k.a0 + k.a1) / 2; val r = (k.r0 + k.r1) / 2
+        touch((0..5).map { i -> val a = (am - dir * i * 2.2) * PI / 180; doubleArrayOf(r * cos(a), r * sin(a)) })
+    }
+
+    @Test fun suggestsAndPicksFromTheStrip() {
+        for (c in "прив") letter(c.toString())
+        assertEquals("Привет", svc.cands[0])
+        picture("strip")
+        stripTap(0)
+        assertEquals("Привет ", field.sb.toString())
+    }
+
+    @Test fun swipeUpTheSpaceKeyTakesTheBestWord() {
+        for (c in "спаси") letter(c.toString())
+        spaceSwipe(1.0)
+        assertEquals("Спасибо ", field.sb.toString())
+        for (c in "до") letter(c.toString())
+        spaceSwipe(-1.0)   // down the arc: the word is deleted
+        assertEquals("Спасибо ", field.sb.toString())
+    }
+
+    @Test fun autocorrectAndUndo() {
+        for (c in "нама") letter(c.toString())   // «м» typed as straight «н»
+        spaceTap()
+        assertEquals("Мама ", field.sb.toString())
+        fnTap(Pulse.Fn.BKSP)                       // ⌫ right after: the typed word is back
+        assertEquals("Нама", field.sb.toString())
+        spaceTap()
+        assertEquals("Нама ", field.sb.toString()) // and is left alone from now on
+    }
+
+    @Test fun noSuggestionsInPasswords() {
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD })
+        for (c in "прив") letter(c.toString())
+        assertTrue(svc.cands.isEmpty())
+        spaceTap(); assertEquals("прив ", field.sb.toString())
+    }
+
+    @Test fun tutorialHandInHand() {
+        Coach.active = true; Coach.next = "м"; Coach.help = 3; Coach.hint = "м: смахни вправо и поверни вверх"
+        picture("coach")
+        letter("н")                                 // a straight stroke right, near enough
+        assertEquals("М", field.sb.toString())
+        Coach.reset()
+        letter("н")
+        assertEquals("Мн", field.sb.toString())
     }
 }

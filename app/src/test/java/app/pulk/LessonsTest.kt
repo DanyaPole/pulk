@@ -1,0 +1,92 @@
+package app.pulk
+
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import java.time.Duration
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class LessonsTest {
+    @Test fun gestureWords() {
+        assertEquals("смахни вправо и поверни вверх", Lessons.how("м", "ru", left = false))
+        assertEquals("смахни влево и поверни вверх", Lessons.how("м", "ru", left = true))   // mirrored for the left hand
+        assertEquals("смахни вверх", Lessons.how("а", "ru", false))
+        assertEquals("смахни влево-вниз и задержи палец", Lessons.how("ё", "ru", false))
+        assertEquals("смахни вправо-вверх и верни палец назад", Lessons.how("ю", "ru", false))
+        assertEquals("коснись центра звезды", Lessons.how(" ", "ru", false))
+    }
+
+    @Test fun everyStepCanBeExplained() {
+        for (lang in listOf("ru", "en")) for (left in listOf(false, true)) for (l in 0..3) for (st in Lessons.steps(l, lang, left)) {
+            val letters = st.want?.let { listOf(it) } ?: st.word!!.map { it.toString() }
+            for (c in letters) assertNotNull("$lang $l $c", Lessons.how(c, lang, left))
+        }
+    }
+
+    @Test fun verdictsAreGenerous() {
+        val word = Lessons.Step("", word = "привет")
+        assertEquals(Lessons.Verdict.Going, Lessons.check(word, "при"))
+        assertEquals(Lessons.Verdict.Done, Lessons.check(word, "Привет"))
+        assertEquals(Lessons.Verdict.Done, Lessons.check(word, "пнивет"))      // one slip is still a success
+        assertEquals(Lessons.Verdict.Going, Lessons.check(word, "прм"))       // not yet judged
+        assertTrue(Lessons.check(word, "пакетик") is Lessons.Verdict.Off)
+        val yo = Lessons.Step("", want = "ё")
+        assertTrue(Lessons.check(yo, "е") is Lessons.Verdict.Off)             // here ё itself is the point
+        assertEquals(Lessons.Verdict.Done, Lessons.check(yo, "Ё"))
+        assertEquals("в", Lessons.next(word, "при"))
+        assertEquals(null, Lessons.next(word, "прм"))
+    }
+
+    private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
+    private fun click(a: android.app.Activity, label: String) {
+        val b = all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == label }
+        b.performClick()
+    }
+    private fun idle(ms: Long) = shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
+
+    @Test fun aLevelFromStartToEnd() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication())
+        prefs.lang = "ru"; prefs.hand = "right"; prefs.lessonsDone = 0; prefs.helpNo = 0; prefs.sound = "off"; prefs.blind = false
+        val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
+        click(a, "Начать")                          // level 1 is the first card's button
+        assertTrue(Coach.active)
+        val field = all(a.window.decorView).filterIsInstance<EditText>().single()
+        // two slips: help is offered, not forced
+        field.setText("о"); idle(50); field.setText("о"); idle(50)
+        val texts = all(a.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+        assertTrue(texts.contains("Подсказать, как?"))
+        click(a, "Да")
+        assertEquals(1, Coach.help)
+        assertEquals("а", Coach.next)
+        assertEquals("«а»: смахни вверх", Coach.hint)
+        // the steps of level 1: а, о, е, н, space
+        for (s in listOf("а", "о", "е", "н", " ")) { field.setText(s); idle(800) }
+        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "«Первые смахи» — получилось!" })
+        assertEquals(1, prefs.lessonsDone and 1)
+        assertFalse(Coach.next != null)
+    }
+
+    @Test fun theLastLevelRestoresSound() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication())
+        prefs.sound = "off"; prefs.blind = false; prefs.lessonsDone = 7
+        val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
+        val buttons = all(a.window.decorView).filterIsInstance<Button>().filter { it.text.toString() == "Начать" }
+        buttons.last().performClick()             // level 4
+        assertTrue(Coach.hideLabels); assertEquals("voice", prefs.sound); assertTrue(prefs.blind)
+        click(a, "← Меню")
+        assertEquals("off", prefs.sound); assertFalse(prefs.blind); assertFalse(Coach.active)
+    }
+}
