@@ -1,0 +1,119 @@
+package app.pulk
+
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.provider.Settings
+import android.view.Gravity
+import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.SeekBar
+import android.widget.TextView
+
+/** The app's front door: turn the keyboard on, try it, choose hand, sound and size. */
+class SettingsActivity : Activity() {
+    private val bg = Color.parseColor("#0D1215")
+    private val panel = Color.parseColor("#141B1F")
+    private val fg = Color.parseColor("#E4EBEE")
+    private val muted = Color.parseColor("#8B9AA2")
+    private val accent = Color.parseColor("#55BAD7")
+    private val accentFg = Color.parseColor("#06222B")
+    private lateinit var prefs: Prefs
+    private val dp get() = resources.displayMetrics.density
+    private fun px(v: Int) = (v * dp).toInt()
+
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b)
+        prefs = Prefs(this)
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(20), px(28), px(20), px(36)); setBackgroundColor(bg) }
+
+        col.addView(text("Пульк", 32f, fg, true))
+        col.addView(text("Клавиатура для набора одной рукой, большим пальцем. Режим «Пульс»: все буквы — в звезде из 8 направлений, палец почти не двигается.", 16f, muted))
+
+        col.addView(h("1. Включи клавиатуру"))
+        col.addView(button("Открыть настройки клавиатур") { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) })
+        col.addView(text("В списке включи «Пульк». Android предупредит, что клавиатура видит всё, что ты печатаешь. У Пулька нет доступа к интернету, набранное не покидает телефон.", 14f, muted))
+        col.addView(h("2. Выбери её для набора"))
+        col.addView(button("Выбрать клавиатуру") { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() })
+        col.addView(h("3. Попробуй здесь"))
+        col.addView(EditText(this).apply {
+            hint = "Нажми и печатай"; setHintTextColor(muted); setTextColor(fg); textSize = 20f; minLines = 3; gravity = Gravity.TOP
+        })
+
+        col.addView(h("Как печатать"))
+        col.addView(text(
+            "Поставь палец в любое место светлой зоны и смахни:\n" +
+            "• прямо в сторону крупной буквы — она;\n" +
+            "• смахни и сразу поверни к мелкой букве — мелкая снаружи;\n" +
+            "• смахни и верни палец назад — мелкая у центра;\n" +
+            "• касание в центре звезды или мимо неё — пробел.\n\n" +
+            "Задержи палец в конце жеста: е → ё, ь → ъ, ? → !.\n" +
+            "Смах по пробелу наружу — точка, внутрь — запятая, вдоль дуги вниз — стереть слово.\n" +
+            "Кнопка ?123 переключает на цифры и знаки, RU/EN — язык.", 15f, fg))
+
+        col.addView(h("Настройки"))
+        col.addView(segmented("Рука", listOf("left" to "Левая", "right" to "Правая"), { prefs.hand }) { prefs.hand = it })
+        col.addView(segmented("Звук", listOf("off" to "Без звука", "clicks" to "Щелчки", "voice" to "Голос"), { prefs.sound }) { prefs.sound = it })
+        col.addView(text("Щелчки: у каждого направления своя нота. Голос: называет введённую букву и читает слово после пробела (в полях паролей не читает).", 13f, muted))
+        col.addView(segmented("Вибрация", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.haptics) "on" else "off" }) { prefs.haptics = it == "on" })
+        col.addView(segmented("Вслепую", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.blind) "on" else "off" }) {
+            prefs.blind = it == "on"
+            if (prefs.blind && prefs.sound == "off") prefs.sound = "voice" // eyes-free needs sound
+        })
+        col.addView(text("Вслепую: звезда крупнее, касание без движения в любом месте — пробел, включается голос.", 13f, muted))
+        col.addView(text("Размер клавиатуры", 15f, fg, true))
+        col.addView(SeekBar(this).apply {
+            max = 35; progress = prefs.size - 80
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { prefs.size = 80 + p }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        })
+        col.addView(text("Настройки применяются, когда клавиатура открывается заново.", 13f, muted))
+
+        setContentView(ScrollView(this).apply { setBackgroundColor(bg); addView(col) })
+    }
+
+    private fun text(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+        text = s; textSize = size; setTextColor(color); setLineSpacing(0f, 1.15f)
+        if (bold) setTypeface(typeface, Typeface.BOLD)
+        setPadding(0, px(6), 0, px(6))
+    }
+    private fun h(s: String) = text(s, 19f, fg, true).apply { setPadding(0, px(22), 0, px(6)) }
+    private fun button(s: String, onClick: () -> Unit) = Button(this).apply { text = s; isAllCaps = false; textSize = 16f; setOnClickListener { onClick() } }
+
+    /** A row of choices; the chosen one is highlighted. */
+    private fun segmented(title: String, options: List<Pair<String, String>>, get: () -> String, set: (String) -> Unit): View {
+        val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        wrap.addView(text(title, 15f, fg, true))
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val buttons = ArrayList<Pair<String, Button>>()
+        fun paint() {
+            val cur = get()
+            for ((v, btn) in buttons) {
+                val on = v == cur
+                btn.background = GradientDrawable().apply { cornerRadius = px(10).toFloat(); setColor(if (on) accent else panel); setStroke(px(1), if (on) accent else Color.parseColor("#29343A")) }
+                btn.setTextColor(if (on) accentFg else fg)
+            }
+        }
+        for ((v, label) in options) {
+            val btn = Button(this).apply {
+                text = label; isAllCaps = false; textSize = 14f
+                layoutParams = LinearLayout.LayoutParams(0, px(48), 1f).apply { setMargins(px(2), 0, px(2), 0) }
+                setOnClickListener { set(v); paint() }
+            }
+            buttons.add(v to btn); row.addView(btn)
+        }
+        paint(); wrap.addView(row)
+        return wrap
+    }
+}
