@@ -183,4 +183,20 @@ class PulseTest {
         for (i in 1..10) end = fast.at(4.5 * i, 0.0, i * 8L)
         assertTrue("stroke kept undefined", end[0] > 30)
     }
+
+    @Test fun twoTapsReachEveryLetter() {
+        for (lang in listOf("ru", "en")) {
+            val t = Pulse.table(lang, false)
+            for (p in 0 until 8) for ((i, k) in Pulse.KINDS.withIndex()) {
+                if (t[p][i].isEmpty()) continue
+                // the second tap anywhere in the quarter, a bit off its middle
+                for (off in listOf(-30.0, 0.0, 30.0)) {
+                    val a = (Pulse.tapAngle(p, k) + off) * PI / 180
+                    val s = Pulse.tapPick(t, p, Pulse.PH[0] + 60 * cos(a), Pulse.PH[1] + 60 * sin(a))
+                    assertEquals("$lang $p $k $off", t[p][i], s?.v)
+                }
+            }
+            assertEquals(null, Pulse.tapPick(t, 3, Pulse.PH[0] + 5, Pulse.PH[1]))   // the centre closes it
+        }
+    }
 }

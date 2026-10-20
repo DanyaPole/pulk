@@ -234,6 +234,23 @@ object Pulse {
         return s
     }
 
+    // ---- «Два касания»: for a hand that can tap but not stroke ----
+    /**
+     * The second tap, once a petal is open: its four letters fill the star as four big quarters, each where its
+     * stroke would go — the big letter towards the petal, the turns to either side, the inner letter opposite.
+     * Null: the centre was touched (close the petal).
+     */
+    fun tapPick(t: Array<Array<String>>, petal: Int, x: Double, y: Double): Slot? {
+        val dx = x - PH[0]; val dy = y - PH[1]
+        if (hypot(dx, dy) < 15) return null
+        var rel = atan2(dy, dx) * 180 / PI - petal * 45
+        while (rel > 180) rel -= 360; while (rel < -180) rel += 360
+        val kind = when { abs(rel) <= 45 -> 'c'; rel in 45.0..135.0 -> 'l'; rel in -135.0..-45.0 -> 'r'; else -> 'b' }
+        return slot(t, petal, kind)
+    }
+    /** Where the quarter of [kind] is drawn for an open [petal], as an angle in degrees. */
+    fun tapAngle(petal: Int, kind: Char) = petal * 45.0 + when (kind) { 'l' -> 90.0; 'r' -> -90.0; 'b' -> 180.0; else -> 0.0 }
+
     /** Direction of a drag in the polar axes of the point it started at: c (too short), cw/ccw (along the arc), out/in. */
     fun dirOf(sx: Double, sy: Double, dx: Double, dy: Double, min: Double): String {
         if (hypot(dx, dy) < min) return "c"

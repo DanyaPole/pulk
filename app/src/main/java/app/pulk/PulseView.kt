@@ -52,7 +52,11 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     /** «Толчки»: a whole word per touch. A lesson says itself which way it teaches. */
     private fun jabsMode() = if (Coach.active) Coach.jabs else svc.prefs.mode == "jabs"
     /** The whole screen is where a stroke may start, and the star comes to the finger. Lessons keep the star in place. */
-    private fun screenZone() = svc.prefs.zone == "screen" && !Coach.active
+    private fun screenZone() = svc.prefs.zone == "screen" && !Coach.active && !tapsMode()
+    /** «Два касания»: for a hand that can tap but not stroke. Strokes still work as in «Пульс». */
+    private fun tapsMode() = !Coach.active && svc.prefs.mode == "taps"
+    /** The petal opened by the first tap, its letters waiting for the second (-1: none). */
+    internal var openPetal = -1
     private fun tapIsSpace() = blind() || screenZone()
     private fun textWindow() = svc.prefs.textWindow && !Coach.active
     private var cornerH = 0f    // how tall the keyboard is in the corner (the screen zone is taller)
@@ -393,7 +397,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         if (goal != null) drawPath(c, goal.first, col)
         // letters of the star
         val up = svc.shiftActive()
-        if (!Coach.hideLabels || !Coach.active) for (p in 0 until 8) for ((i, kind) in Pulse.KINDS.withIndex()) {
+        if (openPetal >= 0) drawOpenPetal(c, col, table, up = svc.shiftActive())
+        else if (!Coach.hideLabels || !Coach.active) for (p in 0 until 8) for ((i, kind) in Pulse.KINDS.withIndex()) {
             val v = table[p][i]
             if (v.isEmpty()) continue
             val s = Pulse.spot(p, kind)
@@ -420,6 +425,25 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             fill.color = col.accent; c.drawCircle(bx, by, 26 * density, fill)
             label(c, if (live.isSpace) "·" else if (svc.isSecure) "•" else shown, bx, by, 28f, col.accentFg, true)
         }
+    }
+
+    /** An open petal: its letters, big, each in the quarter of the star where its stroke would go. */
+    private fun drawOpenPetal(c: Canvas, col: Colors, table: Array<Array<String>>, up: Boolean) {
+        val ctr = scr(Pulse.PH[0], Pulse.PH[1]); val r = (Pulse.R * k).toFloat()
+        fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(ctr[0], ctr[1], r, fill)
+        // the big letter's quarter is lit, so the petal just opened is easy to recognise
+        val big = Path(); val a0 = Pulse.tapAngle(openPetal, 'c') - 45
+        for (i in 0..12) { val q = starPt(Pulse.R - 1, a0 + 90.0 * i / 12); if (i == 0) big.moveTo(q[0], q[1]) else big.lineTo(q[0], q[1]) }
+        for (i in 12 downTo 0) { val q = starPt(15.0, a0 + 90.0 * i / 12); big.lineTo(q[0], q[1]) }
+        big.close(); fill.color = col.zone; c.drawPath(big, fill)
+        stroke.color = col.line; stroke.strokeWidth = 1.5f * density
+        for (j in 0 until 4) { val a = Pulse.tapAngle(openPetal, 'c') + 45 + 90 * j; val s0 = starPt(15.0, a); val s1 = starPt(Pulse.R, a); c.drawLine(s0[0], s0[1], s1[0], s1[1], stroke) }
+        for ((i, kind) in Pulse.KINDS.withIndex()) {
+            val v = table[openPetal][i]; if (v.isEmpty()) continue
+            val q = starPt(Pulse.R * 0.58, Pulse.tapAngle(openPetal, kind))
+            label(c, if (svc.isSecure) "•" else if (up) v.uppercase() else v, q[0], q[1], 34f, col.fg, kind == 'c')
+        }
+        label(c, "×", ctr[0], ctr[1], 18f, col.muted, true)   // the centre closes it
     }
 
     /** Where the star should be centred now, in base units: under the finger (whole screen), or its own place. */
@@ -572,6 +596,28 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     private fun stopTimers(t: Touch) { t.hold?.let { handler.removeCallbacks(it) }; t.repeat?.let { handler.removeCallbacks(it) } }
 
+    /** The finger never went far from where it landed (a screen reports a few jittery moves even for a tap). */
+    private fun isTap(t: Touch, b: DoubleArray): Boolean {
+        var far = hypot(b[0] - t.pts[0], b[1] - t.pts[1])
+        for (i in 1 until t.pts.size / 2) far = max(far, hypot(t.pts[2 * i] - t.pts[0], t.pts[2 * i + 1] - t.pts[1]))
+        return far < Pulse.P_MIN
+    }
+
+    /** «Два касания»: the first tap opens a petal, the second picks a letter in it; the centre is a space (or closes). */
+    private fun tapStep(bx: Double, by: Double) {
+        val t = Pulse.table(svc.lang, svc.symbols)
+        val d = hypot(bx - Pulse.PH[0], by - Pulse.PH[1])
+        if (openPetal < 0) {
+            if (d < 15 || d > Pulse.R + 10) { svc.space(); return }
+            openPetal = Pulse.petalOf(bx - Pulse.PH[0], by - Pulse.PH[1])
+            svc.feedback.petal(openPetal, t[openPetal].filter { it.isNotEmpty() }, svc.lang, svc.isSecure)
+            return
+        }
+        val s = Pulse.tapPick(t, openPetal, bx, by)
+        openPetal = -1
+        if (s == null) svc.feedback.mode() else svc.typeLetter(s.v, s)
+    }
+
     private fun jabSlot(pts: DoubleArray) = helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
@@ -648,6 +694,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     private fun updateCand(t: Touch) {
+        // in «Два касания» a tap is not a letter: nothing to show until the finger really strokes
+        if (tapsMode() && (t.pts.size < 4 || hypot(t.pts[t.pts.size - 2] - t.pts[0], t.pts[t.pts.size - 1] - t.pts[1]) < Pulse.P_MIN)) { cand = null; trail = null; return }
         cand = resolveNow(t.pts.toDoubleArray())
         if (t.pts.size > 2) compass(cand)
         longAlt = if (t.long) cand?.let { Pulse.ALT[it.v] } else null
@@ -719,7 +767,9 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 t.jabs!!.finish()?.let { val s = jabSlot(it); svc.typeLetter(s.v, s) }
                 svc.space()   // lifting the finger ends the word
             }
+            t.fn == null && tapsMode() && isTap(t, b) -> tapStep(t.pts[0], t.pts[1])
             t.fn == null -> {
+                if (tapsMode()) openPetal = -1   // a real stroke: typed as in «Пульс»
                 // the point where the finger left is not used (it jumps as the pad lifts), unless nothing moved
                 if (t.pts.size == 2 && hypot(b[0] - t.pts[0], b[1] - t.pts[1]) >= Pulse.P_MIN) { t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm) }
                 val pts = Pulse.trimLift(t.pts.toDoubleArray(), t.times.toLongArray(), tm)

@@ -113,6 +113,14 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
         if (prefs.sound != "off") tone(listOf(Triple(330.0, 0.0, 0.07), Triple(220.0, 0.07, 0.1)), 0.16)
     }
 
+    /** «Два касания»: a petal opened. Its note, and (voice) the names of its letters — never in a password. */
+    fun petal(p: Int, letters: List<String>, lang: String, secure: Boolean) {
+        buzz(10)
+        if (secure) { if (prefs.sound != "off" || exploring()) tone(listOf(Triple(SECURE_CLICK, 0.0, 0.03)), 0.18); return }
+        if (prefs.sound != "off") tone(listOf(Triple(scale[p], 0.0, 0.06)), 0.16)
+        if (prefs.sound == "voice" || exploring()) say(letters.joinToString(", ") { letterName(it, lang) }, 1.5f)
+    }
+
     fun mode() { buzz(16); if (prefs.sound != "off") tone(listOf(Triple(440.0, 0.0, 0.05)), 0.14) }
 
     /**

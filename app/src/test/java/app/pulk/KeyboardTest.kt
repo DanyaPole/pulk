@@ -463,4 +463,23 @@ class KeyboardTest {
             org.robolectric.Shadows.shadowOf(am).setTouchExplorationEnabled(false)
         } finally { svc.feedback.trace = null; svc.prefs.compass = "off"; svc.prefs.sound = "off"; svc.prefs.haptics = false }
     }
+
+    @Test fun twoTapsTypeWithoutStrokes() {
+        svc.prefs.mode = "taps"
+        fun tapAt(bx: Double, by: Double) = touch(listOf(doubleArrayOf(bx, by), doubleArrayOf(bx + 2, by + 1), doubleArrayOf(bx + 1, by - 1)))   // a tap with a little jitter
+        fun tapPetal(p: Int) { val s = Pulse.spot(p, 'c'); tapAt(s[0], s[1]) }
+        fun tapQuarter(p: Int, k: Char) { val a = Pulse.tapAngle(p, k) * PI / 180; tapAt(Pulse.PH[0] + 55 * cos(a), Pulse.PH[1] + 55 * sin(a)) }
+        tapPetal(0)                                   // «н м ь щ» open
+        assertEquals(0, view.openPetal)
+        picture("taps-open")
+        tapQuarter(0, 'l')
+        assertEquals("М", field.sb.toString())
+        assertEquals(-1, view.openPetal)
+        tapPetal(2); tapQuarter(2, 'c')              // «а»
+        tapPetal(1); tapAt(Pulse.PH[0] + 3, Pulse.PH[1])   // opened, then the centre closes it: nothing typed
+        tapAt(Pulse.PH[0], Pulse.PH[1])              // the centre with nothing open: a space
+        assertEquals("Ма ", field.sb.toString())
+        letter("о")                                   // and strokes still work as in «Пульс»
+        assertEquals("Ма о", field.sb.toString())
+    }
 }
