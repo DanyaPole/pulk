@@ -133,14 +133,12 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     /** A point in base units on screen. */
     private fun scr(bx: Double, by: Double) = floatArrayOf(mx((cx + bx * k).toFloat()), (cy - by * k).toFloat())
 
-    /** The opaque body of the keyboard: the quarter disc around the corner and the star that sticks out of it. */
+    /** What is the keyboard: the star (the active zone) and the keys. Everything else is the app, seen and touched. */
     private fun shape(): Path {
         val p = Path()
-        val c = scr(0.0, 0.0); val rr = (Pulse.OUTER * k).toFloat()
-        p.addCircle(c[0], c[1], rr, Path.Direction.CW)
         val s = scr(Pulse.PH[0], Pulse.PH[1])
-        val p2 = Path(); p2.addCircle(s[0], s[1], (Pulse.R * k).toFloat() + 6 * density, Path.Direction.CW)
-        p.op(p2, Path.Op.UNION)
+        p.addCircle(s[0], s[1], (Pulse.R * k).toFloat() + 10 * density, Path.Direction.CW)
+        for (key in Pulse.FN_KEYS) p.op(sector((key.r0 * k).toFloat(), (key.r1 * k).toFloat(), key.a0, key.a1), Path.Op.UNION)
         return p
     }
 
@@ -157,9 +155,12 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val ins = gap + cr; val rm = ((r0 + r1) / 2 * k).toFloat()
         val da = Math.toDegrees((ins / rm).toDouble())
         val path = sector((r0 * k).toFloat() + ins, (r1 * k).toFloat() - ins, a0 + da, a1 - da)
-        fill.color = color; fill.style = Paint.Style.FILL; c.drawPath(path, fill)
-        stroke.color = color; stroke.strokeWidth = cr * 2; c.drawPath(path, stroke)
+        // one pass, so a see-through key has no darker rim
+        fill.color = color; fill.style = Paint.Style.FILL_AND_STROKE; fill.strokeWidth = cr * 2; fill.strokeJoin = Paint.Join.ROUND
+        c.drawPath(path, fill); fill.style = Paint.Style.FILL
     }
+    /** Keys are glass over the app: the app shows through, the label stays sharp. */
+    private fun glass(color: Int) = (color and 0x00FFFFFF) or (0x6E shl 24)
     private fun label(c: Canvas, s: String, x: Float, y: Float, sizeDp: Float, color: Int, bold: Boolean = false) {
         txt.color = color; txt.textSize = sizeDp * density * max(kDp, 0.85f); txt.isFakeBoldText = bold
         c.drawText(s, x, y - (txt.ascent() + txt.descent()) / 2, txt)
@@ -221,8 +222,6 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun drawBody(c: Canvas, col: Colors) {
         val sym = svc.symbols
         val table = Pulse.table(svc.lang, sym)
-        fill.style = Paint.Style.FILL; fill.color = col.bg
-        c.drawPath(shape(), fill)
         drawChips(c, col)
         // service keys
         for (key in Pulse.FN_KEYS) {
@@ -232,7 +231,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 active || pressedFn == key.fn -> col.press
                 else -> col.fn
             }
-            drawKey(c, key.r0, key.r1, key.a0, key.a1, color)
+            drawKey(c, key.r0, key.r1, key.a0, key.a1, if (color == col.fn) glass(color) else color)
             val rm = (key.r0 + key.r1) / 2; val am = (key.a0 + key.a1) / 2
             val p = pt(rm, am)
             val ink = if (key.fn == Pulse.Fn.SHIFT && svc.shiftLock) col.accentFg else col.fg
@@ -241,8 +240,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 Pulse.Fn.BKSP -> icon(c, 1, p[0], p[1], ink)
                 Pulse.Fn.ENTER -> icon(c, 2, p[0], p[1], ink)
                 Pulse.Fn.HIDE -> icon(c, 3, p[0], p[1], ink)
-                Pulse.Fn.LANG -> label(c, svc.lang.uppercase(), p[0], p[1], 14f, ink, true)
-                Pulse.Fn.SYM -> label(c, if (sym) (if (svc.lang == "ru") "абв" else "abc") else "?123", p[0], p[1], 12f, ink, true)
+                Pulse.Fn.LANG -> label(c, svc.lang.uppercase(), p[0], p[1], 15f, ink, true)
+                Pulse.Fn.SYM -> label(c, if (sym) (if (svc.lang == "ru") "абв" else "abc") else "?123", p[0], p[1], 13f, ink, true)
                 Pulse.Fn.SPACE -> {
                     label(c, if (svc.lang == "ru") "пробел" else "space", p[0], p[1], 14f, col.muted)
                     val o = pt(key.r1 - 11, am); val i = pt(key.r0 + 11, am)
@@ -253,7 +252,6 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             }
         }
         // the zone of the star
-        drawKey(c, Pulse.PAD, Pulse.OUTER, Pulse.A0, Pulse.A1, col.zone)
         val centre = scr(Pulse.PH[0], Pulse.PH[1])
         fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(centre[0], centre[1], (Pulse.R * k).toFloat(), fill)
         stroke.color = col.line; stroke.strokeWidth = density; c.drawCircle(centre[0], centre[1], (Pulse.R * k).toFloat(), stroke)
@@ -497,7 +495,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     Pulse.Fn.SYM -> svc.toggleSymbols()
                     Pulse.Fn.HIDE -> hide()
                     Pulse.Fn.ENTER -> svc.enter()
-                    Pulse.Fn.BKSP -> {}
+                    // a swipe along ⌫ towards the star: the rest of the word goes too
+                    Pulse.Fn.BKSP -> if (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN) == "ccw") svc.deleteWord()
                     Pulse.Fn.SPACE -> when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
                         "out" -> svc.punct(".")
                         "in" -> svc.punct(",")

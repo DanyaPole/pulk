@@ -92,11 +92,20 @@ class PulseTest {
     }
 
     @Test fun serviceKeysAreFoundByPosition() {
-        // a touch near the corner is in the first ring, further out in the second; the star zone is not a service key
-        assertEquals(Pulse.Fn.SHIFT, Pulse.hit(5.0, 60.0)?.fn)   // top, close to the corner
-        assertEquals(Pulse.Fn.HIDE, Pulse.hit(-60.0, 5.0)?.fn)   // bottom edge, close to the corner
-        assertEquals(Pulse.Fn.SPACE, Pulse.hit(-90.0, 90.0)?.fn)
-        assertTrue(Pulse.hit(-200.0, 200.0) == null)
+        fun at(r: Double, deg: Double) = Pulse.hit(r * cos(deg * PI / 180), r * sin(deg * PI / 180))?.fn
+        assertEquals(Pulse.Fn.SPACE, at(90.0, 120.0))     // the corner is one big space…
+        assertEquals(Pulse.Fn.ENTER, at(90.0, 165.0))     // …and ⏎ along the bottom
+        assertEquals(Pulse.Fn.SPACE, at(10.0, 100.0))     // even the very corner: no dead spot
+        assertEquals(Pulse.Fn.BKSP, at(230.0, 100.0))     // ⌫ up the right edge
+        assertEquals(Pulse.Fn.BKSP, at(290.0, 92.0))
+        assertEquals(Pulse.Fn.SHIFT, at(175.0, 170.0))    // the rare keys along the bottom edge
+        assertEquals(Pulse.Fn.LANG, at(210.0, 170.0))
+        assertEquals(Pulse.Fn.SYM, at(250.0, 170.0))
+        assertEquals(Pulse.Fn.HIDE, at(285.0, 170.0))
+        assertEquals(null, at(230.0, 135.0))              // the star
+        assertEquals(null, at(320.0, 100.0))              // beyond the zone: still the star's strokes
+        // every letter of the star is away from the keys
+        for (p in 0 until 8) for (k in Pulse.KINDS) { val s = Pulse.spot(p, k); assertEquals("$p$k", null, Pulse.hit(s[0], s[1])) }
     }
 
     @Test fun liftOffDoesNotTurnAStrokeIntoOutAndBack() {

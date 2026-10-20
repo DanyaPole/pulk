@@ -137,29 +137,36 @@ object Pulse {
         return if (abs(tan) >= abs(rad)) (if (tan > 0) "ccw" else "cw") else (if (rad > 0) "out" else "in")
     }
 
-    // ---- the keyboard's service keys, as rings around the thumb's corner ----
+    // ---- the keyboard's service keys ----
+    // Nothing small sits in the corner itself, where the thumb has to bend: the corner is one big space and ⏎,
+    // ⌫ is a tall key up the right edge (the thumb reaches it by sliding up the edge), and the rare keys
+    // line the bottom edge under the star.
     enum class Fn { SHIFT, LANG, SYM, HIDE, BKSP, SPACE, ENTER }
     data class FnKey(val fn: Fn, val r0: Double, val r1: Double, val a0: Double, val a1: Double)
     const val A0 = 91.0
     const val A1 = 179.0
+    const val EDGE_A = 110.0     // ⌫: from the right edge up to this angle, beyond the corner keys
+    const val BOTTOM_A = 160.0   // the rare keys: from this angle to the bottom edge
 
-    val FN_KEYS: List<FnKey> = run {
-        fun ring(r0: Double, r1: Double, items: List<Pair<Fn, Double>>): List<FnKey> {
-            val tw = items.sumOf { it.second }
-            var a = A0
-            return items.map { (fn, w) -> val k = FnKey(fn, r0, r1, a, a + (A1 - A0) * w / tw); a = k.a1; k }
-        }
-        ring(30.0, 100.0, listOf(Fn.SHIFT to 1.0, Fn.LANG to 1.0, Fn.SYM to 1.0, Fn.HIDE to 0.85)) +
-            ring(100.0, 158.0, listOf(Fn.BKSP to 1.15, Fn.SPACE to 2.6, Fn.ENTER to 1.0))
-    }
+    val FN_KEYS: List<FnKey> = listOf(
+        FnKey(Fn.SPACE, 30.0, PAD, A0, 150.0),
+        FnKey(Fn.ENTER, 30.0, PAD, 150.0, A1),
+        FnKey(Fn.BKSP, PAD, OUTER, A0, EDGE_A),
+        FnKey(Fn.SHIFT, PAD, 194.0, BOTTOM_A, A1),
+        FnKey(Fn.LANG, 194.0, 230.0, BOTTOM_A, A1),
+        FnKey(Fn.SYM, 230.0, 266.0, BOTTOM_A, A1),
+        FnKey(Fn.HIDE, 266.0, OUTER, BOTTOM_A, A1),
+    )
 
     /** What the finger landed on: a service key, or the star zone (null). */
     fun hit(x: Double, y: Double): FnKey? {
-        val r = hypot(x, y)
-        if (r >= PAD) return null
+        val r = max(hypot(x, y), 30.0)
         var a = atan2(y, x) * 180 / PI
-        a = a.coerceIn(A0 + 0.01, A1 - 0.01)
-        val ring = if (r < 100.0) 30.0 else 100.0
-        return FN_KEYS.filter { it.r0 == ring }.firstOrNull { a >= it.a0 && a < it.a1 } ?: FN_KEYS.filter { it.r0 == ring }.last()
+        if (a < 0) a += 360
+        if (r < PAD) a = a.coerceIn(A0 + 0.01, A1 - 0.01)   // the corner: no dead spots at its edges
+        else if (r >= OUTER || (a >= EDGE_A && a < BOTTOM_A)) return null
+        else a = a.coerceIn(A0 + 0.01, A1 - 0.01)
+        return FN_KEYS.firstOrNull { r >= it.r0 && (r < it.r1 || it.r1 == OUTER) && a >= it.a0 && a < it.a1 }
+            ?: FN_KEYS.first { r >= it.r0 && r < it.r1 + 1 }
     }
 }

@@ -63,7 +63,12 @@ class KeyboardTest {
 
     private fun picture(name: String) {
         val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        view.draw(Canvas(bmp))
+        val c = Canvas(bmp)
+        // a pretend app behind the keyboard: stripes of a chat, to see what shows through
+        val p = android.graphics.Paint()
+        c.drawColor(0xFFEDE7DA.toInt())
+        for (i in 0 until view.height / 90) { p.color = if (i % 2 == 0) 0xFFFFFFFF.toInt() else 0xFFD9F2C9.toInt(); val l = if (i % 2 == 0) 30f else view.width * 0.35f; c.drawRoundRect(l, i * 90f + 12, l + view.width * 0.6f, i * 90f + 78, 24f, 24f, p) }
+        view.draw(c)
         val dir = File("build/shots"); dir.mkdirs()
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
