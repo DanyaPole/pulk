@@ -45,6 +45,34 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     /** The finger came down. */
     fun touch() = buzz(6)
 
+    /** When TalkBack is on, speech goes through it (one voice, the person's own settings) instead of our own. */
+    var announcer: ((String) -> Unit)? = null
+    var exploring: () -> Boolean = { false }
+
+    // ---- the sound compass: while the finger moves, what it would type if lifted now ----
+    private var pendingName: Runnable? = null
+    fun compass(slot: Pulse.Slot, text: String, lang: String) {
+        if (prefs.haptics) {
+            val v = vib
+            if (v != null && v.hasVibrator()) try {
+                v.vibrate(if (Build.VERSION.SDK_INT >= 29) VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK) else VibrationEffect.createOneShot(4, 60))
+            } catch (_: Exception) {}
+        }
+        val mode = if (exploring()) "voice" else prefs.compass
+        when (mode) {
+            "notes" -> if (slot.petal >= 0) tone(listOf(Triple(scale[slot.petal] * (if (slot.kind == 'c') 1.0 else 1.5), 0.0, 0.045)), 0.09)
+            "voice" -> {
+                // only once the finger settles on a letter for a moment, so it does not chatter
+                pendingName?.let { handler.removeCallbacks(it) }
+                val name = if (slot.isSpace) (if (lang == "ru") "пробел" else "space") else letterName(text, lang)
+                val r = Runnable { say(name, 1.9f) }
+                pendingName = r; handler.postDelayed(r, 170)
+            }
+        }
+    }
+    /** The finger lifted: what it was about to say is no longer news. */
+    fun hush() { pendingName?.let { handler.removeCallbacks(it) }; pendingName = null }
+
     fun letter(slot: Pulse.Slot, text: String, lang: String, secure: Boolean) {
         when (slot.kind) {
             'l' -> buzz(0, 10, 40, 22)
@@ -52,7 +80,8 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
             'b' -> buzz(0, 10, 30, 10, 30, 10)
             else -> buzz(14)
         }
-        when (prefs.sound) {
+        // with TalkBack every letter is spoken through it; otherwise as the sound setting says
+        when (if (exploring()) "voice" else prefs.sound) {
             "clicks" -> note(slot)
             "voice" -> if (secure) note(slot) else say(letterName(text, lang), 1.5f)
         }
@@ -156,6 +185,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     // ---- voice ----
     fun say(text: String, rate: Float = 1.2f) {
         if (text.isBlank()) return
+        if (exploring()) { announcer?.invoke(text); return }
         val lang = if (text.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }) "ru" else ttsLang.ifEmpty { prefs.lang }
         if (tts == null) {
             tts = TextToSpeech(ctx.applicationContext) { status ->
@@ -189,7 +219,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
             "-" to "dash", "'" to "apostrophe", "@" to "at", "#" to "hash", "(" to "open bracket", ")" to "close bracket"),
     )
 
-    private fun letterName(s: String, lang: String): String {
+    fun letterName(s: String, lang: String): String {
         val c = s.lowercase()
         if (c.length == 1 && lang == "ru") ruNames[c[0]]?.let { return it }
         return punct[lang]?.get(c) ?: s

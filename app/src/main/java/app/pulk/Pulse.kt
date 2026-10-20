@@ -61,7 +61,62 @@ object Pulse {
         return doubleArrayOf(PH[0] + r * cos(a), PH[1] + r * sin(a))
     }
 
-    fun petalOf(x: Double, y: Double): Int = (((atan2(y, x) / (PI / 4)).roundToInt() % 8) + 8) % 8
+    /**
+     * This person's own aim, from the calibration: how many degrees off each direction their thumb really goes
+     * (0 = the textbook 45° steps). A stroke belongs to the direction it is closest to.
+     */
+    val bias = DoubleArray(8)
+
+    fun petalOf(x: Double, y: Double): Int {
+        val a = atan2(y, x) * 180 / PI
+        var best = 0; var bd = Double.MAX_VALUE
+        for (p in 0 until 8) {
+            var d = (a - (p * 45 + bias[p])) % 360; if (d > 180) d -= 360; if (d < -180) d += 360
+            if (abs(d) < bd) { bd = abs(d); best = p }
+        }
+        return best
+    }
+
+    /** Pixels-per-base-unit of the keyboard, in dp: the same everywhere (keyboard, calibration). */
+    fun scaleDp(wdp: Float, vhdp: Float, size: Int, blind: Boolean): Float {
+        val r = OUTER.toFloat()
+        var kd = minOf(wdp, 440f) / (r * 1.047f) * size / 100f * (if (blind) 1.1f else 1f)
+        kd = minOf(kd, (wdp + 4f - 6f) / r)
+        kd = minOf(kd, vhdp * (if (blind) 0.5f else 0.42f) / (r + 4f))
+        return kd
+    }
+
+    /**
+     * A steadier hand: tremor is smoothed with the 1€ filter (Casiez, Roussel, Vogel, CHI 2012) — strong smoothing
+     * while the finger moves slowly or rests (where tremor shows), almost none in a quick stroke, so strokes do not lag.
+     * Points are also measured against this person's stroke length: [tol] above 1 means the thumb's natural strokes are
+     * long, so short jitter must not count; below 1, short strokes are enough.
+     */
+    class Steady(private val ox: Double, private val oy: Double, private val tol: Double, smooth: Double) {
+        private val on = smooth > 0.01
+        private val minCut = when { smooth < 0.45 -> 3.0; smooth < 0.62 -> 1.5; else -> 0.8 }   // Hz
+        private val fx = OneEuro(minCut, BETA); private val fy = OneEuro(minCut, BETA)
+        fun at(x: Double, y: Double, tMs: Long): DoubleArray {
+            val sx = if (on) fx.f(x, tMs) else x; val sy = if (on) fy.f(y, tMs) else y
+            return doubleArrayOf(ox + (sx - ox) / tol, oy + (sy - oy) / tol)
+        }
+    }
+    const val BETA = 0.02   // how fast the smoothing lets go with speed (base units per second)
+
+    /** One coordinate of the 1€ filter. */
+    class OneEuro(private val minCut: Double, private val beta: Double, private val dCut: Double = 1.0) {
+        private var x0 = Double.NaN; private var dx0 = 0.0; private var t0 = 0L
+        private fun alpha(cut: Double, dt: Double): Double { val tau = 1 / (2 * PI * cut); return 1 / (1 + tau / dt) }
+        fun f(x: Double, tMs: Long): Double {
+            if (x0.isNaN()) { x0 = x; t0 = tMs; return x }
+            val dt = maxOf(1L, tMs - t0) / 1000.0; t0 = tMs
+            val dx = (x - x0) / dt
+            dx0 += alpha(dCut, dt) * (dx - dx0)
+            val cut = minCut + beta * abs(dx0)
+            x0 += alpha(cut, dt) * (x - x0)
+            return x0
+        }
+    }
 
     private fun slot(t: Array<Array<String>>, p: Int, kind: Char): Slot {
         val i = KINDS.indexOf(kind)

@@ -381,4 +381,45 @@ class KeyboardTest {
         fnTap(Pulse.Fn.SPACE)                                  // a plain tap is still a space
         assertEquals("Д ом", field.sb.toString())
     }
+
+    @Test fun nextWordBeforeALetterIsTyped() {
+        assertTrue("a start of a message has suggestions", svc.cands.isNotEmpty())
+        for (c in "доброе") letter(c.toString())
+        spaceTap()
+        assertEquals("утро", svc.cands[0])                    // from everyday sentences
+        stripTap(0)
+        assertEquals("Доброе утро ", field.sb.toString())
+        // its own habits win: after «пишу» this person always types «тебе»… after two times it is first
+        repeat(2) { for (c in "пишу") letter(c.toString()); spaceTap(); for (c in "тебе") letter(c.toString()); spaceTap() }
+        for (c in "пишу") letter(c.toString()); spaceTap()
+        assertEquals("тебе", svc.cands[0])
+    }
+
+    @Test fun talkBackHoverStrokesAndSpeaks() {
+        val am = svc.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+        org.robolectric.Shadows.shadowOf(am).setEnabled(true)
+        org.robolectric.Shadows.shadowOf(am).setTouchExplorationEnabled(true)
+        val said = ArrayList<String>(); svc.feedback.announcer = { said.add(it) }
+        try {
+            // one finger under TalkBack comes as hover: a stroke up, the letter is heard before the finger lifts
+            val o = doubleArrayOf(Pulse.PH[0] + 12, Pulse.PH[1] - 8)
+            fun hv(action: Int, b: DoubleArray) { val p = px(b[0], b[1]); t0 += 16; view.onHoverEvent(MotionEvent.obtain(t0, t0, action, p[0], p[1], 0)) }
+            hv(MotionEvent.ACTION_HOVER_ENTER, o)
+            for (i in 1..6) hv(MotionEvent.ACTION_HOVER_MOVE, doubleArrayOf(o[0], o[1] + 7.5 * i))
+            idle(300)
+            assertTrue("heard before lifting: $said", said.contains("а"))
+            hv(MotionEvent.ACTION_HOVER_EXIT, doubleArrayOf(o[0], o[1] + 45))
+            assertEquals("А", field.sb.toString())
+            // its double-tap arrives as a touch: it must not type again
+            letter("о")
+            assertEquals("А", field.sb.toString())
+        } finally { org.robolectric.Shadows.shadowOf(am).setTouchExplorationEnabled(false) }
+    }
+
+    @Test fun compassNotesDoNotChangeWhatIsTyped() {
+        svc.prefs.compass = "notes"
+        for (c in "мама") letter(c.toString())
+        assertEquals("Мама", field.sb.toString())
+        svc.prefs.compass = "off"
+    }
 }

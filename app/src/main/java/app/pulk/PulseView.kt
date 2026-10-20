@@ -66,9 +66,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val wdp = w / density
         val vhdp = resources.displayMetrics.heightPixels / density
         val r = Pulse.OUTER.toFloat()
-        var kd = min(wdp, 440f) / (r * 1.047f) * svc.prefs.size / 100f * (if (blind()) 1.1f else 1f)
-        kd = min(kd, (wdp + 4f - 6f) / r)
-        kd = min(kd, vhdp * (if (blind()) 0.5f else 0.42f) / (r + 4f))
+        val kd = Pulse.scaleDp(wdp, vhdp, svc.prefs.size, blind())
         kDp = kd; k = kd * density
         stripH = STRIP_DP * density
         // the star sticks out past the zone towards the screen's middle: the view is tall enough for it
@@ -501,6 +499,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var erased = false
         var erase: Runnable? = null
         var cursorX = Float.NaN        // holding space: the cursor follows the finger from here (screen x)
+        var steady: Pulse.Steady? = null  // the stroke, smoothed and measured to this hand
     }
     private val touches = HashMap<Int, Touch>()
     private var pressedFn: Pulse.Fn? = null
@@ -512,7 +511,36 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun bx(x: Float) = ((mx(x) - cx) / k).toDouble()
     private fun by(y: Float) = ((cy - y) / k).toDouble()
 
+    // ---- TalkBack: with touch exploration on, one finger arrives as hover; the keyboard takes it as a stroke ----
+    private val a11y = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+    private fun exploring() = a11y.isEnabled && a11y.isTouchExplorationEnabled
+    init {
+        contentDescription = "Клавиатура Пульк. Поставь палец и веди к букве — услышишь её, отпусти — напечатается. Касание без движения — пробел."
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+    override fun onHoverEvent(e: MotionEvent): Boolean {
+        if (!exploring()) return super.onHoverEvent(e)
+        when (e.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER -> down(0, e.x, e.y, e.eventTime)
+            MotionEvent.ACTION_HOVER_MOVE -> move(0, e.x, e.y, e.eventTime)
+            MotionEvent.ACTION_HOVER_EXIT -> up(0, e.x, e.y, e.eventTime)
+        }
+        return true
+    }
+
+    // the sound compass: say what the finger is on, each time it changes
+    private var heard: Pulse.Slot? = null
+    private fun compass(s: Pulse.Slot?) {
+        if (s == null || (svc.prefs.compass == "off" && !exploring())) return
+        val h = heard
+        if (h != null && h.petal == s.petal && h.kind == s.kind) return
+        heard = s
+        svc.feedback.compass(s, if (svc.shiftActive()) s.v.uppercase() else s.v, svc.lang)
+    }
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        // with TalkBack the finger comes as hover; its double-tap would type a second time
+        if (exploring()) return true
         val tm = e.eventTime
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> { val i = e.actionIndex; down(e.getPointerId(i), e.getX(i), e.getY(i), tm) }
@@ -534,6 +562,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
     private fun down(id: Int, x: Float, y: Float, tm: Long) {
+        heard = null
         lastX = x
         if (!isOpen || anim != null) {
             val t = Touch(null, -1, handle = true); touches[id] = t
@@ -553,6 +582,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val inStrip = chip >= 0
         val fn = if (inStrip) null else Pulse.hit(b[0], b[1])
         val t = Touch(fn, chip, handle = false)
+        if (fn == null && !inStrip) t.steady = Pulse.Steady(b[0], b[1], svc.prefs.tol.toDouble(), svc.prefs.smooth.toDouble())
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm); t.anchorX = b[0]; t.anchorY = b[1]
         touches[id] = t
         svc.feedback.touch()
@@ -604,6 +634,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     private fun updateCand(t: Touch) {
         cand = resolveNow(t.pts.toDoubleArray())
+        if (t.pts.size > 2) compass(cand)
         longAlt = if (t.long) cand?.let { Pulse.ALT[it.v] } else null
         trail = ArrayList(t.pts)
     }
@@ -623,6 +654,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         if (t.handle) return
         t.field?.let { f -> if (f[0].isNaN()) slideCursor(x, y) else { fieldDrag = floatArrayOf(x - f[0], y - f[1]); invalidate() }; return }
         val b = doubleArrayOf(bx(x), by(y))
+        t.steady?.let { s -> val q = s.at(b[0], b[1], tm); b[0] = q[0]; b[1] = q[1] }
         if (t.strip >= 0) { val s = chipAt(x, y); if (s != pressedStrip) { pressedStrip = s; invalidate() }; return }
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm)
         lastX = x
@@ -642,7 +674,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 svc.typeLetter(s.v, s); t.since++
                 cand = null; trail = null
             } else if (j.isOut) {
-                j.current()?.let { cand = jabSlot(it); trail = it.toList() }
+                j.current()?.let { cand = jabSlot(it); trail = it.toList(); compass(cand) }
             }
             invalidate(); return
         }
@@ -665,6 +697,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             svc.insetsChanged(); invalidate(); return
         }
         val b = doubleArrayOf(bx(x), by(y))
+        t.steady?.let { s -> val q = s.at(b[0], b[1], tm); b[0] = q[0]; b[1] = q[1] }
         when {
             t.strip >= 0 -> { val s = pressedStrip; pressedStrip = -1; if (s >= 0) svc.pick(s) }
             t.fn == null && t.jabs != null -> {

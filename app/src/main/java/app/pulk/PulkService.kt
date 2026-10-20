@@ -73,6 +73,9 @@ class PulkService : InputMethodService() {
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this); feedback = Feedback(this, prefs); lang = prefs.lang
+        val a11y = getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+        feedback.exploring = { a11y.isEnabled && a11y.isTouchExplorationEnabled }
+        feedback.announcer = { t -> view?.announceForAccessibility(t) }
         Thread { words("ru"); words("en") }.start() // ready before the first word, without holding up the keyboard
     }
 
@@ -126,6 +129,7 @@ class PulkService : InputMethodService() {
     /** Reads what kind of field this is. Separate from the Android callback so it can be tested. */
     fun startInput(info: EditorInfo) {
         lang = prefs.lang
+        prefs.applyBias()
         if (prefs.forget) { prefs.forget = false; forget() }
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         val variation = info.inputType and InputType.TYPE_MASK_VARIATION
@@ -167,6 +171,11 @@ class PulkService : InputMethodService() {
     @Synchronized fun words(l: String): Words = dicts.getOrPut(l) {
         val list = assets.open("dict_$l.txt").bufferedReader().readLines()
         Words(list, l).also { w ->
+            try { w.loadNext(assets.open("next_$l.txt").bufferedReader().readLines()) } catch (_: Exception) {}
+            val pf = pairsFile(l)
+            if (pf.exists()) pf.readLines().forEach { line ->
+                val p = line.split('\t'); if (p.size == 3) p[2].toIntOrNull()?.let { c -> w.pairs.getOrPut(p[0]) { HashMap() }[p[1]] = c }
+            }
             val f = userFile(l)
             if (f.exists()) f.readLines().forEach { line ->
                 val p = line.split('\t'); if (p.size == 2) p[1].toIntOrNull()?.let { w.user[p[0]] = it }
@@ -175,6 +184,7 @@ class PulkService : InputMethodService() {
     }
     private fun wordsIfReady(l: String): Words? = synchronized(this) { dicts[l] }
     private fun userFile(l: String) = File(filesDir, "words_$l.txt")
+    private fun pairsFile(l: String) = File(filesDir, "pairs_$l.txt")
 
     private fun save() {
         if (unsaved == 0) return
@@ -183,22 +193,46 @@ class PulkService : InputMethodService() {
             if (w.user.isEmpty()) continue
             val top = w.user.entries.sortedByDescending { it.value }.take(5000)
             try { userFile(l).writeText(top.joinToString("\n") { "${it.key}\t${it.value}" }) } catch (_: Exception) {}
+            val ps = w.pairs.flatMap { (a, m) -> m.map { Triple(a, it.key, it.value) } }.sortedByDescending { it.third }.take(20000)
+            try { pairsFile(l).writeText(ps.joinToString("\n") { "${it.first}\t${it.second}\t${it.third}" }) } catch (_: Exception) {}
         }
     }
 
     /** Clears the words this keyboard has learned (from the settings screen). */
-    fun forget() { synchronized(this) { dicts.values.forEach { it.user.clear() } }; listOf("ru", "en").forEach { userFile(it).delete() } }
+    fun forget() { synchronized(this) { dicts.values.forEach { it.user.clear() } }; listOf("ru", "en").forEach { userFile(it).delete(); pairsFile(it).delete() }; synchronized(this) { dicts.values.forEach { it.pairs.clear() } } }
 
     private fun currentWord(): String = Regex("\\p{L}[\\p{L}']*$").find(sink.before(48))?.value ?: ""
 
     private fun refreshCands() {
         val w = currentWord()
-        cands = if (!suggestHere || symbols || w.isEmpty() || Coach.active) emptyList() else wordsIfReady(lang)?.suggest(w) ?: emptyList()
+        val dict = wordsIfReady(lang)
+        cands = when {
+            !suggestHere || symbols || Coach.active || dict == null -> emptyList()
+            w.isNotEmpty() -> dict.suggest(w)
+            prefs.predict -> prevWord()?.let { p -> dict.next(p).map { if (shiftActive()) it.replaceFirstChar { c -> c.uppercase() } else it } } ?: emptyList()
+            else -> emptyList()
+        }
+    }
+
+    /** Before a new word: the word before it, "^" at the start of a sentence, or null in the middle of something else. */
+    private fun prevWord(): String? {
+        val b = sink.before(60)
+        if (b.isBlank()) return "^"
+        if (!b.last().isWhitespace()) return null
+        val t = b.trimEnd()
+        if (t.last() in ".!?…\n") return "^"
+        return Regex("[\\p{L}']+$").find(t)?.value ?: "^"
     }
 
     private fun learn(w: String) {
-        if (!learnHere || w.length < 2) return
-        wordsIfReady(lang)?.learn(w); if (++unsaved >= 20) save()
+        if (!learnHere) return
+        val dict = wordsIfReady(lang) ?: return
+        // and what came before it, so next time it can be offered before a letter is typed
+        val before = sink.before(80).trimEnd().let { if (it.endsWith(w)) it.dropLast(w.length) else it }.trimEnd()
+        val prev = if (before.isEmpty() || before.last() in ".!?…\n") "^" else Regex("[\\p{L}']+$").find(before)?.value
+        if (prev != null) dict.learnPair(prev, w)
+        if (w.length >= 2) dict.learn(w)
+        if (++unsaved >= 20) save()
     }
 
     /**
@@ -224,6 +258,7 @@ class PulkService : InputMethodService() {
     // ---- what the view asks for ----
     fun typeLetter(v: String, slot: Pulse.Slot) {
         val s = if (shiftActive() && !symbols) v.uppercase() else v
+        feedback.hush()
         undo = null
         sink.commit(s)
         feedback.letter(slot, s, lang, secure)
@@ -232,6 +267,7 @@ class PulkService : InputMethodService() {
     }
 
     fun space() {
+        feedback.hush()
         val now = System.currentTimeMillis()
         val before = sink.before(2)
         if (now - lastSpace < 350 && before.length == 2 && before[1] == ' ' && before[0].isLetterOrDigit()) {
@@ -279,6 +315,7 @@ class PulkService : InputMethodService() {
     }
 
     fun backspace() {
+        feedback.hush()
         val u = undo
         undo = null
         if (u != null) {

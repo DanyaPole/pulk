@@ -36,5 +36,10 @@
             android:exported="false"
             android:label="Обучение"
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity
+            android:name=".CalibrationActivity"
+            android:exported="false"
+            android:label="Настройка под руку"
+            android:screenOrientation="portrait" />
     </application>
 </manifest>

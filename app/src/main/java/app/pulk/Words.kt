@@ -14,6 +14,31 @@ class Words(dict: List<String>, lang: String) {
     private val folded: Array<String> = Array(words.size) { fold(words[it]) }
     private val rank = HashMap<String, Int>(words.size * 2).also { m -> folded.forEachIndexed { i, w -> m.putIfAbsent(w, i) } }
 
+    /** What usually comes next: from a corpus of everyday sentences (Tatoeba), "^" for the start of a sentence. */
+    private val nextCorpus = HashMap<String, List<String>>()
+    /** What comes next for this person: learned from what they type. */
+    val pairs = HashMap<String, HashMap<String, Int>>()
+
+    fun loadNext(lines: List<String>) {
+        for (l in lines) { val t = l.indexOf('\t'); if (t > 0) nextCorpus[l.substring(0, t)] = l.substring(t + 1).split(' ').filter { it.isNotEmpty() } }
+    }
+
+    /** The next word, before a letter of it is typed: this person's own habits first, then the corpus. */
+    fun next(prev: String, n: Int = 3): List<String> {
+        val p = fold(prev.lowercase())
+        val out = ArrayList<String>()
+        pairs[p]?.entries?.filter { it.value >= 2 }?.sortedByDescending { it.value }?.forEach { if (it.key !in out) out.add(it.key) }
+        (nextCorpus[p] ?: nextCorpus[prev.lowercase()])?.forEach { if (it !in out) out.add(it) }
+        if (out.isEmpty()) nextCorpus["^"]?.let { out.addAll(it) }
+        return out.take(n)
+    }
+
+    fun learnPair(prev: String, w: String) {
+        val a = fold(prev.lowercase()); val b = fold(w.lowercase())
+        if (b.length < 1 || b.any { !it.isLetter() && it != '\'' && it != '-' }) return
+        val m = pairs.getOrPut(a) { HashMap() }; m[b] = (m[b] ?: 0) + 1
+    }
+
     /** Words this person typed, with how often. Known to suggestions and never "corrected". */
     val user = HashMap<String, Int>()
 

@@ -80,5 +80,31 @@ class Prefs(ctx: Context) {
         get() = sp.getFloat("field_up", -1f)
         set(v) = sp.edit().putFloat("field_up", v).apply()
 
+    /** From the calibration: this thumb's stroke length against the textbook one, and how much to smooth tremor (0 off). */
+    var tol: Float
+        get() = sp.getFloat("tol", 1f)
+        set(v) = sp.edit().putFloat("tol", v).apply()
+    var smooth: Float
+        get() = sp.getFloat("smooth", 0f)
+        set(v) = sp.edit().putFloat("smooth", v).apply()
+    /** How far off each of the 8 directions this thumb goes, degrees, as "a,b,c,…". */
+    var bias: String
+        get() = sp.getString("bias", "") ?: ""
+        set(v) = sp.edit().putString("bias", v).apply()
+    var calibrated: Boolean
+        get() = sp.getBoolean("calibrated", false)
+        set(v) = sp.edit().putBoolean("calibrated", v).apply()
+    fun applyBias() { val p = bias.split(",").mapNotNull { it.trim().toDoubleOrNull() }; for (i in 0 until 8) Pulse.bias[i] = p.getOrElse(i) { 0.0 } }
+
+    /** After a space: the words that usually come next. */
+    var predict: Boolean
+        get() = sp.getBoolean("predict", true)
+        set(v) = sp.edit().putBoolean("predict", v).apply()
+
+    /** The sound compass: off · notes (a quiet note of the direction) · voice (the letter's name), before the finger lifts. */
+    var compass: String
+        get() = sp.getString("compass", "off") ?: "off"
+        set(v) = sp.edit().putString("compass", v).apply()
+
     val left get() = hand == "left"
 }

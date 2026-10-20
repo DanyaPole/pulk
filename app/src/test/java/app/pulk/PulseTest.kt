@@ -155,4 +155,32 @@ class PulseTest {
         println("jabs sloppy words=" + ok / (10.0 * words.size))
         assertTrue(ok >= 10 * words.size * 0.8)
     }
+
+    @Test fun personalAimMovesTheBorders() {
+        val t = Pulse.table("ru", false)
+        val o = doubleArrayOf(Pulse.PH[0], Pulse.PH[1])
+        fun at(deg: Double) = Pulse.resolve(t, stroke(o, listOf(deg to 45.0))).v
+        assertEquals("о", at(60.0))                 // textbook: 60° is nearer 45° («о») than 90° («а»)
+        Pulse.bias[2] = -25.0                       // this thumb aims «up» at about 65°
+        try { assertEquals("а", at(60.0)); assertEquals("а", at(90.0)) } finally { Pulse.bias.fill(0.0) }
+    }
+
+    @Test fun steadyHandFiltersTremorAndScalesLength() {
+        // a long-stroke thumb (tol 1.6): a 20-unit wobble is only a tap, a real 70-unit stroke is a letter
+        val s = Pulse.Steady(0.0, 0.0, 1.6, 0.0)
+        val wobble = s.at(20.0, 0.0, 0L)
+        assertTrue(kotlin.math.hypot(wobble[0], wobble[1]) < Pulse.P_MIN)
+        // smoothing: jitter around a straight line comes out much smaller
+        // the finger resting with a tremor of ±3 units at 120 Hz: what comes out barely moves
+        val sm = Pulse.Steady(0.0, 0.0, 1.0, 0.6)
+        var maxOff = 0.0
+        for (i in 1..60) { val q = sm.at(if (i % 2 == 0) 3.0 else -3.0, if (i % 3 == 0) 3.0 else -2.0, i * 8L); if (i > 10) maxOff = maxOf(maxOff, kotlin.math.hypot(q[0], q[1])) }
+        assertTrue("resting tremor $maxOff", maxOff < 2.0)          // the raw tremor reaches 4.2
+        // a quick stroke (45 units in 80 ms) keeps almost all of its length
+        val fast = Pulse.Steady(0.0, 0.0, 1.0, 0.6)
+        var end = doubleArrayOf(0.0, 0.0)
+        fast.at(0.0, 0.0, 0L)
+        for (i in 1..10) end = fast.at(4.5 * i, 0.0, i * 8L)
+        assertTrue("stroke kept undefined", end[0] > 30)
+    }
 }

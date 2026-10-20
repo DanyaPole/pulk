@@ -40,7 +40,12 @@ class SettingsActivity : Activity() {
         col.addView(text("Пульк", 32f, fg, true))
         col.addView(text("Клавиатура для набора одной рукой, большим пальцем. Режим «Пульс»: все буквы — в звезде из 8 направлений, палец почти не двигается.", 16f, muted))
 
-        col.addView(button("Обучение: «Пульс» и «Толчки»", primary = true) { startActivity(Intent(this, TutorialActivity::class.java)) })
+        // first of all: fit the keyboard to this hand (once; can be redone)
+        col.addView(button(if (prefs.calibrated) "Настройка под руку — пройти заново" else "Настрой Пульк под свою руку — 30 секунд", primary = !prefs.calibrated) {
+            startActivity(Intent(this, CalibrationActivity::class.java))
+        })
+        col.addView(text("Клавиатура узнает длину твоих смахов, дрожь пальца и куда он на самом деле ведёт, и подстроится.", 13f, muted))
+        col.addView(button("Обучение: «Пульс» и «Толчки»", primary = prefs.calibrated) { startActivity(Intent(this, TutorialActivity::class.java)) })
         col.addView(h("Как печатать — выбери"))
         col.addView(segmented("Способ набора", listOf("pulse" to "Пульс: смах = буква", "jabs" to "Толчки: касание = слово"), { prefs.mode }) { prefs.mode = it })
         col.addView(segmented("Где начинать смах", listOf("corner" to "Звезда в углу", "screen" to "Весь экран"), { prefs.zone }) { prefs.zone = it })
@@ -91,10 +96,15 @@ class SettingsActivity : Activity() {
         col.addView(segmented("Вслепую", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.blind) "on" else "off" }) {
             prefs.blind = it == "on"
             if (prefs.blind && prefs.sound == "off") prefs.sound = "voice" // eyes-free needs sound
+            if (prefs.blind && prefs.compass == "off") prefs.compass = "voice"
         })
         col.addView(text("Вслепую: звезда крупнее, касание без движения в любом месте — пробел, включается голос.", 13f, muted))
         col.addView(segmented("Звук «пульк» при появлении", listOf("bul" to "Буль", "glass" to "Стакан", "drip" to "Капелька", "off" to "Выкл"), { prefs.dropKind }) { prefs.dropKind = it; drops.drop(it) })
         col.addView(text("Клавиатура выдвигается из угла со звуком капли. ⌄ у нижнего края прячет её, касание кружка в углу — возвращает. Видна только звезда и полупрозрачные клавиши, за ними — приложение; касания мимо них идут в приложение. Без звука, если телефон в беззвучном режиме.", 13f, muted))
+        col.addView(segmented("Звуковой компас", listOf("off" to "Выкл", "notes" to "Ноты", "voice" to "Голос"), { prefs.compass }) { prefs.compass = it })
+        col.addView(text("Пока ведёшь палец, слышишь, какая буква выйдет, если отпустить сейчас: нота направления или название буквы. Можно поправиться, не глядя. С TalkBack включается сам.", 13f, muted))
+        col.addView(segmented("Следующее слово", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.predict) "on" else "off" }) { prefs.predict = it == "on" })
+        col.addView(text("После пробела над звездой — слова, которые обычно идут следом (по корпусу живых фраз Tatoeba и по тому, как пишешь ты). Лучшее — смах по пробелу вверх.", 13f, muted))
         col.addView(segmented("Подсказки слов", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.suggest) "on" else "off" }) { prefs.suggest = it == "on" })
         col.addView(segmented("Автоисправление", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.autocorrect) "on" else "off" }) { prefs.autocorrect = it == "on" })
         col.addView(text("Пробел меняет незнакомое слово на ближайшее из словаря, учитывая типичные промахи «Пульса». ⌫ сразу после — вернуть своё; такое слово клавиатура запомнит.", 13f, muted))
@@ -112,7 +122,7 @@ class SettingsActivity : Activity() {
         })
         col.addView(text("Настройки применяются, когда клавиатура открывается заново.", 13f, muted))
         col.addView(h("О программе"))
-        col.addView(text("Пульк ${packageManager.getPackageInfo(packageName, 0).versionName}. Бесплатно, без рекламы и без интернета.\nСловари: FrequencyWords (Hermit Dave), CC BY-SA 4.0.", 13f, muted))
+        col.addView(text("Пульк ${packageManager.getPackageInfo(packageName, 0).versionName}. Бесплатно, без рекламы и без интернета.\nСловари: FrequencyWords (Hermit Dave), CC BY-SA 4.0. Следующее слово: предложения Tatoeba (tatoeba.org), CC BY 2.0 FR. Фильтр дрожи: 1€ filter (Casiez, Roussel, Vogel, 2012).", 13f, muted))
 
         setContentView(ScrollView(this).apply { setBackgroundColor(bg); addView(col) })
     }
