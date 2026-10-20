@@ -27,18 +27,25 @@ class SettingsActivity : Activity() {
     private val accent = Color.parseColor("#55BAD7")
     private val accentFg = Color.parseColor("#06222B")
     private lateinit var prefs: Prefs
+    private lateinit var drops: Feedback   // to hear a «пульк» sound when choosing it
     private val dp get() = resources.displayMetrics.density
     private fun px(v: Int) = (v * dp).toInt()
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = Prefs(this)
+        drops = Feedback(this, prefs)
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(20), px(28), px(20), px(36)); setBackgroundColor(bg) }
 
         col.addView(text("Пульк", 32f, fg, true))
         col.addView(text("Клавиатура для набора одной рукой, большим пальцем. Режим «Пульс»: все буквы — в звезде из 8 направлений, палец почти не двигается.", 16f, muted))
 
         col.addView(button("Обучение: «Пульс» и «Толчки»", primary = true) { startActivity(Intent(this, TutorialActivity::class.java)) })
+        col.addView(h("Как печатать — выбери"))
+        col.addView(segmented("Способ набора", listOf("pulse" to "Пульс: смах = буква", "jabs" to "Толчки: касание = слово"), { prefs.mode }) { prefs.mode = it })
+        col.addView(segmented("Где начинать смах", listOf("corner" to "Звезда в углу", "screen" to "Весь экран"), { prefs.zone }) { prefs.zone = it })
+        col.addView(text("Весь экран: смах начинается где угодно, звезда появляется под пальцем, касание без движения — пробел. Пока клавиатура открыта, приложение за ней не нажимается: чтобы нажать «Отправить», спрячь клавиатуру ⌄.", 13f, muted))
+        col.addView(text("Эти настройки и все остальные открываются и с клавиатуры: удержи ⌄ у нижнего края.", 13f, muted))
 
         col.addView(h("1. Включи клавиатуру"))
         col.addView(button("Открыть настройки клавиатур") { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) })
@@ -69,16 +76,13 @@ class SettingsActivity : Activity() {
         col.addView(text(
             "Поставь палец в звезду и не отрывай его: толкни к букве и верни назад — буква напечатана, толкни к следующей… " +
             "Поднял палец — пробел. Двойная буква — два толчка в одну сторону. Толчок с поворотом — мелкая буква снаружи, короткий толчок — у центра. " +
-            "Сбился — замри дома на секунду: последняя буква сотрётся, держишь дальше — стирает подряд.", 15f, fg))
-        col.addView(h("Окно текста и курсор"))
+            "Сбился — подними палец и сотри ⌫; смах по ⌫ к звезде стирает слово целиком.", 15f, fg))
+        col.addView(h("Курсор"))
         col.addView(text(
-            "Над клавиатурой — окошко с тем, что ты печатаешь. Коснись текста в нём — курсор встанет туда, веди палец — курсор едет следом. " +
-            "За точки сбоку окошко перетаскивается куда удобно.", 15f, fg))
+            "Удержи пробел и веди палец влево или вправо — курсор едет следом. " +
+            "Можно включить и окно текста над клавиатурой (ниже в настройках): коснись текста в нём — курсор встанет туда.", 15f, fg))
 
         col.addView(h("Настройки"))
-        col.addView(segmented("Способ набора", listOf("pulse" to "Пульс: смах = буква", "jabs" to "Толчки: касание = слово"), { prefs.mode }) { prefs.mode = it })
-        col.addView(segmented("Где начинать смах", listOf("corner" to "Звезда в углу", "screen" to "Весь экран"), { prefs.zone }) { prefs.zone = it })
-        col.addView(text("Весь экран: смах начинается где угодно, звезда появляется под пальцем, касание без движения — пробел. Пока клавиатура открыта, приложение за ней не нажимается: чтобы нажать «Отправить», спрячь клавиатуру ⌄.", 13f, muted))
         col.addView(segmented("Окно текста", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.textWindow) "on" else "off" }) { prefs.textWindow = it == "on" })
         col.addView(segmented("Рука", listOf("left" to "Левая", "right" to "Правая"), { prefs.hand }) { prefs.hand = it })
         col.addView(segmented("Звук", listOf("off" to "Без звука", "clicks" to "Щелчки", "voice" to "Голос"), { prefs.sound }) { prefs.sound = it })
@@ -89,7 +93,7 @@ class SettingsActivity : Activity() {
             if (prefs.blind && prefs.sound == "off") prefs.sound = "voice" // eyes-free needs sound
         })
         col.addView(text("Вслепую: звезда крупнее, касание без движения в любом месте — пробел, включается голос.", 13f, muted))
-        col.addView(segmented("Звук «пульк» при появлении", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.dropSound) "on" else "off" }) { prefs.dropSound = it == "on" })
+        col.addView(segmented("Звук «пульк» при появлении", listOf("bul" to "Буль", "glass" to "Стакан", "drip" to "Капелька", "off" to "Выкл"), { prefs.dropKind }) { prefs.dropKind = it; drops.drop(it) })
         col.addView(text("Клавиатура выдвигается из угла со звуком капли. ⌄ у нижнего края прячет её, касание кружка в углу — возвращает. Видна только звезда и полупрозрачные клавиши, за ними — приложение; касания мимо них идут в приложение. Без звука, если телефон в беззвучном режиме.", 13f, muted))
         col.addView(segmented("Подсказки слов", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.suggest) "on" else "off" }) { prefs.suggest = it == "on" })
         col.addView(segmented("Автоисправление", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.autocorrect) "on" else "off" }) { prefs.autocorrect = it == "on" })

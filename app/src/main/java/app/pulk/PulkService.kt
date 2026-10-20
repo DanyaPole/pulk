@@ -317,6 +317,9 @@ class PulkService : InputMethodService() {
     fun switchLang() { lang = if (lang == "ru") "en" else "ru"; prefs.lang = lang; symbols = false; feedback.mode(); after() }
     fun toggleSymbols() { symbols = !symbols; feedback.mode(); after() }
 
+    /** Long press on ⌄: the app's settings, right from the keyboard. */
+    fun openSettings() { startActivity(android.content.Intent(this, SettingsActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); requestHideSelf(0) }
+
     /** Long press on the language key: Android's list of keyboards, to get back to another one. */
     fun pickKeyboard() { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() }
 

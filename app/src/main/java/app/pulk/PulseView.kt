@@ -500,12 +500,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var since = 0                  // letters typed since the last erase
         var erased = false
         var erase: Runnable? = null
+        var cursorX = Float.NaN        // holding space: the cursor follows the finger from here (screen x)
     }
     private val touches = HashMap<Int, Touch>()
     private var pressedFn: Pulse.Fn? = null
     private var pressedStrip = -1
     private var longAlt: String? = null
     private var lastShiftTap = 0L
+    private var lastX = 0f
 
     private fun bx(x: Float) = ((mx(x) - cx) / k).toDouble()
     private fun by(y: Float) = ((cy - y) / k).toDouble()
@@ -527,29 +529,12 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     private fun stopTimers(t: Touch) { t.hold?.let { handler.removeCallbacks(it) }; t.repeat?.let { handler.removeCallbacks(it) }; t.erase?.let { handler.removeCallbacks(it) } }
 
-    /**
-     * «Толчки»: the finger rests at home after a letter. Holding still there erases: a light tick first as a warning,
-     * then one letter, then one more every 0.3 s while the finger stays.
-     */
-    private fun armErase(t: Touch) {
-        t.erase?.let { handler.removeCallbacks(it) }
-        val warn = Runnable { if (t.jabs?.isOut == false) svc.feedback.touch() }
-        val r = object : Runnable {
-            override fun run() {
-                if (t.jabs?.isOut != false) return
-                svc.backspace(); t.erased = true; t.since = 0
-                handler.postDelayed(this, ERASE_AGAIN_MS)
-            }
-        }
-        handler.postDelayed(warn, ERASE_WARN_MS)
-        t.erase = r; handler.postDelayed(r, ERASE_MS)
-    }
-
     private fun jabSlot(pts: DoubleArray) = helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
     private fun down(id: Int, x: Float, y: Float, tm: Long) {
+        lastX = x
         if (!isOpen || anim != null) {
             val t = Touch(null, -1, handle = true); touches[id] = t
             if (!isOpen) open(sound = true)
@@ -580,6 +565,17 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     svc.backspace()
                     val rep = object : Runnable { override fun run() { svc.backspace(); handler.postDelayed(this, 65) } }
                     t.repeat = rep; handler.postDelayed(rep, 420)
+                }
+                if (fn.fn == Pulse.Fn.SPACE) {   // held still: the cursor rides on the finger, left and right
+                    val r = Runnable {
+                        val moved = hypot(t.pts[t.pts.size - 2] - t.pts[0], t.pts[t.pts.size - 1] - t.pts[1])
+                        if (moved < Pulse.GAP_MIN / 2) { t.cursorX = lastX; svc.feedback.mode(); invalidate() }
+                    }
+                    t.hold = r; handler.postDelayed(r, CURSOR_HOLD_MS)
+                }
+                if (fn.fn == Pulse.Fn.HIDE) {   // held: the settings, from the keyboard itself
+                    val r = Runnable { t.long = true; pressedFn = null; svc.feedback.mode(); svc.openSettings(); invalidate() }
+                    t.hold = r; handler.postDelayed(r, 550)
                 }
                 if (fn.fn == Pulse.Fn.LANG) {
                     val r = Runnable { t.long = true; pressedFn = null; svc.feedback.mode(); svc.pickKeyboard(); invalidate() }
@@ -629,7 +625,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val b = doubleArrayOf(bx(x), by(y))
         if (t.strip >= 0) { val s = chipAt(x, y); if (s != pressedStrip) { pressedStrip = s; invalidate() }; return }
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm)
-        if (t.fn != null) return
+        lastX = x
+        if (t.fn != null) {
+            if (!t.cursorX.isNaN()) {
+                val step = CURSOR_STEP_DP * density
+                val n = ((x - t.cursorX) / step).toInt()
+                if (n != 0) { svc.moveCursor(n); t.cursorX += n * step }
+            }
+            return
+        }
         val j = t.jabs
         if (j != null) {
             val done = j.add(b[0], b[1])
@@ -637,9 +641,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 val s = jabSlot(done)
                 svc.typeLetter(s.v, s); t.since++
                 cand = null; trail = null
-                armErase(t)
             } else if (j.isOut) {
-                t.erase?.let { handler.removeCallbacks(it) }
                 j.current()?.let { cand = jabSlot(it); trail = it.toList() }
             }
             invalidate(); return
@@ -684,11 +686,11 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     Pulse.Fn.SHIFT -> { val now = System.currentTimeMillis(); svc.shiftTap(now - lastShiftTap < 320); lastShiftTap = now }
                     Pulse.Fn.LANG -> if (!t.long) svc.switchLang()
                     Pulse.Fn.SYM -> svc.toggleSymbols()
-                    Pulse.Fn.HIDE -> hide()
+                    Pulse.Fn.HIDE -> if (!t.long) hide()
                     Pulse.Fn.ENTER -> svc.enter()
                     // a swipe along ⌫ towards the star: the rest of the word goes too
                     Pulse.Fn.BKSP -> if (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN) == "ccw") svc.deleteWord()
-                    Pulse.Fn.SPACE -> when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
+                    Pulse.Fn.SPACE -> if (!t.cursorX.isNaN()) Unit else when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
                         "out" -> svc.punct(".")
                         "in" -> svc.punct(",")
                         "ccw" -> svc.deleteWord()
@@ -716,9 +718,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     companion object {
         const val STRIP_DP = 52f
+        const val CURSOR_HOLD_MS = 380L
+        const val CURSOR_STEP_DP = 9f
         const val FIELD_BAND_DP = 68f
-        const val ERASE_WARN_MS = 450L
-        const val ERASE_MS = 800L
-        const val ERASE_AGAIN_MS = 300L
     }
 }

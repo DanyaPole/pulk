@@ -73,26 +73,40 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     fun mode() { buzz(16); if (prefs.sound != "off") tone(listOf(Triple(440.0, 0.0, 0.05)), 0.14) }
 
     /**
-     * «Пульк»: the sound of a drop as the keyboard comes out. A short tone whose pitch jumps up fast,
-     * which is how a drop falling into water sounds. Silent when the phone is on silent or vibrate.
+     * «Пульк»: the sound of a drop as the keyboard comes out. A drop into water rings like a small air bubble —
+     * a soft tone whose pitch rises as the bubble rises — and a smaller bubble after it. A gentle low-pass keeps it
+     * round and wet rather than a beep. The same synthesis renders the samples in tools/drop-sounds.js.
+     * Silent when the phone is on silent or vibrate.
      */
-    fun drop() {
-        if (!prefs.dropSound) return
+    fun drop(kind: String = prefs.dropKind) {
+        if (kind == "off") return
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
         if (am.ringerMode != android.media.AudioManager.RINGER_MODE_NORMAL) return
-        val rate = 22050; val dur = 0.16
-        val buf = ShortArray((dur * rate).toInt())
-        var phase = 0.0
-        for (i in buf.indices) {
-            val t = i.toDouble() / rate
-            val f = 380.0 + 1500.0 * (1 - Math.exp(-t / 0.018))           // the plop: pitch sweeps up
-            phase += 2 * PI * f / rate
-            val env = minOf(1.0, t / 0.003) * Math.exp(-t / 0.035)
-            val blip = if (t > 0.05) 0.35 * sin(2 * PI * 1250 * t) * Math.exp(-(t - 0.05) / 0.02) else 0.0 // a tiny second ring
-            buf[i] = ((sin(phase) * env + blip * minOf(1.0, (t - 0.05) / 0.003)) * 0.32 * 32767).toInt().coerceIn(-32768, 32767).toShort()
+        // bubbles: start s, from Hz, to Hz, rise s, decay s, level
+        val (bubbles, dur, vol, soft) = when (kind) {
+            "glass" -> Quad(listOf(doubleArrayOf(0.0, 220.0, 560.0, 0.05, 0.09, 1.0), doubleArrayOf(0.1, 450.0, 700.0, 0.03, 0.05, 0.3)), 0.32, 0.45, 0.28)
+            "drip" -> Quad(listOf(doubleArrayOf(0.0, 420.0, 1150.0, 0.025, 0.045, 1.0), doubleArrayOf(0.05, 900.0, 1400.0, 0.015, 0.025, 0.25)), 0.18, 0.38, 0.4)
+            else -> Quad(listOf(doubleArrayOf(0.0, 300.0, 820.0, 0.035, 0.065, 1.0), doubleArrayOf(0.075, 620.0, 1050.0, 0.02, 0.035, 0.35)), 0.26, 0.42, 0.35)
         }
+        val rate = 22050
+        val n = (dur * rate).toInt()
+        val acc = DoubleArray(n)
+        for (bb in bubbles) {
+            var phase = 0.0
+            for (i in (bb[0] * rate).toInt() until n) {
+                val t = i.toDouble() / rate - bb[0]
+                val f = bb[1] + (bb[2] - bb[1]) * (1 - Math.exp(-t / bb[3]))
+                phase += 2 * PI * f / rate
+                acc[i] += sin(phase) * (1 - Math.exp(-t / 0.006)) * Math.exp(-t / bb[4]) * bb[5]
+            }
+        }
+        var y = 0.0
+        val fade = (0.02 * rate).toInt()
+        val buf = ShortArray(n) { i -> y += soft * (acc[i] - y); val e = if (i > n - fade) (n - i).toDouble() / fade else 1.0
+            (y * e * vol * 32767).toInt().coerceIn(-32768, 32767).toShort() }
         play(buf, rate, dur)
     }
+    private data class Quad(val a: List<DoubleArray>, val b: Double, val c: Double, val d: Double)
 
     // ---- sound ----
     private val scale = doubleArrayOf(262.0, 294.0, 330.0, 392.0, 440.0, 523.0, 587.0, 659.0)

@@ -54,10 +54,10 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("forget", false)
         set(v) = sp.edit().putBoolean("forget", v).apply()
 
-    /** The «пульк» drop sound when the keyboard comes out. */
-    var dropSound: Boolean
-        get() = sp.getBoolean("drop", true)
-        set(v) = sp.edit().putBoolean("drop", v).apply()
+    /** The «пульк» sound when the keyboard comes out: bul · glass · drip · off. */
+    var dropKind: String
+        get() = sp.getString("drop_kind", null) ?: if (sp.getBoolean("drop", true)) "bul" else "off"
+        set(v) = sp.edit().putString("drop_kind", v).apply()
 
     /** pulse: a stroke per letter · jabs («Толчки»): a whole word per touch, a letter per jab out and back. */
     var mode: String
@@ -70,7 +70,7 @@ class Prefs(ctx: Context) {
 
     /** The keyboard shows what is being typed in its own window, which can be dragged anywhere. */
     var textWindow: Boolean
-        get() = sp.getBoolean("text_window", true)
+        get() = sp.getBoolean("text_window", false)
         set(v) = sp.edit().putBoolean("text_window", v).apply()
     /** Where the text window was left: its left edge as a share of the width, its top in dp above the bottom (-1: default). */
     var fieldX: Float

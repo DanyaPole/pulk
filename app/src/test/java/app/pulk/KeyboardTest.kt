@@ -314,17 +314,19 @@ class KeyboardTest {
         assertEquals("Мама касса. ", field.sb.toString())
     }
 
-    @Test fun jabsHoldAtHomeErases() {
+    @Test fun jabsHoldingStillNeverErases() {
+        // thinking with the finger resting at home must not touch what is typed
         svc.prefs.mode = "jabs"
         val pts = jabPoints("дым")
         view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(pts[0][0], pts[0][1])))
         for (p in pts.drop(1)) view.dispatchTouchEvent(ev(MotionEvent.ACTION_MOVE, px(p[0], p[1])))
+        idle(3000)
         assertEquals("Дым", field.sb.toString())
-        idle(900)                                         // the finger stays home: the last letter goes
-        assertEquals("Ды", field.sb.toString())
         val last = pts.last()
         view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, px(last[0], last[1])))
-        assertEquals("no space after erasing", "Ды", field.sb.toString())
+        assertEquals("Дым ", field.sb.toString())
+        fnTap(Pulse.Fn.BKSP); fnTap(Pulse.Fn.BKSP)          // ⌫ after the lift: the space, then the letter
+        assertEquals("Ды", field.sb.toString())
     }
 
     @Test fun wholeScreenStarComesToTheFinger() {
@@ -363,5 +365,20 @@ class KeyboardTest {
         val r2 = view.fieldRect()!!
         assertTrue("moved", r2.top > r.top + 100 && kotlin.math.abs(r2.left - r.left) > 100)
         assertEquals("ТДом", field.sb.toString())   // at the very start a capital, as in any field
+    }
+
+    @Test fun holdSpaceAndSlideMovesTheCursor() {
+        for (c in "дом") letter(c.toString())
+        val k = Pulse.FN_KEYS.first { it.fn == Pulse.Fn.SPACE }
+        val am = (k.a0 + k.a1) / 2 * PI / 180; val r = (k.r0 + k.r1) / 2
+        val p = px(r * cos(am), r * sin(am))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, p))
+        idle(500)                                              // held still: the cursor mode
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_MOVE, floatArrayOf(p[0] - 9 * density * 2.5f, p[1])))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, floatArrayOf(p[0] - 9 * density * 2.5f, p[1])))
+        assertEquals(1, field.cur)                             // two letters back, and no space typed
+        assertEquals("Дом", field.sb.toString())
+        fnTap(Pulse.Fn.SPACE)                                  // a plain tap is still a space
+        assertEquals("Д ом", field.sb.toString())
     }
 }
