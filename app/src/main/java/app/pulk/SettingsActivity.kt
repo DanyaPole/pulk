@@ -38,7 +38,7 @@ class SettingsActivity : Activity() {
         col.addView(text("Пульк", 32f, fg, true))
         col.addView(text("Клавиатура для набора одной рукой, большим пальцем. Режим «Пульс»: все буквы — в звезде из 8 направлений, палец почти не двигается.", 16f, muted))
 
-        col.addView(button("Обучение: 4 коротких уровня", primary = true) { startActivity(Intent(this, TutorialActivity::class.java)) })
+        col.addView(button("Обучение: «Пульс» и «Толчки»", primary = true) { startActivity(Intent(this, TutorialActivity::class.java)) })
 
         col.addView(h("1. Включи клавиатуру"))
         col.addView(button("Открыть настройки клавиатур") { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) })
@@ -52,11 +52,11 @@ class SettingsActivity : Activity() {
 
         col.addView(h("Как печатать"))
         col.addView(text(
-            "Поставь палец в любое место светлой зоны и смахни:\n" +
+            "Поставь палец в звезду (в режиме «Весь экран» — куда угодно) и смахни:\n" +
             "• прямо в сторону крупной буквы — она;\n" +
             "• смахни и сразу поверни к мелкой букве — мелкая снаружи;\n" +
             "• смахни и верни палец назад — мелкая у центра;\n" +
-            "• касание в центре звезды или мимо неё — пробел.\n\n" +
+            "• касание в центре звезды — пробел.\n\n" +
             "Задержи палец в конце жеста: е → ё, ь → ъ, ? → !.\n" +
             "Смах по пробелу наружу — точка, внутрь — запятая, вдоль дуги вниз — стереть слово, вдоль дуги вверх — взять лучшую подсказку.\n" +
             "Подсказки слов — над звездой, лучшая ближе к пальцу. Если клавиатура исправила слово, а ты хотел своё, — сразу нажми ⌫.\n" +
@@ -65,7 +65,21 @@ class SettingsActivity : Activity() {
             "Удержи RU/EN — список клавиатур, чтобы вернуться к другой.\n" +
             "Кнопка ?123 переключает на цифры и знаки, RU/EN — язык.", 15f, fg))
 
+        col.addView(h("Толчки — слово одним касанием"))
+        col.addView(text(
+            "Поставь палец в звезду и не отрывай его: толкни к букве и верни назад — буква напечатана, толкни к следующей… " +
+            "Поднял палец — пробел. Двойная буква — два толчка в одну сторону. Толчок с поворотом — мелкая буква снаружи, короткий толчок — у центра. " +
+            "Сбился — замри дома на секунду: последняя буква сотрётся, держишь дальше — стирает подряд.", 15f, fg))
+        col.addView(h("Окно текста и курсор"))
+        col.addView(text(
+            "Над клавиатурой — окошко с тем, что ты печатаешь. Коснись текста в нём — курсор встанет туда, веди палец — курсор едет следом. " +
+            "За точки сбоку окошко перетаскивается куда удобно.", 15f, fg))
+
         col.addView(h("Настройки"))
+        col.addView(segmented("Способ набора", listOf("pulse" to "Пульс: смах = буква", "jabs" to "Толчки: касание = слово"), { prefs.mode }) { prefs.mode = it })
+        col.addView(segmented("Где начинать смах", listOf("corner" to "Звезда в углу", "screen" to "Весь экран"), { prefs.zone }) { prefs.zone = it })
+        col.addView(text("Весь экран: смах начинается где угодно, звезда появляется под пальцем, касание без движения — пробел. Пока клавиатура открыта, приложение за ней не нажимается: чтобы нажать «Отправить», спрячь клавиатуру ⌄.", 13f, muted))
+        col.addView(segmented("Окно текста", listOf("on" to "Вкл", "off" to "Выкл"), { if (prefs.textWindow) "on" else "off" }) { prefs.textWindow = it == "on" })
         col.addView(segmented("Рука", listOf("left" to "Левая", "right" to "Правая"), { prefs.hand }) { prefs.hand = it })
         col.addView(segmented("Звук", listOf("off" to "Без звука", "clicks" to "Щелчки", "voice" to "Голос"), { prefs.sound }) { prefs.sound = it })
         col.addView(text("Щелчки: у каждого направления своя нота. Голос: называет введённую букву и читает слово после пробела (в полях паролей не читает).", 13f, muted))
@@ -130,7 +144,8 @@ class SettingsActivity : Activity() {
         for ((v, label) in options) {
             val btn = Button(this).apply {
                 text = label; isAllCaps = false; textSize = 14f
-                layoutParams = LinearLayout.LayoutParams(0, px(48), 1f).apply { setMargins(px(2), 0, px(2), 0) }
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(px(2), 0, px(2), 0) }
+                minHeight = px(48); minimumHeight = px(48); setPadding(px(6), px(8), px(6), px(8))
                 setOnClickListener { set(v); paint() }
             }
             buttons.add(v to btn); row.addView(btn)

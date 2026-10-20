@@ -59,5 +59,26 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("drop", true)
         set(v) = sp.edit().putBoolean("drop", v).apply()
 
+    /** pulse: a stroke per letter · jabs («Толчки»): a whole word per touch, a letter per jab out and back. */
+    var mode: String
+        get() = sp.getString("mode", "pulse") ?: "pulse"
+        set(v) = sp.edit().putString("mode", v).apply()
+    /** corner: the star in the thumb's corner · screen: a stroke may start anywhere, the star comes to the finger. */
+    var zone: String
+        get() = sp.getString("zone", "corner") ?: "corner"
+        set(v) = sp.edit().putString("zone", v).apply()
+
+    /** The keyboard shows what is being typed in its own window, which can be dragged anywhere. */
+    var textWindow: Boolean
+        get() = sp.getBoolean("text_window", true)
+        set(v) = sp.edit().putBoolean("text_window", v).apply()
+    /** Where the text window was left: its left edge as a share of the width, its top in dp above the bottom (-1: default). */
+    var fieldX: Float
+        get() = sp.getFloat("field_x", -1f)
+        set(v) = sp.edit().putFloat("field_x", v).apply()
+    var fieldUp: Float
+        get() = sp.getFloat("field_up", -1f)
+        set(v) = sp.edit().putFloat("field_up", v).apply()
+
     val left get() = hand == "left"
 }

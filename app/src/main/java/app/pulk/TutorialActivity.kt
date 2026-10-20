@@ -77,26 +77,27 @@ class TutorialActivity : Activity() {
         root.addView(text("Четыре коротких уровня, каждый — пара минут. Печатаешь самой клавиатурой Пульк, подсказки появляются прямо на звезде.", 15f, muted))
         val done = prefs.lessonsDone
         for (l in Lessons.LEVELS.indices) {
+            if (l % Lessons.PER_COURSE == 0) root.addView(text(if (Lessons.isJabs(l)) "«Толчки» — слово за одно касание" else "«Пульс» — буква за смах", 20f, fg, true).apply { setPadding(0, px(22), 0, 0) })
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(px(16), px(14), px(16), px(14))
                 background = GradientDrawable().apply { cornerRadius = px(14).toFloat(); setColor(panel); setStroke(px(1), line) }
                 layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) }
             }
             val mark = if (done and (1 shl l) != 0) "  ✓" else ""
-            card.addView(text("${l + 1}. ${Lessons.LEVELS[l]}$mark", 18f, fg, true))
+            card.addView(text("${l % Lessons.PER_COURSE + 1}. ${Lessons.LEVELS[l]}$mark", 18f, fg, true))
             card.addView(text(Lessons.ABOUT[l], 14f, muted))
-            card.addView(button(if (done and (1 shl l) != 0) "Ещё раз" else "Начать", primary = l == firstUndone()) { startLevel(l) })
+            card.addView(button(if (done and (1 shl l) != 0) "Ещё раз" else "Начать", primary = l == firstUndone(Lessons.courseOf(l))) { startLevel(l) })
             root.addView(card)
         }
     }
-    private fun firstUndone() = Lessons.LEVELS.indices.firstOrNull { prefs.lessonsDone and (1 shl it) == 0 } ?: 0
+    private fun firstUndone(course: Int) = (course * Lessons.PER_COURSE until (course + 1) * Lessons.PER_COURSE).firstOrNull { prefs.lessonsDone and (1 shl it) == 0 } ?: course * Lessons.PER_COURSE
 
     // ---- a level ----
     private fun startLevel(l: Int) {
         endLevel(keep = false)
         level = l; steps = Lessons.steps(l, prefs.lang, prefs.left); i = 0; help = 0; misses = 0; lock = false
-        Coach.active = true; Coach.help = 0; Coach.hideLabels = l == 3
-        if (l == 3) {
+        Coach.active = true; Coach.help = 0; Coach.hideLabels = Lessons.isBlind(l); Coach.jabs = Lessons.isJabs(l)
+        if (Lessons.isBlind(l)) {
             // the last level is typed by ear: voice and eyes-free mode, for this level only
             restore = prefs.sound to prefs.blind
             if (prefs.sound == "off") prefs.sound = "voice"
@@ -170,7 +171,7 @@ class TutorialActivity : Activity() {
             }
             row.addView(d)
         }
-        row.addView(text("уровень ${level + 1} из ${Lessons.LEVELS.size}", 13f, muted).apply { setPadding(px(8), 0, 0, 0) })
+        row.addView(text("уровень ${level % Lessons.PER_COURSE + 1} из ${Lessons.PER_COURSE}", 13f, muted).apply { setPadding(px(8), 0, 0, 0) })
         return row
     }
 
@@ -182,14 +183,14 @@ class TutorialActivity : Activity() {
         val sch = findViewById<View>(ID_SCHEDULE); val idx = root.indexOfChild(sch)
         root.removeView(sch); root.addView(schedule().apply { id = ID_SCHEDULE }, idx)
         updateCoach(field?.text?.toString() ?: "")
-        if (level == 3) listen()
+        if (Lessons.isBlind(level)) listen()
     }
 
     private fun updateCoach(text: String) {
         val st = steps.getOrNull(i) ?: return
         val nx = Lessons.next(st, text)
         Coach.next = nx; Coach.help = help
-        Coach.hint = if (help >= 1 && nx != null) "«${if (nx == " ") "пробел" else nx}»: ${Lessons.how(nx, prefs.lang, prefs.left)}" else null
+        Coach.hint = if (help >= 1 && nx != null) "«${if (nx == " ") "пробел" else nx}»: ${Lessons.how(nx, prefs.lang, prefs.left, Lessons.isJabs(level))}" else null
         Coach.changed()
         if (help >= 1) status?.apply { setTextColor(fg); this.text = Coach.hint ?: "Можно стереть ⌫ — или продолжай, одна ошибка не страшна." }
     }
@@ -246,7 +247,7 @@ class TutorialActivity : Activity() {
         val l = level
         root.removeAllViews(); field = null
         root.addView(text("«${Lessons.LEVELS[l]}» — получилось!", 26f, fg, true))
-        if (l == 3) {
+        if (Lessons.isBlind(l)) {
             root.addView(text("Ты печатаешь, не глядя на звезду. Звук и режим «вслепую» можно оставить: в нём касание в любом месте — пробел, звезда крупнее.", 15f, muted))
             root.addView(button("Оставить звук и «вслепую»", primary = true) { endLevel(keep = true); menu() })
             root.addView(button("Вернуть как было") { endLevel(keep = false); menu() })

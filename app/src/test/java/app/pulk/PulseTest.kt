@@ -123,4 +123,36 @@ class PulseTest {
         val back = gesture(1, 'b'); val bt = LongArray(back.size / 2) { it * 16L }
         assertEquals("ю", Pulse.resolve(t, Pulse.trimLift(back, bt, bt.last() + 8)).v)
     }
+
+    /** A whole word as one touch of jabs: each letter out from home and back, with a bit of hand noise. */
+    private fun jabWord(word: String, lang: String = "ru", noise: Double = 0.0, drift: Boolean = false): String {
+        val t = Pulse.table(lang, false)
+        var x = Pulse.PH[0]; var y = Pulse.PH[1]
+        val jabs = Pulse.Jabs(x, y); val out = StringBuilder()
+        fun go(a: Double, len: Double) { for (s in 1..8) { x += cos(a * PI / 180) * len / 8 + g() * noise; y += sin(a * PI / 180) * len / 8 + g() * noise
+            jabs.add(x, y)?.let { out.append(Pulse.jab(t, it).v) } } }
+        for (ch in word) {
+            var p = -1; var k = -1
+            for (i in 0 until 8) { val j = t[i].indexOf(ch.toString()); if (j >= 0) { p = i; k = j } }
+            val a = p * 45.0 + g() * noise * 4
+            when (Pulse.KINDS[k]) {
+                'c' -> { go(a, 42.0); go(a + 180, if (drift) 36.0 else 42.0) }
+                'l' -> { go(a, 36.0); go(a + 70, 22.0); go(a + 200, 50.0) }
+                'r' -> { go(a, 36.0); go(a - 70, 22.0); go(a - 200, 50.0) }
+                else -> { go(a, 20.0); go(a + 180, 20.0) }
+            }
+        }
+        jabs.finish()?.let { out.append(Pulse.jab(t, it).v) }
+        return out.toString()
+    }
+
+    @Test fun jabsTypeWholeWords() {
+        for (w in listOf("мама", "привет", "касса", "сон", "щука", "семья", "человек")) assertEquals(w, jabWord(w))
+        assertEquals("hello", jabWord("hello", "en"))
+        // a hand that drifts and shakes a little
+        var ok = 0; val words = listOf("мама", "привет", "касса", "дом", "работа", "человек", "сегодня", "хорошо")
+        repeat(10) { for (w in words) if (jabWord(w, noise = 0.6, drift = true) == w) ok++ }
+        println("jabs sloppy words=" + ok / (10.0 * words.size))
+        assertTrue(ok >= 10 * words.size * 0.8)
+    }
 }

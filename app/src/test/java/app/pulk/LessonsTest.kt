@@ -30,9 +30,9 @@ class LessonsTest {
     }
 
     @Test fun everyStepCanBeExplained() {
-        for (lang in listOf("ru", "en")) for (left in listOf(false, true)) for (l in 0..3) for (st in Lessons.steps(l, lang, left)) {
+        for (lang in listOf("ru", "en")) for (left in listOf(false, true)) for (l in Lessons.LEVELS.indices) for (st in Lessons.steps(l, lang, left)) {
             val letters = st.want?.let { listOf(it) } ?: st.word!!.map { it.toString() }
-            for (c in letters) assertNotNull("$lang $l $c", Lessons.how(c, lang, left))
+            for (c in letters) assertNotNull("$lang $l $c", Lessons.how(c, lang, left, Lessons.isJabs(l)))
         }
     }
 
@@ -88,5 +88,25 @@ class LessonsTest {
         assertTrue(Coach.hideLabels); assertEquals("voice", prefs.sound); assertTrue(prefs.blind)
         click(a, "← Меню")
         assertEquals("off", prefs.sound); assertFalse(prefs.blind); assertFalse(Coach.active)
+    }
+
+    @Test fun jabsCourse() {
+        assertEquals(8, Lessons.LEVELS.size)
+        assertEquals("толкни вправо, поверни вверх и вернись", Lessons.how("м", "ru", false, jabs = true))
+        val a = Lessons.steps(4, "ru", false)[0]
+        assertEquals(Lessons.Verdict.Done, Lessons.check(a, "а "))      // the lifted finger adds a space
+        assertEquals(Lessons.Verdict.Done, Lessons.check(Lessons.Step("", word = "сон"), "Сон "))
+        assertTrue(Lessons.isBlind(7) && Lessons.isJabs(7) && !Lessons.isJabs(3))
+    }
+
+    @Test fun theMenuHasBothCourses() {
+        val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
+        val texts = all(a.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
+        assertTrue(texts.any { it.startsWith("«Толчки»") })
+        assertTrue(texts.any { it.startsWith("«Пульс»") })
+        val start = all(a.window.decorView).filterIsInstance<Button>().filter { it.text.toString() == "Начать" }
+        start[4].performClick()                   // the first level of «Толчки»
+        assertTrue(Coach.active && Coach.jabs)
+        click(a, "← Меню"); assertFalse(Coach.active)
     }
 }

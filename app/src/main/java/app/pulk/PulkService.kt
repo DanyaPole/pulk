@@ -17,6 +17,9 @@ interface TextSink {
     fun key(code: Int)
     fun action(a: Int)
     fun capsOn(inputType: Int): Boolean
+    fun after(n: Int): String = ""
+    /** Moves the cursor by [delta] characters (negative: back). */
+    fun moveCursor(delta: Int) {}
 }
 
 /**
@@ -55,7 +58,16 @@ class PulkService : InputMethodService() {
         override fun key(code: Int) { sendDownUpKeyEvents(code) }
         override fun action(a: Int) { currentInputConnection?.performEditorAction(a) }
         override fun capsOn(inputType: Int) = (currentInputConnection?.getCursorCapsMode(inputType) ?: 0) != 0
+        override fun after(n: Int) = currentInputConnection?.getTextAfterCursor(n, 0)?.toString() ?: ""
+        override fun moveCursor(delta: Int) {
+            val ic = currentInputConnection ?: return
+            if (selStart >= 0) { val p = maxOf(0, selStart + delta); ic.setSelection(p, p); selStart = p; selEnd = p }
+            else repeat(kotlin.math.abs(delta)) { sendDownUpKeyEvents(if (delta < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT) }
+        }
     }
+    /** Where the cursor is in the field, as the app last told us (-1: not known). */
+    private var selStart = -1
+    private var selEnd = -1
     var sink: TextSink = realSink
 
     override fun onCreate() {
@@ -106,6 +118,7 @@ class PulkService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         startInput(info)
+        if (!restarting) view?.open(sound = true) // a new field: the keyboard comes out again if it was hidden
     }
 
     override fun onFinishInputView(finishingInput: Boolean) { save(); super.onFinishInputView(finishingInput) }
@@ -128,8 +141,9 @@ class PulkService : InputMethodService() {
         correctHere = suggestHere && !noSuggest && prefs.autocorrect
         learnHere = suggestHere && prefs.learn && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         editor = info
+        selStart = info.initialSelStart; selEnd = info.initialSelEnd
         shiftOnce = false; undo = null
-        updateAutoCap(); refreshCands()
+        updateAutoCap(); refreshCands(); refreshText()
         view?.refresh()
     }
     private var editor: EditorInfo? = null
@@ -137,7 +151,8 @@ class PulkService : InputMethodService() {
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
         super.onUpdateSelection(a, b, c, d, e, f)
-        updateAutoCap(); refreshCands(); view?.invalidate()
+        selStart = c; selEnd = d
+        updateAutoCap(); refreshCands(); refreshText(); view?.invalidate()
     }
 
     private fun updateAutoCap() {
@@ -305,5 +320,22 @@ class PulkService : InputMethodService() {
     /** Long press on the language key: Android's list of keyboards, to get back to another one. */
     fun pickKeyboard() { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() }
 
-    private fun after() { updateAutoCap(); refreshCands(); view?.invalidate() }
+    private fun after() { updateAutoCap(); refreshCands(); refreshText(); view?.invalidate() }
+
+    /** The text around the cursor, for the keyboard's own text window. Passwords show as dots. */
+    /** The view asks: the cursor goes [delta] characters along; suggestions start over at the new place. */
+    fun moveCursor(delta: Int) {
+        if (delta == 0) return
+        undo = null
+        sink.moveCursor(delta)
+        feedback.touch(); after()
+    }
+
+    var textBefore = ""; private set
+    var textAfter = ""; private set
+    private fun refreshText() {
+        val b = sink.before(160); val a = sink.after(60)
+        textBefore = if (secure) "•".repeat(minOf(b.length, 24)) else b
+        textAfter = if (secure) "" else a
+    }
 }

@@ -128,6 +128,57 @@ object Pulse {
         return pts.copyOf(n * 2)
     }
 
+    // ---- «Толчки»: a whole word without lifting the finger ----
+    const val JAB_OUT = 14.0    // the finger has left home: a jab begins
+    const val JAB_HOME = 10.0   // it is back home (or within 40% of how far it went): the jab is a letter
+    const val JAB_SHORT = 30.0  // a short straight jab is the small letter near the centre, a long one the big letter
+
+    /**
+     * Cuts one touch into jabs: from home out towards a petal and back. Each return home is a letter, so a
+     * double letter is simply two jabs the same way. Home follows the finger after each jab, so the thumb may drift.
+     */
+    class Jabs(private var ax: Double, private var ay: Double) {
+        private val cur = ArrayList<Double>()
+        private var far = 0.0
+        // after a jab the finger is still coming back: home settles where it comes closest to the old home
+        private var settling = false
+        private var hx = 0.0; private var hy = 0.0; private var best = 0.0
+        val isOut get() = cur.isNotEmpty()
+        val home get() = doubleArrayOf(ax, ay)
+        fun current(): DoubleArray? = if (cur.isEmpty()) null else cur.toDoubleArray()
+        /** The points of a jab that has just come back home, or null. */
+        fun add(x: Double, y: Double): DoubleArray? {
+            if (settling) {
+                val d0 = hypot(x - hx, y - hy)
+                if (d0 <= best + 0.8) { if (d0 < best) best = d0; ax = x; ay = y; return null }
+                settling = false
+            }
+            val d = hypot(x - ax, y - ay)
+            if (cur.isEmpty()) { if (d < JAB_OUT) return null; cur.add(ax); cur.add(ay) }
+            cur.add(x); cur.add(y); if (d > far) far = d
+            if (d < max(JAB_HOME, far * 0.4)) {
+                val r = cur.toDoubleArray(); cur.clear(); far = 0.0
+                settling = true; hx = ax; hy = ay; best = d; ax = x; ay = y
+                return r
+            }
+            return null
+        }
+        /** The finger lifted: a jab still on its way out counts too. */
+        fun finish(): DoubleArray? = if (cur.isEmpty()) null else cur.toDoubleArray().also { cur.clear(); far = 0.0 }
+    }
+
+    /** The letter of one jab: its way out decides, as a «Пульс» stroke would (straight, or with a turn). */
+    fun jab(t: Array<Array<String>>, pts: DoubleArray): Slot {
+        val ox = pts[0]; val oy = pts[1]; val n = pts.size / 2
+        var far = 0.0; var fi = 1
+        for (i in 1 until n) { val d = hypot(pts[2 * i] - ox, pts[2 * i + 1] - oy); if (d > far) { far = d; fi = i } }
+        val way = pts.copyOf((fi + 1) * 2)
+        var s = resolve(t, way)
+        if (s.isSpace || s.kind == 'b') s = slot(t, petalOf(pts[2 * fi] - ox, pts[2 * fi + 1] - oy), 'c')
+        if (s.kind == 'c' && far < JAB_SHORT) s = slot(t, s.petal, 'b')
+        return s
+    }
+
     /** Direction of a drag in the polar axes of the point it started at: c (too short), cw/ccw (along the arc), out/in. */
     fun dirOf(sx: Double, sy: Double, dx: Double, dy: Double, min: Double): String {
         if (hypot(dx, dy) < min) return "c"

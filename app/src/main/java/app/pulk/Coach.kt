@@ -13,11 +13,13 @@ object Coach {
     @Volatile var help = 0
     /** The last level is typed by ear: the letters on the star are hidden. */
     @Volatile var hideLabels = false
+    /** The lesson teaches «Толчки» (a word per touch) rather than a stroke per letter. */
+    @Volatile var jabs = false
     /** One short line for the strip above the star. */
     @Volatile var hint: String? = null
 
     var onChange: (() -> Unit)? = null
     fun changed() { onChange?.invoke() }
 
-    fun reset() { active = false; next = null; help = 0; hideLabels = false; hint = null; changed() }
+    fun reset() { active = false; next = null; help = 0; hideLabels = false; hint = null; jabs = false; changed() }
 }

@@ -27,15 +27,20 @@ import kotlin.math.sin
 @Config(sdk = [34], qualifiers = "w412dp-h892dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class KeyboardTest {
+    /** A text field with a cursor, like the app's. */
     private class Field : TextSink {
         val sb = StringBuilder()
+        var cur = 0
         var caps = true
-        override fun commit(s: String) { sb.append(s) }
-        override fun deleteBefore(n: Int) { sb.setLength(maxOf(0, sb.length - n)) }
-        override fun before(n: Int) = sb.takeLast(n).toString()
-        override fun key(code: Int) { if (code == KeyEvent.KEYCODE_DEL && sb.isNotEmpty()) sb.setLength(sb.length - 1) else if (code == KeyEvent.KEYCODE_ENTER) sb.append('\n') }
-        override fun action(a: Int) { sb.append("<action$a>") }
-        override fun capsOn(inputType: Int) = caps && (inputType and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES != 0) && (sb.isEmpty() || sb.endsWith(". ") || sb.endsWith("\n"))
+        override fun commit(s: String) { sb.insert(cur, s); cur += s.length }
+        override fun deleteBefore(n: Int) { val k = minOf(n, cur); sb.delete(cur - k, cur); cur -= k }
+        override fun before(n: Int) = sb.substring(maxOf(0, cur - n), cur)
+        override fun after(n: Int) = sb.substring(cur, minOf(sb.length, cur + n))
+        override fun key(code: Int) { if (code == KeyEvent.KEYCODE_DEL) deleteBefore(1) else if (code == KeyEvent.KEYCODE_ENTER) commit("\n") }
+        override fun action(a: Int) { commit("<action$a>") }
+        override fun moveCursor(delta: Int) { cur = (cur + delta).coerceIn(0, sb.length) }
+        override fun capsOn(inputType: Int) = caps && (inputType and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES != 0) &&
+            before(2).let { it.isEmpty() && cur == 0 || it.endsWith(". ") || it.endsWith("\n") }
     }
 
     private lateinit var svc: PulkService
@@ -45,6 +50,7 @@ class KeyboardTest {
     @Before fun setUp() {
         svc = Robolectric.setupService(PulkService::class.java)
         svc.prefs.sound = "off"; svc.prefs.haptics = false; svc.prefs.hand = "right"; svc.prefs.lang = "ru"; svc.prefs.blind = false; svc.prefs.size = 100
+        svc.prefs.mode = "pulse"; svc.prefs.zone = "corner"; svc.prefs.textWindow = true; svc.prefs.fieldX = -1f; svc.prefs.fieldUp = -1f
         svc.prefs.suggest = true; svc.prefs.autocorrect = true; svc.prefs.learn = true
         svc.words("ru"); svc.words("en"); svc.forget()
         Coach.reset()
@@ -274,5 +280,88 @@ class KeyboardTest {
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
         assertTrue(view.isOpen)
         assertEquals("", field.sb.toString())
+    }
+
+    private fun idle(ms: Long) = org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(ms))
+
+    /** The points of a word typed as jabs from [start]: out to each letter and back home. */
+    private fun jabPoints(word: String, start: DoubleArray = doubleArrayOf(Pulse.PH[0], Pulse.PH[1])): List<DoubleArray> {
+        val t = Pulse.table(svc.lang, false)
+        var x = start[0]; var y = start[1]
+        val pts = arrayListOf(doubleArrayOf(x, y))
+        fun go(a: Double, len: Double) { for (s in 1..6) { x += cos(a * PI / 180) * len / 6; y += sin(a * PI / 180) * len / 6; pts.add(doubleArrayOf(x, y)) } }
+        for (ch in word.lowercase()) {
+            var p = -1; var k = -1
+            for (i in 0 until 8) { val j = t[i].indexOf(ch.toString()); if (j >= 0) { p = i; k = j } }
+            val a = p * 45.0
+            when (Pulse.KINDS[k]) {
+                'c' -> { go(a, 42.0); go(a + 180, 42.0) }
+                'l' -> { go(a, 36.0); go(a + 70, 22.0); go(a + 200, 50.0) }
+                'r' -> { go(a, 36.0); go(a - 70, 22.0); go(a - 200, 50.0) }
+                else -> { go(a, 20.0); go(a + 180, 20.0) }
+            }
+        }
+        return pts
+    }
+
+    @Test fun jabsTypeAWordPerTouch() {
+        svc.prefs.mode = "jabs"
+        touch(jabPoints("мама"))
+        assertEquals("Мама ", field.sb.toString())       // lifting the finger is the space
+        touch(jabPoints("касса"))                        // a double letter: two jabs the same way
+        assertEquals("Мама касса ", field.sb.toString())
+        touch(listOf(doubleArrayOf(Pulse.PH[0], Pulse.PH[1])))   // a tap right after: two spaces make a full stop
+        assertEquals("Мама касса. ", field.sb.toString())
+    }
+
+    @Test fun jabsHoldAtHomeErases() {
+        svc.prefs.mode = "jabs"
+        val pts = jabPoints("дым")
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(pts[0][0], pts[0][1])))
+        for (p in pts.drop(1)) view.dispatchTouchEvent(ev(MotionEvent.ACTION_MOVE, px(p[0], p[1])))
+        assertEquals("Дым", field.sb.toString())
+        idle(900)                                         // the finger stays home: the last letter goes
+        assertEquals("Ды", field.sb.toString())
+        val last = pts.last()
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, px(last[0], last[1])))
+        assertEquals("no space after erasing", "Ды", field.sb.toString())
+    }
+
+    @Test fun wholeScreenStarComesToTheFinger() {
+        svc.prefs.zone = "screen"; view.refresh(); measure()
+        assertTrue("taller than the corner keyboard", view.height > 412 * 3)
+        val reg = android.graphics.Region(); view.touchRegion(reg)
+        assertTrue("all of it is the keyboard", reg.contains(10, 10))
+        picture("screen-idle")
+        // a stroke up from far away from the star still gives «а»; a tap anywhere is a space
+        stroke(listOf(90.0 to 45.0), start = doubleArrayOf(-150.0, 520.0))
+        spaceTap()
+        touch(listOf(doubleArrayOf(-200.0, 450.0)))
+        assertEquals("А. ", field.sb.toString())
+        // with «Толчки» too
+        svc.prefs.mode = "jabs"
+        touch(jabPoints("сон", start = doubleArrayOf(-120.0, 600.0)))
+        assertEquals("А. Сон ", field.sb.toString())
+    }
+
+    @Test fun textWindowMovesTheCursorAndItself() {
+        for (c in "дом") letter(c.toString())
+        picture("text-window")
+        val r = view.fieldRect()!!
+        // touch the text at its very start: the cursor goes before «Д», and typing goes there
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, floatArrayOf(r.left + 31 * density, r.centerY())))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, floatArrayOf(r.left + 31 * density, r.centerY())))
+        assertEquals(0, field.cur)
+        letter("т")
+        assertEquals("ТДом", field.sb.toString())   // at the very start a capital, as in any field
+        // the dots on the side drag the window, and it stays where it was left
+        val g = floatArrayOf(r.right - 10 * density, r.centerY())   // right hand: the grip is on the far side
+        val gx = if (svc.prefs.left) r.right - 10 * density else r.left + 8 * density
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, floatArrayOf(gx, g[1])))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_MOVE, floatArrayOf(gx - 150, g[1] + 160)))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, floatArrayOf(gx - 150, g[1] + 160)))
+        val r2 = view.fieldRect()!!
+        assertTrue("moved", r2.top > r.top + 100 && kotlin.math.abs(r2.left - r.left) > 100)
+        assertEquals("ТДом", field.sb.toString())   // at the very start a capital, as in any field
     }
 }

@@ -49,6 +49,17 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private val left get() = svc.prefs.left
     private fun mx(x: Float) = if (left) width - x else x
     private fun blind() = svc.prefs.blind
+    /** «Толчки»: a whole word per touch. A lesson says itself which way it teaches. */
+    private fun jabsMode() = if (Coach.active) Coach.jabs else svc.prefs.mode == "jabs"
+    /** The whole screen is where a stroke may start, and the star comes to the finger. Lessons keep the star in place. */
+    private fun screenZone() = svc.prefs.zone == "screen" && !Coach.active
+    private fun tapIsSpace() = blind() || screenZone()
+    private fun textWindow() = svc.prefs.textWindow && !Coach.active
+    private var cornerH = 0f    // how tall the keyboard is in the corner (the screen zone is taller)
+    private fun statusBar(): Int {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else (24 * density).toInt()
+    }
 
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
         val w = MeasureSpec.getSize(widthSpec)
@@ -62,7 +73,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         stripH = STRIP_DP * density
         // the star sticks out past the zone towards the screen's middle: the view is tall enough for it
         val starTop = ((Pulse.PH[1] + Pulse.R + 4) * k).toFloat()
-        val h = Math.ceil(max(r * k + 4 * density + stripH, starTop + 4 * density).toDouble()).toInt()
+        cornerH = max(r * k + 4 * density + stripH, starTop + 4 * density)
+        var hf = cornerH + if (textWindow()) FIELD_BAND_DP * density else 0f
+        if (screenZone()) {
+            val spec = MeasureSpec.getSize(heightSpec)
+            val screenH = resources.displayMetrics.heightPixels - statusBar()
+            val avail = if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED && spec > 0) min(spec, screenH) else screenH
+            hf = max(cornerH, avail.toFloat())
+        }
+        val h = Math.ceil(hf.toDouble()).toInt()
         cx = w + 4 * density; cy = h + 4 * density
         setMeasuredDimension(w, h)
     }
@@ -105,8 +124,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     fun touchRegion(out: Region) {
         val clip = Region(0, 0, width, height)
         if (!isOpen) { out.set(handleRect()); return }
+        if (screenZone()) { out.set(0, 0, width, height); return }   // all of it: the finger may start anywhere
         val p = shape()
         val r = Region(); r.setPath(p, clip)
+        fieldRect()?.let { f -> r.op(Rect(f.left.toInt(), f.top.toInt(), f.right.toInt(), f.bottom.toInt()), Region.Op.UNION) }
         for (rc in chipRects()) r.op(Rect(rc.left.toInt(), rc.top.toInt(), rc.right.toInt(), rc.bottom.toInt()), Region.Op.UNION)
         out.set(r)
     }
@@ -114,6 +135,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     /** Where the app's own content should end: the arc's height at the middle of the screen. */
     fun contentTop(): Int {
         if (!isOpen) return height
+        if (screenZone()) return max(0, (cy - 75 * k).toInt())        // the app shows down to the keys at the bottom
         val dx = (width / 2f - 4 * density) / k
         val r = Pulse.OUTER
         val hBase = if (dx < r) sqrt(r * r - dx * dx) else 0.0
@@ -182,7 +204,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         if (items.isEmpty()) return emptyList()
         txt.textSize = 17f * density; txt.isFakeBoldText = true
         val pad = 14 * density; val gap = 8 * density; val h = 38 * density
-        val top = (stripH - h) / 2
+        val top = (height - cornerH) + (stripH - h) / 2   // above the corner keyboard, whatever the zone
         val out = ArrayList<RectF>()
         var edge = width - 8 * density  // from the thumb's side
         val maxW = (width - 16 * density - gap * (items.size - 1)) / items.size
@@ -195,6 +217,84 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         return out
     }
 
+    // ---- the text window ----
+    private var fieldDrag: FloatArray? = null   // while it is being dragged: its left and top
+    // the text as last drawn, to find which letter the finger is on
+    private var fieldLay: android.text.StaticLayout? = null
+    private var fieldTx = 0f; private var fieldTy = 0f
+    // while the cursor is being slid: the text as it was when the finger came down, and where the cursor is in it
+    private var curText: String? = null
+    private var curAt = 0
+    private fun gripW() = 26 * density
+    private fun onGrip(r: RectF, x: Float) = if (left) x > r.right - gripW() else x < r.left + gripW()
+    private fun fieldW() = min(width * 0.8f, 360 * density)
+    private fun fieldH() = 60 * density
+    /** Where the text window is, or null when it is off. Kept inside the view. */
+    internal fun fieldRect(): RectF? {
+        if (!textWindow() || width == 0) return null
+        val w = fieldW(); val h = fieldH()
+        val d = fieldDrag
+        var x = d?.get(0) ?: svc.prefs.fieldX.let { if (it < 0) (if (left) 8 * density else width - w - 8 * density) else it * width }
+        var y = d?.get(1) ?: svc.prefs.fieldUp.let { if (it < 0) height - cornerH - h - 4 * density else height - it * density }
+        x = x.coerceIn(0f, width - w); y = y.coerceIn(0f, height - h)
+        return RectF(x, y, x + w, y + h)
+    }
+
+    private val layoutPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private fun drawField(c: Canvas, col: Colors) {
+        val r = fieldRect() ?: return
+        fill.style = Paint.Style.FILL; fill.color = (col.key and 0x00FFFFFF) or (0xEE shl 24)
+        c.drawRoundRect(r, 14 * density, 14 * density, fill)
+        stroke.color = if (fieldDrag != null) col.accent else col.line; stroke.strokeWidth = (if (fieldDrag != null) 2f else 1f) * density
+        c.drawRoundRect(r, 14 * density, 14 * density, stroke)
+        // a grip on the side away from the thumb, so the window reads as something to drag
+        val gx = if (left) r.right - 10 * density else r.left + 10 * density
+        fill.color = col.muted
+        for (i in 0..2) c.drawCircle(gx, r.centerY() + (i - 1) * 7 * density, 1.8f * density, fill)
+        val pad = 30 * density; val tw = (r.width() - pad * 2).toInt()   // clear of the grip on either side
+        val snap = curText
+        val before = if (snap != null) snap.substring(0, curAt) else svc.textBefore
+        val after = if (snap != null) snap.substring(curAt) else svc.textAfter
+        layoutPaint.textSize = 16f * density; layoutPaint.color = col.fg
+        fieldLay = null
+        if (before.isEmpty() && after.isEmpty()) {
+            layoutPaint.color = col.muted
+            c.drawText(if (svc.lang == "ru") "здесь будет текст — перетащи окно куда удобно" else "your text shows here — drag me anywhere", r.left + pad, r.centerY() + 6 * density, layoutPaint.also { it.textSize = 13f * density })
+            return
+        }
+        val text = before + after
+        val lay = android.text.StaticLayout.Builder.obtain(text, 0, text.length, layoutPaint, tw).setIncludePad(false).build()
+        val cur = before.length
+        val line = lay.getLineForOffset(cur)
+        val first = if (snap != null) fieldFirst else maxOf(0, line - 1)   // two lines: the cursor's line and the one before; still while sliding
+        fieldFirst = first
+        val lineH = lay.getLineBottom(0) - lay.getLineTop(0)
+        c.save()
+        c.clipRect(r.left + pad - 2, r.top + 4 * density, r.right - 8 * density, r.bottom - 4 * density)
+        val top = r.top + (r.height() - lineH * minOf(2, line + 1)) / 2
+        c.translate(r.left + pad, top - lay.getLineTop(first))
+        fieldLay = lay; fieldTx = r.left + pad; fieldTy = top - lay.getLineTop(first)
+        lay.draw(c)
+        val cx0 = lay.getPrimaryHorizontal(cur)
+        fill.color = col.accent
+        c.drawRect(cx0, lay.getLineTop(line).toFloat(), cx0 + 2 * density, lay.getLineBottom(line).toFloat(), fill)
+        c.restore()
+    }
+
+    private var fieldFirst = 0
+
+    /** Which character of the shown text is under the finger (an offset into before + after). */
+    private fun offsetAt(x: Float, y: Float): Int? {
+        val lay = fieldLay ?: return null
+        val line = lay.getLineForVertical((y - fieldTy).toInt().coerceIn(lay.getLineTop(fieldFirst), lay.getLineBottom(minOf(lay.lineCount - 1, fieldFirst + 1)) - 1))
+        return lay.getOffsetForHorizontal(line, x - fieldTx)
+    }
+    private fun slideCursor(x: Float, y: Float) {
+        val at = offsetAt(x, y) ?: return
+        if (at != curAt) { svc.moveCursor(at - curAt); curAt = at }
+        invalidate()
+    }
+
     private fun handleCentre() = pt(62.0, 135.0)
     private fun handleRect(): Rect { val c = handleCentre(); val r = (30 * density).toInt(); return Rect(c[0].toInt() - r, c[1].toInt() - r, c[0].toInt() + r, c[1].toInt() + r) }
 
@@ -203,6 +303,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         // the handle in the corner, when the keyboard is hidden (and under it while it comes out)
         if (g < 1f) drawHandle(c, col, 1f - g)
         if (g <= 0.001f) return
+        if (g >= 0.999f) drawField(c, col)
         val corner = scr(0.0, 0.0)
         c.save()
         c.scale(g, g, corner[0], corner[1])
@@ -251,8 +352,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 }
             }
         }
-        // the zone of the star
-        val centre = scr(Pulse.PH[0], Pulse.PH[1])
+        // the star: in its place, or (whole screen) under the finger
+        val origin = starOrigin()
+        if (screenZone() && origin == null) { drawIdleHint(c, col); return }
+        val home = scr(Pulse.PH[0], Pulse.PH[1])
+        val dx = if (origin != null) scr(origin[0], origin[1])[0] - home[0] else 0f
+        val dy = if (origin != null) scr(origin[0], origin[1])[1] - home[1] else 0f
+        c.save(); c.translate(dx, dy)
+        val centre = home
         fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(centre[0], centre[1], (Pulse.R * k).toFloat(), fill)
         stroke.color = col.line; stroke.strokeWidth = density; c.drawCircle(centre[0], centre[1], (Pulse.R * k).toFloat(), stroke)
         // the wedge under the finger, or the one the tutorial points at
@@ -281,6 +388,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             label(c, if (up) v.uppercase() else v, q[0], q[1], if (big) 21f else if (kind == 'b') 11f else 14f,
                 if (isGoal) col.accent else if (big) col.fg else col.muted, isGoal)
         }
+        c.restore()
         // the finger's trail: what the keyboard sees of the stroke
         trail?.let { tr ->
             if (tr.size >= 4) {
@@ -293,9 +401,27 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         // while stroking: the letter that will be typed, big, in the middle of the star
         if (live != null && !(Coach.active && Coach.hideLabels)) {
             val shown = (if (longAlt != null) longAlt!! else live.v).let { if (up) it.uppercase() else it }
-            fill.color = col.accent; c.drawCircle(centre[0], centre[1], 26 * density, fill)
-            label(c, if (live.isSpace) "·" else shown, centre[0], centre[1], 28f, col.accentFg, true)
+            val bx = centre[0] + dx; val by = centre[1] + dy
+            fill.color = col.accent; c.drawCircle(bx, by, 26 * density, fill)
+            label(c, if (live.isSpace) "·" else shown, bx, by, 28f, col.accentFg, true)
         }
+    }
+
+    /** Where the star should be centred now, in base units: under the finger (whole screen), or its own place. */
+    private fun starOrigin(): DoubleArray? {
+        if (!screenZone()) return null
+        val t = touches.values.firstOrNull { it.fn == null && it.strip < 0 && !it.handle } ?: return null
+        return t.jabs?.home ?: doubleArrayOf(t.pts[0], t.pts[1])
+    }
+
+    /** The whole screen, before a touch: a faint star where it would be, and a word on what to do. */
+    private fun drawIdleHint(c: Canvas, col: Colors) {
+        val s = scr(Pulse.PH[0], Pulse.PH[1]); val r = (Pulse.R * k).toFloat()
+        stroke.color = col.accent; stroke.alpha = 90; stroke.strokeWidth = 2f * density
+        c.drawCircle(s[0], s[1], r, stroke)
+        for (p in 0 until 8) { val a = starPt(Pulse.R * 0.55, p * 45.0); val b = starPt(Pulse.R * 0.85, p * 45.0); c.drawLine(a[0], a[1], b[0], b[1], stroke) }
+        stroke.alpha = 255
+        label(c, if (svc.lang == "ru") "касайся где угодно" else "touch anywhere", s[0], s[1], 13f, col.muted)
     }
 
     private fun drawChips(c: Canvas, col: Colors) {
@@ -363,13 +489,17 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     // ---- touch ----
-    private class Touch(val fn: Pulse.FnKey?, val strip: Int, val handle: Boolean) {
+    private class Touch(val fn: Pulse.FnKey?, val strip: Int, val handle: Boolean, val field: FloatArray? = null) {
         val pts = ArrayList<Double>()
         val times = ArrayList<Long>()
         var anchorX = 0.0; var anchorY = 0.0
         var long = false
         var hold: Runnable? = null
         var repeat: Runnable? = null
+        var jabs: Pulse.Jabs? = null   // «Толчки»: this touch is a word
+        var since = 0                  // letters typed since the last erase
+        var erased = false
+        var erase: Runnable? = null
     }
     private val touches = HashMap<Int, Touch>()
     private var pressedFn: Pulse.Fn? = null
@@ -395,7 +525,27 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         return true
     }
 
-    private fun stopTimers(t: Touch) { t.hold?.let { handler.removeCallbacks(it) }; t.repeat?.let { handler.removeCallbacks(it) } }
+    private fun stopTimers(t: Touch) { t.hold?.let { handler.removeCallbacks(it) }; t.repeat?.let { handler.removeCallbacks(it) }; t.erase?.let { handler.removeCallbacks(it) } }
+
+    /**
+     * «Толчки»: the finger rests at home after a letter. Holding still there erases: a light tick first as a warning,
+     * then one letter, then one more every 0.3 s while the finger stays.
+     */
+    private fun armErase(t: Touch) {
+        t.erase?.let { handler.removeCallbacks(it) }
+        val warn = Runnable { if (t.jabs?.isOut == false) svc.feedback.touch() }
+        val r = object : Runnable {
+            override fun run() {
+                if (t.jabs?.isOut != false) return
+                svc.backspace(); t.erased = true; t.since = 0
+                handler.postDelayed(this, ERASE_AGAIN_MS)
+            }
+        }
+        handler.postDelayed(warn, ERASE_WARN_MS)
+        t.erase = r; handler.postDelayed(r, ERASE_MS)
+    }
+
+    private fun jabSlot(pts: DoubleArray) = helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
@@ -404,6 +554,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             val t = Touch(null, -1, handle = true); touches[id] = t
             if (!isOpen) open(sound = true)
             return
+        }
+        // the text window: dragged by the finger, wherever it is handy
+        fieldRect()?.let { f ->
+            if (f.contains(x, y)) {
+                if (onGrip(f, x) || fieldLay == null) { touches[id] = Touch(null, -1, handle = false, field = floatArrayOf(x - f.left, y - f.top, x, y)); fieldDrag = floatArrayOf(f.left, f.top) }
+                else { touches[id] = Touch(null, -1, handle = false, field = floatArrayOf(Float.NaN, 0f, x, y)); curText = svc.textBefore + svc.textAfter; curAt = svc.textBefore.length; slideCursor(x, y) }
+                invalidate(); return
+            }
         }
         val b = doubleArrayOf(bx(x), by(y))
         val chip = if (svc.cands.isNotEmpty()) chipAt(x, y) else -1
@@ -415,7 +573,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         svc.feedback.touch()
         when {
             inStrip -> pressedStrip = chip
-            fn == null -> { updateCand(t); armHold(t) }
+            fn == null -> if (jabsMode()) t.jabs = Pulse.Jabs(b[0], b[1]) else { updateCand(t); armHold(t) }
             else -> {
                 pressedFn = fn.fn
                 if (fn.fn == Pulse.Fn.BKSP) {
@@ -433,7 +591,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     private fun resolveNow(pts: DoubleArray): Pulse.Slot {
-        val slot = Pulse.resolve(Pulse.table(svc.lang, svc.symbols), pts, blind())
+        return helped(Pulse.resolve(Pulse.table(svc.lang, svc.symbols), pts, tapIsSpace()))
+    }
+
+    private fun helped(slot: Pulse.Slot): Pulse.Slot {
         // hand in hand (the tutorial's strongest help): a stroke near the wanted letter becomes that letter
         if (Coach.active && Coach.help >= 3) {
             val want = Coach.next?.let { target(it) }?.first
@@ -464,10 +625,25 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun move(id: Int, x: Float, y: Float, tm: Long) {
         val t = touches[id] ?: return
         if (t.handle) return
+        t.field?.let { f -> if (f[0].isNaN()) slideCursor(x, y) else { fieldDrag = floatArrayOf(x - f[0], y - f[1]); invalidate() }; return }
         val b = doubleArrayOf(bx(x), by(y))
         if (t.strip >= 0) { val s = chipAt(x, y); if (s != pressedStrip) { pressedStrip = s; invalidate() }; return }
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm)
         if (t.fn != null) return
+        val j = t.jabs
+        if (j != null) {
+            val done = j.add(b[0], b[1])
+            if (done != null) {
+                val s = jabSlot(done)
+                svc.typeLetter(s.v, s); t.since++
+                cand = null; trail = null
+                armErase(t)
+            } else if (j.isOut) {
+                t.erase?.let { handler.removeCallbacks(it) }
+                j.current()?.let { cand = jabSlot(it); trail = it.toList() }
+            }
+            invalidate(); return
+        }
         if (hypot(b[0] - t.anchorX, b[1] - t.anchorY) > 4) { t.anchorX = b[0]; t.anchorY = b[1]; t.long = false; armHold(t) }
         updateCand(t); invalidate()
     }
@@ -476,9 +652,24 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val t = touches.remove(id) ?: return
         stopTimers(t)
         if (t.handle) return
+        t.field?.let { f ->
+            if (f[0].isNaN()) { slideCursor(x, y); curText = null; invalidate(); return }
+            val r = fieldRect()
+            fieldDrag = null
+            if (r != null) {
+                if (hypot(x - f[2], y - f[3]) < 10 * density) { if (svc.prefs.sound == "voice" && !svc.isSecure) svc.feedback.say(svc.textBefore + svc.textAfter, 1.1f) }
+                else { svc.prefs.fieldX = r.left / width; svc.prefs.fieldUp = (height - r.top) / density }
+            }
+            svc.insetsChanged(); invalidate(); return
+        }
         val b = doubleArrayOf(bx(x), by(y))
         when {
             t.strip >= 0 -> { val s = pressedStrip; pressedStrip = -1; if (s >= 0) svc.pick(s) }
+            t.fn == null && t.jabs != null -> {
+                t.jabs!!.finish()?.let { val s = jabSlot(it); svc.typeLetter(s.v, s); t.since++ }
+                // lifting the finger ends the word with a space, unless this touch only erased
+                if (!t.erased || t.since > 0) svc.space()
+            }
             t.fn == null -> {
                 // the point where the finger left is not used (it jumps as the pad lifts), unless nothing moved
                 if (t.pts.size == 2 && hypot(b[0] - t.pts[0], b[1] - t.pts[1]) >= Pulse.P_MIN) { t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm) }
@@ -513,5 +704,21 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     fun refresh() { requestLayout(); invalidate(); svc.insetsChanged() }
 
-    companion object { const val STRIP_DP = 52f }
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        // ⌫ runs along the screen's edge, where Android's own back gesture starts: keep that edge for ⌫
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val key = Pulse.FN_KEYS.first { it.fn == Pulse.Fn.BKSP }
+            val bounds = RectF(); sector((key.r0 * k).toFloat(), (key.r1 * k).toFloat(), key.a0, key.a1).computeBounds(bounds, true)
+            systemGestureExclusionRects = listOf(Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt()))
+        }
+    }
+
+    companion object {
+        const val STRIP_DP = 52f
+        const val FIELD_BAND_DP = 68f
+        const val ERASE_WARN_MS = 450L
+        const val ERASE_MS = 800L
+        const val ERASE_AGAIN_MS = 300L
+    }
 }
