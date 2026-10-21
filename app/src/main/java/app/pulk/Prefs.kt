@@ -246,6 +246,11 @@ class Prefs(ctx: Context) {
         get() = (sp.getString("journal", "") ?: "").split('\n').filter { it.isNotEmpty() }
         set(v) = sp.edit().putString("journal", v.joinToString("\n")).apply()
 
+    /** «Проверка на этом телефоне»: what was marked (see [Check.decode]). */
+    var check: String
+        get() = sp.getString("check", "") ?: ""
+        set(v) = sp.edit().putString("check", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

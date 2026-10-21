@@ -104,6 +104,7 @@ class OptionsActivity : Activity() {
 
         body.addView(ui.h("О программе"))
         body.addView(ui.note("Пульк ${packageManager.getPackageInfo(packageName, 0).versionName}. Бесплатно, без рекламы и без интернета.\nСловари: FrequencyWords (Hermit Dave), CC BY-SA 4.0. Следующее слово: предложения Tatoeba (tatoeba.org), CC BY 2.0 FR. Фильтр дрожи: 1€ filter (Casiez, Roussel, Vogel, 2012)."))
+        body.addView(ui.button("Проверка на телефоне и «Сообщить о проблеме»") { startActivity(Intent(this, CheckActivity::class.java)) })
         val bottom = ui.bottomBar()
         bottom.addView(ui.button("Назад", main = true) { finish() })
         setContentView(ui.screen(body, bottom))

@@ -86,6 +86,22 @@ class ScreensTest {
         assertTrue(all(c.window.decorView).filterIsInstance<android.widget.TextView>().any { it.text.toString() == "Внимание" })
     }
 
+    @Test fun theReportCarriesNothingTyped() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply {
+            check = ""; mode = "pulse"; phrases = listOf("Секретная фраза"); aboutMe = "Меня зовут Костя"
+            family = Together.familyLines(listOf(Together.Word("Барсик", ""))); talk = Together.said(emptyList(), true, "Хочу на качели")
+        }
+        val c = Robolectric.buildActivity(CheckActivity::class.java).setup().get()
+        all(c.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Не работает" }.performClick()   // the first item: «Включается»
+        shot(c, "screen-check")
+        assertEquals("on=no", prefs.check)
+        val r = c.reportText()
+        assertTrue(r.startsWith("Пульк ") && "способ pulse" in r && "✗ Включается и выбирается" in r && "· Печатает" in r)
+        for (secret in listOf("Секретная", "Костя", "Барсик", "качели")) assertTrue(secret !in r)
+        assertEquals(mapOf("a" to "ok", "b" to "skip"), Check.decode(Check.encode(mapOf("a" to "ok", "b" to "skip", "c" to ""))))
+        prefs.phrases = emptyList(); prefs.aboutMe = ""; prefs.family = emptyList(); prefs.talk = emptyList(); prefs.check = ""
+    }
+
     @Test fun startingAtOnceAsksNothingMore() {
         val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; guard = 0; wizardDone = false; doors = ""; offered = false; calibrated = false }
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()

@@ -54,5 +54,6 @@
         <activity android:name=".ParentsActivity" android:exported="false" android:label="Как помочь ребёнку" />
         <activity android:name=".BubblesActivity" android:exported="false" android:label="Пузыри" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <activity android:name=".ComfortActivity" android:exported="false" android:label="Удобство" />
+        <activity android:name=".CheckActivity" android:exported="false" android:label="Проверка на телефоне" />
     </application>
 </manifest>
