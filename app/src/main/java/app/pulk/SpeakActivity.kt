@@ -217,7 +217,7 @@ class SpeakActivity : Activity() {
         historyBox.removeAllViews()
         val h = prefs.phrases.take(8)
         if (h.isEmpty()) historyBox.addView(ui.note("Здесь появятся сказанные фразы — касание повторит."))
-        for (p in h) historyBox.addView(ui.button("↻ $p") { sayMine(p, history = false) })
+        for (p in h) historyBox.addView(ui.button("↻ $p") { sayMine(p, history = false) }.apply { contentDescription = "Повторить: $p" })
     }
 
     /** The text, huge, for the person opposite: it can be turned upside down to face them across a table. */
@@ -227,6 +227,7 @@ class SpeakActivity : Activity() {
             this.text = text; textSize = if (text.length < 16) 52f else if (text.length < 50) 40f else 30f
             setTextColor(ui.ink); setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding(ui.px(24), ui.px(24), ui.px(24), ui.px(24))
+            contentDescription = "Для собеседника: $text"
         }
         val frame = FrameLayout(this).apply { setBackgroundColor(ui.bg); addView(big, FrameLayout.LayoutParams(-1, -1)) }
         val bottom = ui.bottomBar()

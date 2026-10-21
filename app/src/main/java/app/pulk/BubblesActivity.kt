@@ -69,10 +69,11 @@ class BubblesActivity : Activity() {
         bubble = TextView(this).apply {
             textSize = 64f; setTypeface(typeface, Typeface.BOLD); setTextColor(ui.ink); gravity = Gravity.CENTER
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ui.panel); setStroke(ui.px(3), ui.accent) }
+            accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE   // TalkBack reads each new letter
             layoutParams = LinearLayout.LayoutParams(ui.px(140), ui.px(140)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ui.px(16) }
         }
         body.addView(bubble)
-        note = ui.text("", 17f, ui.muted); body.addView(note)
+        note = ui.text("", 17f, ui.muted).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }; body.addView(note)
         field = EditText(this).apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; textSize = 22f; hint = "Печатай звездой здесь"; setTextColor(ui.ink); setHintTextColor(ui.muted) }
         field.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}

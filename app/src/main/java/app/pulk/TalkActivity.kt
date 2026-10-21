@@ -42,7 +42,7 @@ class TalkActivity : Activity() {
     private fun yours(t: String) { val s = t.trim(); if (s.isEmpty()) return; prefs.talk = Together.said(prefs.talk, false, s); build() }
 
     private fun bubble(l: Together.Line) = TextView(this).apply {
-        text = l.text; textSize = 22f; setLineSpacing(0f, 1.15f)
+        text = l.text; contentDescription = (if (l.me) "Я: " else "Собеседник: ") + l.text; textSize = 22f; setLineSpacing(0f, 1.15f)
         setTypeface(typeface, if (l.me) Typeface.BOLD else Typeface.NORMAL)
         setTextColor(if (l.me) ui.onAccent else ui.ink)
         setPadding(ui.px(14), ui.px(10), ui.px(14), ui.px(10))
