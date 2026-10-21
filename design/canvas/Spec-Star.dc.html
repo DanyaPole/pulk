@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Звезда в размерах</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 960px; height: 892px; box-sizing: border-box; padding: 40px; background: #F4F6F7; color: #0F1E26; font-family: Roboto, 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 30px; font-weight: 700">Звезда «Лепестки» — размеры в dp</h1>
+<p style="margin: 0; font-size: 15px; color: #4A5B64">Телефон 412 × 892 dp, обычный размер: 1 единица кода = 1,232 dp. Правая рука; для левой всё зеркально.</p>
+</div>
+<div style="display: flex; gap: 32px; align-items: flex-start">
+<div style="position: relative; width: 560px; height: 560px; flex: 0 0 auto; border-radius: 16px; overflow: hidden; background: #E9E3D7">
+<div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: translate(-69.1px, -981.1px) scale(1.9)">
+<dc-import name="Keyboard" cfg='{"concept":"petals","theme":"light"}' hint-size="412px,892px"></dc-import>
+</div>
+<svg width="560" height="560" viewBox="0 0 560 560" style="position: absolute; left: 0; top: 0" role="img" aria-label="Размерные круги звезды">
+<g fill="none" stroke="#C2185B" stroke-width="1.5" stroke-dasharray="5 5">
+<circle cx="280" cy="280" r="224.7"></circle>
+<circle cx="280" cy="280" r="121.7"></circle>
+<circle cx="280" cy="280" r="201.3"></circle>
+<circle cx="280" cy="280" r="56.2"></circle>
+<circle cx="280" cy="280" r="42.1"></circle>
+</g>
+<g font-family="Roboto, system-ui, sans-serif" font-size="12" font-weight="700" text-anchor="middle" fill="#FFFFFF">
+<circle cx="366" cy="487.6" r="11" fill="#C2185B"></circle><text x="366" y="491.8">1</text>
+<circle cx="392.4" cy="233.4" r="11" fill="#C2185B"></circle><text x="392.4" y="237.6">2</text>
+<circle cx="203" cy="94" r="11" fill="#C2185B"></circle><text x="203" y="98.2">3</text>
+<circle cx="228.1" cy="258.5" r="11" fill="#C2185B"></circle><text x="228.1" y="262.7">4</text>
+<circle cx="268.4" cy="308.1" r="11" fill="#C2185B"></circle><text x="268.4" y="312.3">5</text>
+<circle cx="318.9" cy="296.1" r="11" fill="#C2185B"></circle><text x="318.9" y="300.3">6</text>
+</g>
+</svg>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 1.45; min-width: 0">
+<div style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #4A5B64">ЗВЕЗДА</div>
+<div><b>Центр</b> — 228 dp влево и 228 dp вверх от угла под пальцем (262 ед. под 135°).</div>
+<div><b style="color: #C2185B">1</b> Радиус звезды — <b>118 dp</b>.</div>
+<div><b style="color: #C2185B">2</b> Крупная буква — на 64 dp от центра. <b>28 dp, Roboto Medium</b>, #0F1E26 / #EDF3F6.</div>
+<div><b style="color: #C2185B">3</b> Боковые буквы — на 106 dp, ±14° от оси. <b>17 dp Regular</b>, #4A5B64 / #A3B4BC.</div>
+<div><b style="color: #C2185B">4</b> Буква «туда и обратно» — на 30 dp. <b>14 dp Regular</b>, те же цвета.</div>
+<div><b style="color: #C2185B">5</b> Капля в центре — круг ⌀ 32 dp, акцент #0A6680 / #4CC2DE.</div>
+<div><b style="color: #C2185B">6</b> Лепесток — от 22 до 118 dp, просвет 4 dp, скругление 5 dp, рамка 1 dp #7F929C / #5E737D.</div>
+<div style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #4A5B64; margin-top: 6px">ПОД ПАЛЬЦЕМ</div>
+<div>Лепесток выдвигается на <b>6 dp</b>, заливка #CFE8F0 / #244A5B, рамка <b>2 dp</b> акцент; все его буквы — основным цветом.</div>
+<div>След — линия 5 dp, акцент 60 %, круглые концы. Палец — кружок ⌀ 22 dp.</div>
+<div>Буква на выходе — круг ⌀ 60 dp акцент, буква 34 dp Bold, кант 2 dp цвета фона.</div>
+<div>Обучение — путь 3,5 dp, цель — кольцо ⌀ 34 dp, лепесток-цель #E6F3F7 / #1E3944.</div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; font-size: 13px; line-height: 1.45">
+<div style="background: #FFFFFF; border-radius: 12px; padding: 14px 16px"><b>Служебные клавиши</b> (кольца от угла): пробел 37–195 dp, 91–150°; ⏎ 37–195 dp, 150–179°; ⌫ 195–370 dp, 91–110°.</div>
+<div style="background: #FFFFFF; border-radius: 12px; padding: 14px 16px"><b>Нижний край</b>, 160–179°: ⇧ 195–239, RU 239–283, ?123 283–328, ⌄ 328–370 dp. Просвет 5 dp, скругление 15 dp.</div>
+<div style="background: #FFFFFF; border-radius: 12px; padding: 14px 16px"><b>Стекло</b>: цвет лепестка 55 % / 60 % — сквозь него видно приложение, рамка 1 dp. Подписи и значки — с ореолом 3 dp #FFFFFF / #0B1114.</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

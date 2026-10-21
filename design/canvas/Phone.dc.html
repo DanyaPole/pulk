@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Телефон с фоном</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 412px; height: 892px; overflow: hidden; font-family: Roboto, 'Segoe UI', system-ui, sans-serif; color: #111B21; background: #E9E3D7">
+
+<sc-if value="{{isLight}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; inset: 0; background: #E9E3D7">
+<div style="height: 64px; background: #FFFFFF; display: flex; align-items: center; gap: 12px; padding: 0 16px; box-sizing: border-box; border-bottom: 1px solid #D9D4C8">
+<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke="#3B4A54" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div style="width: 40px; height: 40px; border-radius: 20px; background: #7FA6C6; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 18px">Л</div>
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 17px; font-weight: 500">Лена</div><div style="font-size: 13px; color: #3E6B2E">в сети</div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 0">
+<div style="align-self: flex-start; max-width: 76%; background: #FFFFFF; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Привет! Ты завтра заедешь?</div>
+<div style="align-self: flex-end; max-width: 76%; background: #D9F5C5; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Да, после обеда</div>
+<div style="align-self: flex-start; max-width: 76%; background: #FFFFFF; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Захвати, пожалуйста, зарядку. И купи хлеба по дороге</div>
+<div style="align-self: flex-end; max-width: 76%; background: #D9F5C5; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Хорошо</div>
+<div style="align-self: flex-start; max-width: 76%; background: #FFFFFF; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Бабушка звонила, спрашивала про выходные</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 452px; display: flex; flex-direction: column; gap: 8px; padding: 12px">
+<div style="align-self: flex-end; max-width: 76%; background: #D9F5C5; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Я ей перезвоню вечером</div>
+<div style="align-self: flex-start; max-width: 76%; background: #FFFFFF; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Она хочет испечь пирог с капустой и ждёт нас всех в субботу к обеду</div>
+<div style="align-self: flex-end; max-width: 76%; background: #D9F5C5; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Скажи, что я приеду</div>
+<div style="align-self: flex-start; max-width: 76%; background: #FFFFFF; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Договорились! Тогда возьми ещё яблок, если будут хорошие</div>
+<div style="align-self: flex-end; max-width: 76%; background: #D9F5C5; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Возьму</div>
+<div style="align-self: flex-start; max-width: 76%; background: #FFFFFF; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Спасибо, до завтра</div>
+</div>
+<div style="position: absolute; left: 8px; right: 8px; top: 392px; height: 48px; border-radius: 24px; background: #FFFFFF; display: flex; align-items: center; padding: 0 18px; box-sizing: border-box; font-size: 17px; box-shadow: 0 1px 2px rgba(0,0,0,0.15)">
+<span style="{{fieldStyle}}">{{fieldText}}</span><span style="display: inline-block; width: 2px; height: 22px; background: #0A6680; margin-left: 1px"></span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isDark}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: #0E1621; color: #F2F5F7">
+<div style="height: 64px; background: #17212B; display: flex; align-items: center; gap: 12px; padding: 0 16px; box-sizing: border-box">
+<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke="#AAB8C2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div style="width: 40px; height: 40px; border-radius: 20px; background: #C2864A; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 18px">М</div>
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 17px; font-weight: 500">Мастерская</div><div style="font-size: 13px; color: #8FA3B3">5 участников</div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 0">
+<div style="align-self: flex-start; max-width: 76%; background: #182533; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Кто завтра берёт холсты?</div>
+<div style="align-self: flex-end; max-width: 76%; background: #2B5278; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Я возьму два больших</div>
+<div style="align-self: flex-start; max-width: 76%; background: #182533; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Отлично. Краски остались с прошлого раза</div>
+<div style="align-self: flex-start; max-width: 76%; background: #182533; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Начинаем в 11, не опаздывайте</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 452px; display: flex; flex-direction: column; gap: 8px; padding: 12px">
+<div style="align-self: flex-end; max-width: 76%; background: #2B5278; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Буду к половине</div>
+<div style="align-self: flex-start; max-width: 76%; background: #182533; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Тогда открой окно, когда придёшь, там душно после лака</div>
+<div style="align-self: flex-end; max-width: 76%; background: #2B5278; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Хорошо</div>
+<div style="align-self: flex-start; max-width: 76%; background: #182533; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">И кто-нибудь, захватите удлинитель для лампы</div>
+<div style="align-self: flex-end; max-width: 76%; background: #2B5278; border-radius: 16px 4px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Есть, принесу</div>
+<div style="align-self: flex-start; max-width: 76%; background: #182533; border-radius: 4px 16px 16px 16px; padding: 8px 12px; font-size: 16px; line-height: 1.35">Спасибо!</div>
+</div>
+<div style="position: absolute; left: 8px; right: 8px; top: 392px; height: 48px; border-radius: 24px; background: #17212B; display: flex; align-items: center; padding: 0 18px; box-sizing: border-box; font-size: 17px; color: #F2F5F7">
+<span style="{{fieldStyleDark}}">{{fieldText}}</span><span style="display: inline-block; width: 2px; height: 22px; background: #4CC2DE; margin-left: 1px"></span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isPhoto}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: #1C2A36">
+<svg width="412" height="892" viewBox="0 0 412 892" style="position: absolute; left: 0; top: 0" role="img" aria-label="Фото: закат над озером в горах">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3D5A8A"></stop><stop offset="0.45" stop-color="#C98B7A"></stop><stop offset="0.62" stop-color="#F3C98B"></stop></linearGradient>
+<linearGradient id="lake" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E9B989"></stop><stop offset="0.35" stop-color="#5E7FA0"></stop><stop offset="1" stop-color="#1D3247"></stop></linearGradient>
+</defs>
+<rect x="0" y="0" width="412" height="560" fill="url(#sky)"></rect>
+<circle cx="268" cy="500" r="42" fill="#FFE9BE"></circle>
+<path d="M0 470 L60 410 L110 452 L170 380 L238 470 L300 420 L360 468 L412 430 L412 560 L0 560 Z" fill="#5C6E93"></path>
+<path d="M0 520 L50 488 L120 530 L190 470 L260 540 L330 498 L412 532 L412 560 L0 560 Z" fill="#344A5E"></path>
+<rect x="0" y="556" width="412" height="336" fill="url(#lake)"></rect>
+<rect x="228" y="566" width="80" height="4" fill="#FFE9BE" opacity="0.8"></rect>
+<rect x="240" y="584" width="56" height="3" fill="#FFE9BE" opacity="0.6"></rect>
+<rect x="250" y="602" width="36" height="3" fill="#FFE9BE" opacity="0.45"></rect>
+<path d="M412 600 L360 640 L330 700 L300 720 L280 892 L412 892 Z" fill="#14261C"></path>
+<path d="M352 892 L352 690 L338 720 L346 690 L330 712 L352 640 L374 712 L358 690 L366 720 L352 690 Z" fill="#0C1A12"></path>
+<path d="M0 760 C80 740 150 790 230 800 C300 810 340 860 412 850 L412 892 L0 892 Z" fill="#E7E1D1" opacity="0.92"></path>
+<path d="M0 820 C90 800 160 860 260 860 C320 862 370 880 412 878 L412 892 L0 892 Z" fill="#B7AE97"></path>
+</svg>
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 16px; box-sizing: border-box; background: rgba(0,0,0,0.35); color: #FFFFFF">
+<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div style="font-size: 17px; font-weight: 500">Отправить фото</div>
+</div>
+<div style="position: absolute; left: 8px; right: 8px; top: 392px; height: 48px; border-radius: 24px; background: rgba(0,0,0,0.55); display: flex; align-items: center; padding: 0 18px; box-sizing: border-box; font-size: 17px; color: #FFFFFF">
+<span style="{{fieldStylePhoto}}">{{fieldText}}</span><span style="display: inline-block; width: 2px; height: 22px; background: #FFFFFF; margin-left: 1px"></span>
+</div>
+</div>
+</sc-if>
+
+<div style="position: absolute; left: 0; top: 0">
+<dc-import name="Keyboard" cfg="{{cfgStr}}" hint-size="412px,892px"></dc-import>
+</div>
+<div style="position: absolute; left: 50%; bottom: 6px; width: 108px; height: 4px; margin-left: -54px; border-radius: 2px; background: {{navBar}}"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"cfg":{"editor":"text","default":"{\"concept\":\"petals\",\"theme\":\"light\",\"bg\":\"chat-light\",\"field\":\"Прив\",\"chips\":[\"Привет\",\"Привести\",\"Привёл\"]}"},"$preview":{"width":412,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() {
+    let cfg = {};
+    try { cfg = typeof this.props.cfg === 'string' ? JSON.parse(this.props.cfg) : (this.props.cfg || {}); } catch (e) { cfg = {}; }
+    if (!cfg.concept) cfg = { concept: 'petals', theme: 'light', bg: 'chat-light', field: 'Прив', chips: ['Привет', 'Привести', 'Привёл'] };
+    const bg = cfg.bg || 'chat-light';
+    const has = !!cfg.field;
+    const ph = cfg.lang === 'en' ? 'Message' : (bg === 'photo' ? 'Подпись к фото' : 'Сообщение');
+    return {
+      cfgStr: JSON.stringify(cfg),
+      isLight: bg === 'chat-light', isDark: bg === 'chat-dark', isPhoto: bg === 'photo',
+      fieldText: has ? cfg.field : ph,
+      fieldStyle: has ? 'color: #111B21; letter-spacing: ' + (cfg.secure ? '3px' : '0') : 'color: #667781',
+      fieldStyleDark: has ? 'color: #F2F5F7; letter-spacing: ' + (cfg.secure ? '3px' : '0') : 'color: #8FA3B3',
+      fieldStylePhoto: has ? 'color: #FFFFFF' : 'color: #E6E6E6',
+      navBar: bg === 'chat-light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.75)'
+    };
+  }
+}
+</script>
+</body>
+</html>

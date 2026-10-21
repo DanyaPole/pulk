@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Движение</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1520px; height: 892px; box-sizing: border-box; padding: 40px; background: #F4F6F7; color: #0F1E26; font-family: Roboto, 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 30px; font-weight: 700">Движение: мягкая капля и короткий отклик</h1>
+<p style="margin: 0; font-size: 15px; color: #4A5B64">Двигается только то, что нужно понять. Если в Android включено «Убрать анимацию» — всё появляется сразу, остаются звук и вибрация.</p>
+</div>
+
+<div style="display: flex; gap: 40px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 17px; font-weight: 700">Появление «пульк» — 300 мс, звезда вырастает из угла с перелётом 4 %</div>
+<div style="display: flex; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 8px; width: 124px">
+<div style="position: relative; width: 124px; height: 268px; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"light","bg":"chat-light","stage":"hidden"}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.35"><b>0 мс</b><br>касание кружка</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 124px">
+<div style="position: relative; width: 124px; height: 268px; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"light","bg":"chat-light","stage":"emerging","g":0.63}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.35"><b>60 мс</b><br>63 %, кружок гаснет</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 124px">
+<div style="position: relative; width: 124px; height: 268px; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"light","bg":"chat-light","stage":"emerging","g":0.94}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.35"><b>120 мс</b><br>94 %, звук «пульк»</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 124px">
+<div style="position: relative; width: 124px; height: 268px; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"light","bg":"chat-light","stage":"emerging","g":1.045}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.35"><b>195 мс</b><br>104 % — капля «упала»</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 124px">
+<div style="position: relative; width: 124px; height: 268px; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"light","bg":"chat-light"}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.35"><b>300 мс</b><br>100 %, на месте</div>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 17px; font-weight: 700">Кривая: перелёт 1,1 (появление) и замедление (уход)</div>
+<svg width="420" height="268" viewBox="0 0 420 268" role="img" aria-label="График скорости: появление с перелётом до 104 процентов, уход с замедлением" style="background: #FFFFFF; border-radius: 12px">
+<line x1="30" y1="230" x2="400" y2="230" stroke="#B3C1C9" stroke-width="1"></line>
+<line x1="30" y1="30" x2="30" y2="230" stroke="#B3C1C9" stroke-width="1"></line>
+<line x1="30" y1="70" x2="400" y2="70" stroke="#7F929C" stroke-width="1" stroke-dasharray="4 4"></line>
+<text x="36" y="62" font-size="12" fill="#4A5B64" font-family="Roboto, sans-serif">100 %</text>
+<path d="{{overshootD}}" fill="none" stroke="#0A6680" stroke-width="3" stroke-linecap="round"></path>
+<path d="{{hideD}}" fill="none" stroke="#C2410C" stroke-width="3" stroke-dasharray="8 6" stroke-linecap="round"></path>
+<circle cx="{{peak.x}}" cy="{{peak.y}}" r="5" fill="#0A6680"></circle>
+<text x="{{peak.tx}}" y="{{peak.ty}}" font-size="12" fill="#0A6680" font-weight="700" font-family="Roboto, sans-serif">104 % на 195 мс</text>
+<text x="300" y="250" font-size="12" fill="#4A5B64" font-family="Roboto, sans-serif">время →</text>
+<text x="250" y="130" font-size="12" fill="#C2410C" font-weight="700" font-family="Roboto, sans-serif">уход 170 мс</text>
+</svg>
+<div style="display: flex; gap: 16px; font-size: 13px"><span style="display: flex; align-items: center; gap: 6px"><span style="display: inline-block; width: 24px; height: 3px; background: #0A6680"></span>появление, сплошная</span><span style="display: flex; align-items: center; gap: 6px"><span style="display: inline-block; width: 24px; height: 0; border-top: 3px dashed #C2410C"></span>уход, пунктир</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 17px; font-weight: 700">Отклик — одно кольцо, не дольше 120 мс, и свой звук для каждого действия</div>
+<div style="display: flex; gap: 24px">
+<div style="display: flex; gap: 14px; width: 330px">
+<div style="position: relative; width: 124px; height: 268px; flex: 0 0 auto; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"dark","bg":"chat-dark","field":"Привет","ringAt":"star","ringR":46,"ringOp":0.55}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.45"><b>Буква</b><br>Кольцо из центра звезды: ⌀ 32 → 120 dp, 3 dp, акцент, тает за 120 мс. Звук — короткий «тик», вибрация 12 мс.</div>
+</div>
+<div style="display: flex; gap: 14px; width: 330px">
+<div style="position: relative; width: 124px; height: 268px; flex: 0 0 auto; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"dark","bg":"chat-dark","field":"Привет ","pressed":"SPACE","ringAt":"SPACE","ringR":40,"ringOp":0.5}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.45"><b>Пробел</b><br>Клавиша на 80 мс в цвет нажатия с рамкой 2 dp. Звук ниже и мягче, вибрация 18 мс.</div>
+</div>
+<div style="display: flex; gap: 14px; width: 330px">
+<div style="position: relative; width: 124px; height: 268px; flex: 0 0 auto; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"dark","bg":"chat-dark","field":"Приве","pressed":"BKSP","ringAt":"BKSP","ringR":30,"ringOp":0.5}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.45"><b>Стирание</b><br>⌫ вспыхивает, кольцо сжимается внутрь (обратное движение = «назад»). Звук — двойной низкий «тук».</div>
+</div>
+<div style="display: flex; gap: 14px; width: 330px">
+<div style="position: relative; width: 124px; height: 268px; flex: 0 0 auto; overflow: hidden; border-radius: 12px"><div style="position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: 0 0; transform: scale(0.3)"><dc-import name="Phone" cfg='{"concept":"petals","theme":"dark","bg":"chat-dark","stage":"emerging","g":0.35}' hint-size="412px,892px"></dc-import></div></div>
+<div style="font-size: 13px; line-height: 1.45"><b>Прячется</b><br>⌄ — звезда уходит в угол за 170 мс с замедлением, кружок проявляется на последних 60 мс.</div>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1520,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const T = 1.1;
+    const ov = (t) => { const u = t - 1; return u * u * ((T + 1) * u + T) + 1; };
+    const dec = (t) => 1 - (1 - (1 - t) * (1 - t));
+    const X = (t) => 30 + t * 360, Y = (v) => 230 - v * 160;
+    let a = '', b = '';
+    for (let i = 0; i <= 50; i++) {
+      const t = i / 50;
+      a += (i ? ' L' : 'M') + X(t).toFixed(1) + ' ' + Y(ov(t)).toFixed(1);
+      const th = t * 170 / 300;
+      b += (i ? ' L' : 'M') + X(th).toFixed(1) + ' ' + Y(dec(t)).toFixed(1);
+    }
+    const pt = 0.65;
+    return { overshootD: a, hideD: b, peak: { x: X(pt), y: Y(ov(pt)), tx: X(pt) - 40, ty: Y(ov(pt)) - 12 } };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Клавиатура Пульк</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 412px; height: 892px; overflow: hidden; font-family: Roboto, 'Segoe UI', system-ui, sans-serif; color: #0F1E26">
+<div style="{{bodyStyle}}">
+<svg width="412" height="892" viewBox="0 0 412 892" style="position: absolute; left: 0; top: 0; overflow: visible" aria-hidden="true">
+<path d="{{glassD}}" fill="{{c.fn}}" fill-opacity="{{c.glassOp}}" stroke="{{c.border}}" stroke-opacity="{{c.borderOp}}" stroke-width="{{borderW}}"></path>
+<path d="{{pressD}}" fill="{{c.press}}" stroke="{{c.accent}}" stroke-width="2"></path>
+<path d="{{accentD}}" fill="{{c.accent}}"></path>
+<circle cx="{{ring.x}}" cy="{{ring.y}}" r="{{ring.r}}" fill="none" stroke="{{c.accent}}" stroke-width="3" opacity="{{ring.op}}"></circle>
+<g transform="{{ic.SHIFT}}"><path d="{{icon.shift}}" fill="none" stroke="{{shiftHalo}}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"></path><path d="{{icon.shift}}" fill="{{shiftFill}}" stroke="{{shiftInk}}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"></path></g>
+<g transform="{{ic.BKSP}}"><path d="{{icon.bksp}}" fill="none" stroke="{{c.halo}}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"></path><path d="{{icon.bksp}}" fill="none" stroke="{{c.ink}}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"></path></g>
+<g transform="{{ic.ENTER}}"><path d="{{icon.enter}}" fill="none" stroke="{{c.halo}}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"></path><path d="{{icon.enter}}" fill="none" stroke="{{c.ink}}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"></path></g>
+<g transform="{{ic.HIDE}}"><path d="{{icon.hide}}" fill="none" stroke="{{c.halo}}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"></path><path d="{{icon.hide}}" fill="none" stroke="{{c.ink}}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"></path></g>
+<circle cx="{{S.x}}" cy="{{S.y}}" r="{{discR}}" fill="{{c.key}}" stroke="{{c.ring}}" stroke-width="{{ringW}}"></circle>
+<path d="{{wedgeZoneD}}" fill="{{c.zone}}"></path>
+<path d="{{wedgeHlD}}" fill="{{c.press}}"></path>
+<path d="{{sepD}}" fill="none" stroke="{{c.line}}" stroke-width="{{sepW}}"></path>
+<path d="{{rimD}}" fill="none" stroke="{{c.accent}}" stroke-width="{{rimW}}" stroke-linecap="round"></path>
+<path d="{{petalsD}}" fill="none" stroke="{{c.line}}" stroke-width="{{petalEdgeW}}" stroke-linejoin="round"></path>
+<path d="{{petalsD}}" fill="{{c.key}}" stroke="{{c.key}}" stroke-width="{{petalW}}" stroke-linejoin="round"></path>
+<path d="{{zoneD}}" fill="{{c.zone}}" stroke="{{c.zone}}" stroke-width="{{petalW}}" stroke-linejoin="round"></path>
+<path d="{{hlD}}" fill="none" stroke="{{c.accent}}" stroke-width="{{hlEdgeW}}" stroke-linejoin="round"></path>
+<path d="{{hlD}}" fill="{{c.press}}" stroke="{{c.press}}" stroke-width="{{petalW}}" stroke-linejoin="round"></path>
+<circle cx="{{S.x}}" cy="{{S.y}}" r="{{centreR}}" fill="{{c.centre}}"></circle>
+<path d="{{coachD}}" fill="none" stroke="{{c.accent}}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="{{coachT.x}}" cy="{{coachT.y}}" r="{{coachT.r}}" fill="none" stroke="{{c.accent}}" stroke-width="2"></circle>
+</svg>
+<sc-for list="{{labels}}" as="l" hint-placeholder-count="40"><div style="{{l.s}}">{{l.t}}</div></sc-for>
+<svg width="412" height="892" viewBox="0 0 412 892" style="position: absolute; left: 0; top: 0; overflow: visible" aria-hidden="true">
+<path d="{{trailD}}" fill="none" stroke="{{c.accent}}" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="{{finger.x}}" cy="{{finger.y}}" r="{{finger.r}}" fill="{{c.accent}}" fill-opacity="0.22" stroke="{{c.accent}}" stroke-width="2"></circle>
+<circle cx="{{S.x}}" cy="{{S.y}}" r="{{previewR}}" fill="{{c.accent}}" stroke="{{c.halo}}" stroke-width="{{previewEdge}}"></circle>
+</svg>
+<sc-for list="{{top}}" as="l" hint-placeholder-count="1"><div style="{{l.s}}">{{l.t}}</div></sc-for>
+<div style="{{chipRow}}">
+<sc-for list="{{chips}}" as="ch" hint-placeholder-count="3"><button type="button" style="{{ch.s}}">{{ch.t}}</button></sc-for>
+</div>
+<sc-if value="{{notice.on}}" hint-placeholder-val="{{false}}">
+<div style="{{notice.s}}"><svg width="20" height="20" viewBox="-12 -12 24 24" aria-hidden="true"><path d="{{notice.icon}}" fill="none" stroke="{{c.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>{{notice.t}}</span></div>
+</sc-if>
+</div>
+<svg width="412" height="892" viewBox="0 0 412 892" style="position: absolute; left: 0; top: 0" opacity="{{handle.op}}" aria-hidden="true">
+<circle cx="{{handle.x}}" cy="{{handle.y}}" r="{{handle.r}}" fill="{{c.accent}}" stroke="{{c.halo}}" stroke-width="2"></circle>
+<path d="{{handle.d}}" fill="none" stroke="{{c.accentFg}}" stroke-width="2.4" stroke-linecap="round"></path>
+</svg>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"cfg":{"editor":"text","default":"{\"concept\":\"petals\",\"theme\":\"light\",\"chips\":[\"Привет\",\"Привести\",\"Привёл\"]}"},"$preview":{"width":412,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() {
+    let cfg = {};
+    try { cfg = typeof this.props.cfg === 'string' ? JSON.parse(this.props.cfg) : (this.props.cfg || {}); } catch (e) { cfg = {}; }
+    if (!cfg.concept) cfg = { concept: 'petals', theme: 'light', chips: ['Привет', 'Привести', 'Привёл'] };
+
+    // ---- палитры трёх концепций ----
+    const PALS = {
+      drop: {
+        light: { key: '#FFFFFF', line: '#C6D0D6', ring: '#C6D0D6', fn: '#C3CDD3', glassOp: 0.62, border: '#152027', borderOp: 0.12, ink: '#152027', muted: '#5B6A73', accent: '#0B6E8A', accentFg: '#FFFFFF', press: '#A9D3E0', zone: '#E3F1F5', halo: '#FFFFFF', centre: '#C3CDD3', chip: '#C3CDD3', chipEdge: '#C3CDD3' },
+        dark: { key: '#20292E', line: '#3A474E', ring: '#3A474E', fn: '#2C373D', glassOp: 0.62, border: '#FFFFFF', borderOp: 0.12, ink: '#E4EBEE', muted: '#8B9AA2', accent: '#55BAD7', accentFg: '#06222B', press: '#2F6070', zone: '#1B323B', halo: '#0A0E10', centre: '#2C373D', chip: '#2C373D', chipEdge: '#2C373D' }
+      },
+      beacon: {
+        light: { key: '#FFFFFF', line: '#7A7A7A', ring: '#111111', fn: '#FFFFFF', glassOp: 0.86, border: '#111111', borderOp: 1, ink: '#000000', muted: '#2B2B2B', accent: '#9A4700', accentFg: '#FFFFFF', press: '#FFDDB0', zone: '#FFF0DA', halo: '#FFFFFF', centre: '#111111', chip: '#FFFFFF', chipEdge: '#111111' },
+        dark: { key: '#000000', line: '#5E5E5E', ring: '#FFC23D', fn: '#000000', glassOp: 0.86, border: '#FFFFFF', borderOp: 0.7, ink: '#FFFFFF', muted: '#E2E2E2', accent: '#FFC23D', accentFg: '#1C1300', press: '#4D3900', zone: '#2B2100', halo: '#000000', centre: '#FFC23D', chip: '#000000', chipEdge: '#FFFFFF' }
+      },
+      petals: {
+        light: { key: '#FFFFFF', line: '#7F929C', ring: '#7F929C', fn: '#FFFFFF', glassOp: 0.55, border: '#0F1E26', borderOp: 0.18, ink: '#0F1E26', muted: '#4A5B64', accent: '#0A6680', accentFg: '#FFFFFF', press: '#CFE8F0', zone: '#E6F3F7', halo: '#FFFFFF', centre: '#0A6680', chip: '#FFFFFF', chipEdge: '#7F929C' },
+        dark: { key: '#1B262C', line: '#5E737D', ring: '#5E737D', fn: '#1B262C', glassOp: 0.6, border: '#FFFFFF', borderOp: 0.18, ink: '#EDF3F6', muted: '#A3B4BC', accent: '#4CC2DE', accentFg: '#032029', press: '#244A5B', zone: '#1E3944', halo: '#0B1114', centre: '#4CC2DE', chip: '#1B262C', chipEdge: '#5E737D' }
+      }
+    };
+    const STY = {
+      drop: { cr: 6, strip: 52, chipH: 38, chipFs: 17, big: 21, side: 14, back: 11, wBig: 400, wSide: 400, ringW: 1, sepW: 1, previewR: 26, chipEdge: 0, petals: false, rimW: 3 },
+      beacon: { cr: 4, strip: 60, chipH: 48, chipFs: 18, big: 23, side: 15, back: 12, wBig: 700, wSide: 500, ringW: 2.5, sepW: 1.5, previewR: 30, chipEdge: 2, petals: false, rimW: 4 },
+      petals: { cr: 12, strip: 60, chipH: 48, chipFs: 18, big: 23, side: 14, back: 11.5, wBig: 500, wSide: 400, ringW: 0, sepW: 0, previewR: 30, chipEdge: 1, petals: true, rimW: 0 }
+    };
+    const concept = PALS[cfg.concept] ? cfg.concept : 'petals';
+    const theme = cfg.theme === 'dark' ? 'dark' : 'light';
+    const c = PALS[concept][theme], st = STY[concept];
+
+    // ---- геометрия: как в Pulse.kt (базовые единицы × K = dp) ----
+    const left = cfg.hand === 'left', blind = !!cfg.blind;
+    const W = 412, H = 892, K = blind ? 1.367 : 1.232, kd = Math.max(K, 0.85);
+    const RAD = Math.PI / 180;
+    const cos = (a) => Math.cos(a * RAD), sin = (a) => Math.sin(a * RAD);
+    const X = (x) => (left ? W - x : x);
+    const f1 = (n) => Math.round(n * 10) / 10;
+    const toS = (q) => [X(W + q[0]), H - q[1]];
+    const pd = (r, a) => toS([r * cos(a), r * sin(a)]);
+    const PH = [262 * cos(135) * K, 262 * sin(135) * K];
+    const R = 96 * K;
+    const Sp = toS(PH);
+    const S = { x: f1(Sp[0]), y: f1(Sp[1]) };
+    const sl = (r, a) => [PH[0] + r * cos(a), PH[1] + r * sin(a)];
+    const line = (pts, close) => 'M' + pts.map((q) => f1(q[0]) + ' ' + f1(q[1])).join(' L') + (close ? ' Z' : '');
+    const scr = (pts) => pts.map(toS);
+
+    const rsector = (r0, r1, a0, a1, cr) => {
+      const pts = [];
+      const P = (r, a) => [r * cos(a), r * sin(a)];
+      const arc = (o, t0, t1) => { for (let i = 0; i <= 6; i++) { const t = t0 + (t1 - t0) * i / 6; pts.push([o[0] + cr * cos(t), o[1] + cr * sin(t)]); } };
+      const N = 28;
+      for (let i = 0; i <= N; i++) pts.push(P(r1 + cr, a0 + (a1 - a0) * i / N));
+      arc(P(r1, a1), a1, a1 + 90);
+      arc(P(r0, a1), a1 + 90, a1 + 180);
+      for (let i = 0; i <= N; i++) pts.push(P(r0 - cr, a1 - (a1 - a0) * i / N));
+      arc(P(r0, a0), a0 + 180, a0 + 270);
+      arc(P(r1, a0), a0 + 270, a0 + 360);
+      return line(scr(pts), true);
+    };
+    const wedge = (a0, a1, r0, r1) => {
+      const pts = [];
+      for (let i = 0; i <= 16; i++) pts.push(sl(r1, a0 + (a1 - a0) * i / 16));
+      for (let i = 0; i <= 6; i++) pts.push(sl(r0, a1 - (a1 - a0) * i / 6));
+      return line(scr(pts), true);
+    };
+    const petal = (mid, half, rIn, rOut, gap, crp, shift) => {
+      const h = gap / 2 + crp, rI = rIn + crp, rO = rOut - crp;
+      const dI = Math.asin(Math.min(h / rI, 0.99)) / RAD, dO = Math.asin(h / rO) / RAD;
+      const spanI = Math.max(0, 2 * half - 2 * dI), spanO = 2 * half - 2 * dO;
+      const pts = [];
+      for (let i = 0; i <= 18; i++) pts.push(sl(rO, mid - half + dO + spanO * i / 18));
+      for (let i = 0; i <= 6; i++) pts.push(sl(rI, mid + half - dI - spanI * i / 6));
+      const sh = pts.map((q) => [q[0] + shift * cos(mid), q[1] + shift * sin(mid)]);
+      return line(scr(sh), true);
+    };
+
+    // ---- таблицы букв (Pulse.kt) ----
+    const RU = [['н', 'м', 'ь', 'щ'], ['о', 'у', 'б', 'ю'], ['а', 'в', 'я', 'ф'], ['с', 'з', 'ч', 'ш'], ['и', 'ы', 'й', '?'], ['е', 'к', 'г', 'э'], ['т', 'д', 'п', 'ц'], ['р', 'л', 'х', 'ж']];
+    const EN = [['o', 'u', 'f', ':'], ['e', 'd', 'w', 'z'], ['t', 'h', 'p', '-'], ['s', 'b', 'v', 'q'], ['i', 'c', 'g', "'"], ['a', 'l', 'y', '?'], ['n', 'm', 'k', ''], ['r', 'x', 'j', '']];
+    const SYM = [['1', '9', '(', '@'], ['2', '0', ')', '#'], ['3', '.', ',', '~'], ['4', '?', '!', ':'], ['5', '-', '_', ';'], ['6', "'", '"', '/'], ['7', '+', '=', '%'], ['8', '*', '&', '$']];
+    const KINDS = ['c', 'l', 'r', 'b'];
+    const SPOT = { c: [52, 0], l: [86, 14], r: [86, -14], b: [24, 0] };
+    const TAP = { c: 0, l: 90, r: -90, b: 180 };
+    const lang = cfg.lang === 'en' ? 'en' : 'ru';
+    const sym = cfg.layer === 'sym';
+    const table = sym ? SYM : (lang === 'ru' ? RU : EN);
+    const up = cfg.caps === 'once' || cfg.caps === 'lock';
+    const parseSlot = (s) => (s && s.length >= 2 ? { p: +s[0], k: s[1] } : null);
+    const live = parseSlot(cfg.swipe);
+    const goal = parseSlot(cfg.coach);
+    const openP = cfg.openPetal != null ? +cfg.openPetal : -1;
+    const chipsIn = cfg.secure ? [] : (cfg.chips || []);
+
+    const labels = [];
+    const halo = (col) => 'text-shadow: 0 0 2px ' + col + ', 0 0 2px ' + col + ', 0 0 3px ' + col + ', 0 0 5px ' + col + ';';
+    const base = 'position: absolute; transform: translate(-50%, -50%); line-height: 1; white-space: nowrap;';
+    const lab = (list, t, q, size, color, weight, haloCol) => list.push({ t: t, s: base + 'left:' + f1(q[0]) + 'px;top:' + f1(q[1]) + 'px;font-size:' + f1(size) + 'px;font-weight:' + (weight || 400) + ';color:' + color + ';' + (haloCol ? halo(haloCol) : '') });
+
+    // ---- служебные клавиши ----
+    const FN = [['SPACE', 30, 158, 91, 150], ['ENTER', 30, 158, 150, 179], ['BKSP', 158, 300, 91, 110], ['SHIFT', 158, 194, 160, 179], ['LANG', 194, 230, 160, 179], ['SYM', 230, 266, 160, 179], ['HIDE', 266, 300, 160, 179]];
+    const cr = st.cr * kd, ins = 2.5 + cr;
+    let glassD = '', pressD = '', accentD = '';
+    const KP = {};
+    FN.forEach((f) => {
+      const fn = f[0], r0 = f[1], r1 = f[2], a0 = f[3], a1 = f[4];
+      const rm = (r0 + r1) / 2 * K;
+      const da = (ins / rm) / RAD;
+      const d = rsector(r0 * K + ins, r1 * K - ins, a0 + da, a1 - da, cr);
+      const lock = fn === 'SHIFT' && cfg.caps === 'lock';
+      const pressed = (fn === 'SHIFT' && cfg.caps === 'once') || cfg.pressed === fn;
+      if (lock) accentD += d; else if (pressed) pressD += d; else glassD += d;
+      KP[fn] = { r0: r0, r1: r1, a0: a0, a1: a1, rm: (r0 + r1) / 2, am: (a0 + a1) / 2 };
+    });
+    const kp = (fn) => pd(KP[fn].rm * K, KP[fn].am);
+    lab(labels, lang === 'ru' ? 'пробел' : 'space', kp('SPACE'), 14 * kd, c.muted, 500, c.halo);
+    lab(labels, '.', pd((158 - 11) * K, KP.SPACE.am), 17 * kd, c.muted, 700, c.halo);
+    lab(labels, ',', pd((30 + 11) * K, KP.SPACE.am), 17 * kd, c.muted, 700, c.halo);
+    if (chipsIn.length && !cfg.hint) lab(labels, '↑', pd(KP.SPACE.rm * K, KP.SPACE.a0 + 9), 15 * kd, c.accent, 700, c.halo);
+    lab(labels, lang.toUpperCase(), kp('LANG'), 15 * kd, c.ink, 700, c.halo);
+    lab(labels, sym ? (lang === 'ru' ? 'абв' : 'abc') : '?123', kp('SYM'), 13 * kd, c.ink, 700, c.halo);
+    const ic = {};
+    ['SHIFT', 'BKSP', 'ENTER', 'HIDE'].forEach((fn) => { const q = kp(fn); ic[fn] = 'translate(' + f1(q[0]) + ' ' + f1(q[1]) + ') scale(' + f1(kd * 0.95 * 10) / 10 + ')'; });
+    const lock = cfg.caps === 'lock';
+    const icon = {
+      shift: 'M0 -9 L9 1 L4 1 L4 8 L-4 8 L-4 1 L-9 1 Z' + (lock ? ' M-5 12 L5 12' : ''),
+      bksp: 'M-3 -8 L10 -8 L10 8 L-3 8 L-11 0 Z M0.5 -3.5 L7.5 3.5 M7.5 -3.5 L0.5 3.5',
+      enter: 'M9 -7 L9 2 L-8 2 M-4 -2 L-8 2 L-4 6',
+      hide: 'M-7 -3 L0 4 L7 -3'
+    };
+    const shiftInk = lock ? c.accentFg : c.ink;
+    const shiftFill = lock ? c.accentFg : (cfg.caps === 'once' ? c.ink : 'none');
+    const shiftHalo = lock || cfg.caps === 'once' ? 'none' : c.halo;
+
+    // ---- звезда ----
+    const hl = live && live.p >= 0 && openP < 0 ? live.p : -1;
+    let wedgeZoneD = '', wedgeHlD = '', sepD = '', rimD = '', petalsD = '', zoneD = '', hlD = '';
+    let discR = 0;
+    const crp = 5 * kd / 1.232, gap = 4, rIn = 18 * K, shiftHl = 6;
+    if (!st.petals) {
+      discR = f1(R);
+      if (openP >= 0) {
+        const m = openP * 45;
+        wedgeZoneD = wedge(m - 45, m + 45, 15 * K, R - 1);
+        for (let j = 0; j < 4; j++) { const a = m + 45 + 90 * j; sepD += line(scr([sl(15 * K, a), sl(R, a)])); }
+      } else {
+        if (goal) wedgeZoneD = wedge(goal.p * 45 - 22.5, goal.p * 45 + 22.5, 13 * K, R - 1);
+        if (hl >= 0) {
+          wedgeHlD = wedge(hl * 45 - 22.5, hl * 45 + 22.5, 13 * K, R - 1);
+          const pts = []; for (let i = 0; i <= 12; i++) pts.push(sl(R - st.rimW / 2, hl * 45 - 22.5 + 45 * i / 12));
+          rimD = line(scr(pts));
+        }
+        for (let p = 0; p < 8; p++) { const a = p * 45 - 22.5; sepD += line(scr([sl(15 * K, a), sl(R, a)])); }
+      }
+    } else {
+      if (openP >= 0) {
+        KINDS.forEach((k) => {
+          const m = openP * 45 + TAP[k];
+          const d = petal(m, 45, rIn, R, 4, crp, 0);
+          if (k === 'c') zoneD += d; else petalsD += d;
+        });
+      } else {
+        for (let p = 0; p < 8; p++) {
+          const d = petal(p * 45, 22.5, rIn, R, gap, crp, 0);
+          if (p === hl) hlD = petal(p * 45, 22.5, rIn, R, gap, crp, shiftHl);
+          else if (goal && goal.p === p) zoneD += d;
+          else petalsD += d;
+        }
+        if (goal) petalsD += '';
+      }
+    }
+    const centreR = f1((st.petals ? 13 : 13) * K);
+
+    // ---- буквы ----
+    if (openP >= 0) {
+      KINDS.forEach((k, i) => {
+        const v = table[openP][i]; if (!v) return;
+        const q = toS(sl(R * 0.58, openP * 45 + TAP[k]));
+        lab(labels, cfg.secure ? '•' : (up ? v.toUpperCase() : v), q, 34 * kd, c.ink, k === 'c' ? 700 : 500);
+      });
+      lab(labels, '×', [S.x, S.y], 18 * kd, st.petals ? c.accentFg : c.muted, 700);
+    } else if (!cfg.coachHide) {
+      for (let p = 0; p < 8; p++) {
+        KINDS.forEach((k, i) => {
+          const v = table[p][i]; if (!v) return;
+          const r = SPOT[k][0] * K, a = p * 45 + SPOT[k][1];
+          let q = sl(r, a);
+          if (st.petals && p === hl) q = [q[0] + shiftHl * cos(p * 45), q[1] + shiftHl * sin(p * 45)];
+          const isGoal = goal && goal.p === p && goal.k === k;
+          const big = k === 'c';
+          const size = (big ? st.big : (k === 'b' ? st.back : st.side)) * kd;
+          const col = isGoal ? c.accent : (big || p === hl ? c.ink : c.muted);
+          lab(labels, up ? v.toUpperCase() : v, toS(q), size, col, isGoal ? 700 : (big ? st.wBig : st.wSide));
+        });
+      }
+    }
+
+    // ---- обучение: путь пальца и цель ----
+    let coachD = '', coachT = { x: 0, y: 0, r: 0 };
+    if (goal) {
+      const bigp = sl(SPOT.c[0] * K, goal.p * 45);
+      const pts = [PH, bigp];
+      const e = sl(SPOT[goal.k][0] * K, goal.p * 45 + SPOT[goal.k][1]);
+      if (goal.k !== 'c') pts.push(e);
+      coachD = line(scr(pts));
+      const t = toS(e); coachT = { x: f1(t[0]), y: f1(t[1]), r: f1(14 * K) };
+    }
+
+    // ---- смах: след, палец, буква в центре ----
+    let trailD = '', finger = { x: 0, y: 0, r: 0 }, previewR = 0, previewEdge = 0;
+    const top = [];
+    if (live) {
+      const bigp = sl(SPOT.c[0] * K, live.p * 45);
+      const pts = [PH, bigp];
+      const e = sl(SPOT[live.k][0] * K * (live.k === 'c' ? 1.15 : 1), live.p * 45 + SPOT[live.k][1]);
+      if (live.k !== 'c') pts.push(e); else pts[1] = e;
+      trailD = line(scr(pts));
+      const t = toS(e); finger = { x: f1(t[0]), y: f1(t[1]), r: 11 };
+      previewR = st.previewR; previewEdge = 2;
+      const v = table[live.p][KINDS.indexOf(live.k)] || '';
+      lab(top, cfg.secure ? '•' : (up ? v.toUpperCase() : v), [S.x, S.y], 28 * kd, c.accentFg, 700);
+    }
+
+    // ---- подсказки слов ----
+    const strip = st.strip, chipH = st.chipH;
+    const cornerH = Math.max(300 * K + 4 + strip, (185.26 + 96 + 4) * K + 4);
+    const chipTop = f1(H - cornerH + (strip - chipH) / 2);
+    const chips = chipsIn.map((t, i) => {
+      const best = i === 0 && !cfg.hint;
+      const pressedChip = cfg.chipPressed === i;
+      const bg = pressedChip ? c.press : (best ? c.accent : c.chip);
+      const fg = best && !pressedChip ? c.accentFg : c.ink;
+      const edge = st.chipEdge ? (best ? (pressedChip ? c.accent : c.accent) : c.chipEdge) : bg;
+      return { t: t, s: 'all: unset; box-sizing: border-box; height:' + chipH + 'px; padding: 0 ' + (chipH >= 48 ? 18 : 14) + 'px; border-radius:' + chipH / 2 + 'px; background:' + bg + '; color:' + fg + '; border:' + (st.chipEdge || 0) + 'px solid ' + edge + '; font: ' + (best ? 700 : 500) + ' ' + st.chipFs + 'px/1 Roboto, system-ui, sans-serif; display: flex; align-items: center; white-space: nowrap; flex: 0 0 auto;' + (best && st.chipEdge ? ' box-shadow: 0 0 0 2px ' + c.halo + ';' : '') };
+    });
+    const chipRow = 'position: absolute; top:' + chipTop + 'px; ' + (left ? 'left: 8px; flex-direction: row;' : 'right: 8px; flex-direction: row-reverse;') + ' display: flex; gap: 8px;';
+
+    let notice = { on: false, t: '', s: '', icon: '' };
+    const noticeBase = 'position: absolute; top:' + chipTop + 'px; ' + (left ? 'left: 8px;' : 'right: 8px;') + ' height:' + chipH + 'px; padding: 0 16px; border-radius:' + chipH / 2 + 'px; background:' + c.chip + '; border: 1px solid ' + c.chipEdge + '; color:' + c.ink + '; display: flex; align-items: center; gap: 8px; font: 500 15px/1 Roboto, system-ui, sans-serif; white-space: nowrap;';
+    if (cfg.secure) notice = { on: true, t: lang === 'ru' ? 'Пароль: без подсказок, звука и голоса' : 'Password: no hints, sound or voice', s: noticeBase, icon: 'M-6 -1 L6 -1 L6 9 L-6 9 Z M-4 -1 L-4 -5 A4 4 0 0 1 4 -5 L4 -1' };
+    if (cfg.voice) notice = { on: true, t: cfg.voice, s: noticeBase, icon: 'M-9 -3 L-5 -3 L1 -8 L1 8 L-5 3 L-9 3 Z M4 -4 A6 6 0 0 1 4 4 M7 -7 A10 10 0 0 1 7 7' };
+
+    // ---- отклик: кольцо ----
+    let ring = { x: 0, y: 0, r: 0, op: 0 };
+    if (cfg.ringAt) {
+      const q = cfg.ringAt === 'star' ? [S.x, S.y] : kp(cfg.ringAt);
+      ring = { x: f1(q[0]), y: f1(q[1]), r: cfg.ringR || 40, op: cfg.ringOp != null ? cfg.ringOp : 0.6 };
+    }
+
+    // ---- спрятана / выдвигается ----
+    const stage = cfg.stage || 'open';
+    const g = stage === 'hidden' ? 0 : (stage === 'emerging' ? (cfg.g != null ? cfg.g : 0.6) : 1);
+    const bodyStyle = 'position: absolute; left: 0; top: 0; width: 412px; height: 892px; transform-origin: ' + X(W) + 'px ' + H + 'px; transform: scale(' + g + ');' + (g === 0 ? ' visibility: hidden;' : '');
+    const hc = pd(62 * K, 135), hr = 26;
+    let hd = '';
+    for (let i = 0; i < 8; i++) { const a = i * 45; hd += 'M' + f1(hc[0] + cos(a) * hr * 0.3) + ' ' + f1(hc[1] + sin(a) * hr * 0.3) + ' L' + f1(hc[0] + cos(a) * hr * 0.62) + ' ' + f1(hc[1] + sin(a) * hr * 0.62); }
+    const handle = { x: f1(hc[0]), y: f1(hc[1]), r: hr, d: hd, op: stage === 'hidden' ? 1 : (stage === 'emerging' ? Math.max(0, 1 - g * 1.6) : 0) };
+
+    return {
+      c: c, S: S, bodyStyle: bodyStyle, glassD: glassD, pressD: pressD, accentD: accentD, borderW: concept === 'beacon' ? 2 : 1,
+      ic: ic, icon: icon, shiftInk: shiftInk, shiftFill: shiftFill, shiftHalo: shiftHalo,
+      discR: discR, ringW: st.ringW, wedgeZoneD: wedgeZoneD, wedgeHlD: wedgeHlD, sepD: sepD, sepW: st.sepW, rimD: rimD, rimW: st.rimW,
+      petalsD: petalsD, zoneD: zoneD, hlD: hlD, petalW: f1(crp * 2), petalEdgeW: f1(crp * 2 + 2), hlEdgeW: f1(crp * 2 + 4),
+      centreR: centreR, coachD: coachD, coachT: coachT, labels: labels, top: top,
+      trailD: trailD, finger: finger, previewR: previewR, previewEdge: previewEdge,
+      chips: chips, chipRow: chipRow, notice: notice, ring: ring, handle: handle
+    };
+  }
+}
+</script>
+</body>
+</html>
