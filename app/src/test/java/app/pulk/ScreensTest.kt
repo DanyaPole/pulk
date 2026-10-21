@@ -126,4 +126,12 @@ class ScreensTest {
         val home = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
         assertTrue(all(home.window.decorView).filterIsInstance<android.widget.TextView>().any { it.text.toString().startsWith("Подстроить Пульк под человека") })
     }
+
+    @Test fun talkBackHearsHeadingsAndWhatIsChosen() {
+        val v = all(Robolectric.buildActivity(OptionsActivity::class.java).setup().get().window.decorView)
+        assertTrue(v.any { it.isAccessibilityHeading })
+        val chosen = v.filterIsInstance<Button>().filter { it.isSelected }
+        assertTrue(chosen.isNotEmpty())
+        assertTrue(chosen.all { it.contentDescription?.contains(": ") == true && !it.contentDescription.contains("✓") })
+    }
 }

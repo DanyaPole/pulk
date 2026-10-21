@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
+import android.os.Build
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
@@ -51,8 +52,9 @@ class Ui(private val a: Activity) {
         if (bold) setTypeface(typeface, Typeface.BOLD)
         setPadding(0, px(6), 0, px(6))
     }
-    fun title(s: String) = text(s, 28f, ink, true)
-    fun h(s: String) = text(s, 19f, ink, true).apply { setPadding(0, px(20), 0, px(4)) }
+    /** Titles and headings are marked for TalkBack, so a person can jump between them. */
+    fun title(s: String) = text(s, 28f, ink, true).apply { if (Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true }
+    fun h(s: String) = text(s, 19f, ink, true).apply { setPadding(0, px(20), 0, px(4)); if (Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true }
     fun note(s: String) = text(s, 14f, muted)
 
     /** A button: [main] is the screen's one big action (64 dp, filled), the others 52 dp outlined. */
@@ -79,6 +81,8 @@ class Ui(private val a: Activity) {
                 b.text = if (on) "✓ $label" else label
                 b.background = GradientDrawable().apply { cornerRadius = px(12).toFloat(); setColor(if (on) accent else panel); setStroke(px(1), if (on) accent else line) }
                 b.setTextColor(if (on) onAccent else ink)
+                // TalkBack hears «Звук: Вкл, выбрано», not «галочка Вкл».
+                b.contentDescription = "$title: $label"; b.isSelected = on
             }
         }
         for ((v, label) in options) {
