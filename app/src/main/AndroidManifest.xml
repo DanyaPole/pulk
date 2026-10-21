@@ -43,5 +43,6 @@
             android:screenOrientation="portrait" />
         <activity android:name=".OptionsActivity" android:exported="false" android:label="Настройки" />
         <activity android:name=".WizardActivity" android:exported="false" android:label="Пульк" />
+        <activity android:name=".SpeedActivity" android:exported="false" android:label="Проверка скорости" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
     </application>
 </manifest>

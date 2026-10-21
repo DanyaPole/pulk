@@ -132,6 +132,16 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit().putString("gestures", v.joinToString(",")).apply()
     fun has(g: String) = g in gestures
 
+    /** «Проверка скорости»: the last results, newest first ("date|mode|cpm|accuracy|erases"). */
+    var speedHistory: List<String>
+        get() = (sp.getString("speed", "") ?: "").split("\n").filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("speed", v.joinToString("\n")).apply()
+
+    /** Scanning: how long each thing stays lit, ms. */
+    var scanMs: Int
+        get() = sp.getInt("scan_ms", 1200)
+        set(v) = sp.edit().putInt("scan_ms", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

@@ -351,6 +351,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         if (g < 1f) drawHandle(c, col, 1f - g)
         if (g <= 0.001f) return
         if (g >= 0.999f) drawField(c, col)
+        ensureScan()
         val corner = scr(0.0, 0.0)
         c.save()
         c.scale(g, g, corner[0], corner[1])
@@ -429,10 +430,12 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             c.restore()
         }
         fill.color = col.accent; c.drawCircle(centre[0], centre[1], 16 * ds(), fill)   // the drop
+        if (scanMode()) drawScan(c, col)
         if (goal != null) drawPath(c, goal.first, col)
         // letters of the star
         val up = svc.shiftActive()
-        if (openPetal >= 0) drawOpenPetal(c, col, table, up = svc.shiftActive())
+        if (scanMode() && scanPetal >= 0) drawOpenPetal(c, col, table, svc.shiftActive(), scanPetal, if (scanAt < 4) Pulse.KINDS[scanAt] else 'c', back = scanAt == 4)
+        else if (openPetal >= 0) drawOpenPetal(c, col, table, up = svc.shiftActive())
         else if (!Coach.hideLabels || !Coach.active) for (p in 0 until 8) for ((i, kind) in Pulse.KINDS.withIndex()) {
             val v = table[p][i]
             if (v.isEmpty()) continue
@@ -463,14 +466,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     /** An open petal: its letters, big, each in the quarter of the star where its stroke would go. */
-    private fun drawOpenPetal(c: Canvas, col: Colors, table: Array<Array<String>>, up: Boolean) {
+    private fun drawOpenPetal(c: Canvas, col: Colors, table: Array<Array<String>>, up: Boolean, openPetal: Int = this.openPetal, lit: Char = 'c', back: Boolean = false) {
         val ctr = scr(Pulse.PH[0], Pulse.PH[1]); val r = (Pulse.R * k).toFloat()
         fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(ctr[0], ctr[1], r, fill)
-        // the big letter's quarter is lit, so the petal just opened is easy to recognise
-        val big = Path(); val a0 = Pulse.tapAngle(openPetal, 'c') - 45
+        // one quarter is lit: the big letter when the petal opens, or the one scanning points at now
+        val big = Path(); val a0 = Pulse.tapAngle(openPetal, lit) - 45
         for (i in 0..12) { val q = starPt(Pulse.R - 1, a0 + 90.0 * i / 12); if (i == 0) big.moveTo(q[0], q[1]) else big.lineTo(q[0], q[1]) }
         for (i in 12 downTo 0) { val q = starPt(15.0, a0 + 90.0 * i / 12); big.lineTo(q[0], q[1]) }
-        big.close(); fill.color = col.zone; c.drawPath(big, fill)
+        big.close(); fill.color = if (scanMode()) col.press else col.zone; c.drawPath(big, fill)
+        if (scanMode() && !back) { stroke.color = col.accent; stroke.strokeWidth = 3 * density; c.drawPath(big, stroke) }
         stroke.color = col.line; stroke.strokeWidth = 1.5f * density
         for (j in 0 until 4) { val a = Pulse.tapAngle(openPetal, 'c') + 45 + 90 * j; val s0 = starPt(15.0, a); val s1 = starPt(Pulse.R, a); c.drawLine(s0[0], s0[1], s1[0], s1[1], stroke) }
         for ((i, kind) in Pulse.KINDS.withIndex()) {
@@ -478,7 +482,77 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             val q = starPt(Pulse.R * 0.58, Pulse.tapAngle(openPetal, kind))
             label(c, if (svc.isSecure) "•" else if (up) v.uppercase() else v, q[0], q[1], 34f, col.fg, kind == 'c')
         }
-        label(c, "×", ctr[0], ctr[1], 18f, col.muted, true)   // the centre closes it
+        // the centre closes it (in scanning: lit when «назад» is the choice)
+        if (back) { fill.color = col.accent; c.drawCircle(ctr[0], ctr[1], 22 * density, fill) }
+        label(c, "×", ctr[0], ctr[1], 18f, if (back) col.accentFg else col.muted, true)
+    }
+
+    // ---- «Сканирование»: the keyboard points at things in turn; one press of any button picks the one lit ----
+    private fun scanMode() = !Coach.active && svc.prefs.mode == "scan"
+    /** First the groups — petals by how often their letters come, the space key, ⌫, ⏎ — then the letters of one petal. */
+    internal val scanGroups = listOf(1, 5, 2, SCAN_SPACE, 4, 0, 6, 3, 7, SCAN_BKSP, SCAN_ENTER)
+    internal var scanPetal = -1          // -1: choosing a group; else: choosing a letter in this petal
+    internal var scanAt = 0
+    private var scanLoops = 0
+    private var scanning = false
+    private val scanTick = object : Runnable {
+        override fun run() {
+            if (!scanMode() || !isOpen) { scanning = false; return }
+            val n = if (scanPetal < 0) scanGroups.size else 5   // four letters and «назад»
+            scanAt = (scanAt + 1) % n
+            if (scanAt == 0 && scanPetal >= 0 && ++scanLoops >= 2) { scanPetal = -1; scanLoops = 0 }   // nothing chosen twice round: back
+            announceScan()
+            invalidate()
+            handler.postDelayed(this, svc.prefs.scanMs.toLong())
+        }
+    }
+    private fun ensureScan() {
+        if (scanning || !scanMode() || !isOpen) return
+        scanning = true; scanAt = 0; scanPetal = -1; scanLoops = 0
+        handler.postDelayed(scanTick, svc.prefs.scanMs.toLong())
+    }
+    /** What is lit now, heard as well as seen: the same note or voice as the compass. */
+    private fun announceScan() {
+        val t = Pulse.table(svc.lang, svc.symbols)
+        val s = if (scanPetal < 0) when (val g = scanGroups[scanAt]) {
+            SCAN_SPACE -> Pulse.SPACE
+            SCAN_BKSP, SCAN_ENTER -> null
+            else -> Pulse.Slot(g, 'c', t[g][0])
+        } else if (scanAt < 4) { val k = Pulse.KINDS[scanAt]; t[scanPetal][scanAt].takeIf { it.isNotEmpty() }?.let { Pulse.Slot(scanPetal, k, it) } } else null
+        if (s != null) svc.feedback.compass(s, s.v, svc.lang, svc.isSecure)
+    }
+    /** The one button was pressed. */
+    fun scanPress() {
+        if (!scanMode()) return
+        val t = Pulse.table(svc.lang, svc.symbols)
+        if (scanPetal < 0) {
+            when (val g = scanGroups[scanAt]) {
+                SCAN_SPACE -> svc.space()
+                SCAN_BKSP -> svc.backspace()
+                SCAN_ENTER -> svc.enter()
+                else -> { scanPetal = g; scanAt = 0; scanLoops = 0; svc.feedback.petal(g, t[g].filter { it.isNotEmpty() }, svc.lang, svc.isSecure) }
+            }
+            if (scanPetal < 0) scanAt = 0
+        } else {
+            if (scanAt < 4 && t[scanPetal][scanAt].isNotEmpty()) svc.typeLetter(t[scanPetal][scanAt], Pulse.Slot(scanPetal, Pulse.KINDS[scanAt], t[scanPetal][scanAt]))
+            scanPetal = -1; scanAt = 0
+        }
+        // start the round again from the first thing, so the next pick is predictable
+        handler.removeCallbacks(scanTick); handler.postDelayed(scanTick, svc.prefs.scanMs.toLong())
+        invalidate()
+    }
+    private fun drawScan(c: Canvas, col: Colors) {
+        if (scanPetal < 0) {
+            when (val g = scanGroups[scanAt]) {
+                SCAN_SPACE, SCAN_BKSP, SCAN_ENTER -> {
+                    val fn = when (g) { SCAN_SPACE -> Pulse.Fn.SPACE; SCAN_BKSP -> Pulse.Fn.BKSP; else -> Pulse.Fn.ENTER }
+                    val key = Pulse.FN_KEYS.first { it.fn == fn }
+                    stroke.color = col.accent; stroke.strokeWidth = 4 * density
+                    c.drawPath(sector((key.r0 * k).toFloat() + 4 * density, (key.r1 * k).toFloat() - 4 * density, key.a0 + 1, key.a1 - 1), stroke)
+                }
+                else -> { stroke.color = col.accent; stroke.strokeWidth = 4 * density; c.drawPath(wedge(g), stroke) }
+            }
+        }
     }
 
     /** Where the star should be centred now, in base units: under the finger (whole screen), or its own place. */
@@ -619,6 +693,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        // scanning: the whole keyboard is one big button (the hidden keyboard's circle still opens it)
+        if (scanMode() && isOpen && anim == null) { if (e.actionMasked == MotionEvent.ACTION_DOWN) scanPress(); return true }
         // with TalkBack the finger comes as hover; its double-tap would type a second time
         if (exploring()) return true
         val tm = e.eventTime
@@ -857,6 +933,9 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     companion object {
         const val STRIP_DP = 60f
+        const val SCAN_SPACE = -1
+        const val SCAN_BKSP = -2
+        const val SCAN_ENTER = -3
         const val CURSOR_HOLD_MS = 380L
         const val CURSOR_STEP_DP = 9f
         const val FIELD_BAND_DP = 68f

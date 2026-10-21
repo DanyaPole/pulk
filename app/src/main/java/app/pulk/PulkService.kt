@@ -96,6 +96,17 @@ class PulkService : InputMethodService() {
 
     override fun onEvaluateFullscreenMode() = false // never take over the whole screen, even in landscape
 
+    /** Scanning: an outside switch (it acts as a keyboard key: space, enter, the centre of a d-pad) is the one button. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val v = view
+        if (prefs.mode == "scan" && isInputViewShown && v != null &&
+            (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER)) {
+            if (event.repeatCount == 0) v.scanPress()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onWindowShown() {
         super.onWindowShown()
         // the window itself is see-through: only the keyboard's shape is drawn

@@ -525,4 +525,28 @@ class KeyboardTest {
             assertEquals("Дом ", field.sb.toString())
         } finally { svc.prefs.gestures = Prefs.GESTURES }
     }
+
+    @Test fun oneButtonScanning() {
+        svc.prefs.mode = "scan"; svc.prefs.scanMs = 1000
+        try {
+            val ms = 1000L
+            picture("scan-groups")
+            view.invalidate(); view.draw(android.graphics.Canvas(android.graphics.Bitmap.createBitmap(10, 10, android.graphics.Bitmap.Config.ARGB_8888)))   // drawing starts the scan
+            fun press() { view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(Pulse.PH[0], Pulse.PH[1]))); view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, px(Pulse.PH[0], Pulse.PH[1]))) }
+            press()                                   // the first group is lit: the petal «о у б ю»
+            assertEquals(1, view.scanPetal)
+            picture("scan-letters")
+            press()                                   // its first letter is lit: «о»
+            assertEquals("О", field.sb.toString())
+            idle(ms * 2 + 100)                        // two steps on: the petal «а в я ф»
+            press()
+            assertEquals(2, view.scanPetal)
+            idle(ms + 100)                            // one step: «в»
+            press()
+            assertEquals("Ов", field.sb.toString())
+            idle(ms * 3 + 100); press()               // groups: о, е, а, пробел → a space
+            assertEquals("Ов ", field.sb.toString())
+            svc.onKeyDown(KeyEvent.KEYCODE_SPACE, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE))   // an outside switch works the same
+        } finally { svc.prefs.mode = "pulse" }
+    }
 }
