@@ -50,6 +50,8 @@ object Physical {
         }
         /** A key goes up: the held direction is typed when its own key is let go. */
         fun up(c: Int): List<Key> = if (petal >= 0 && c == code) flush() else emptyList()
+        /** Forget a key held when the keyboard closed: its letter must not fall into the next field. */
+        fun reset() { petal = -1; kind = 'c'; code = 0 }
         private fun flush(): List<Key> { if (petal < 0) return emptyList(); val k = Key(petal, kind); petal = -1; kind = 'c'; code = 0; return listOf(k) }
     }
 }

@@ -104,6 +104,15 @@ class Ui(private val a: Activity) {
     fun gravityCenter(v: TextView) = v.apply { gravity = Gravity.CENTER }
 
     companion object {
+        /**
+         * Fixed ids for the fields people type in: with an id Android keeps the text when it closes a screen in
+         * the background to free memory and opens it again (no id, no memory of it).
+         */
+        const val ID_SPEAK = 0x5501
+        const val ID_TALK_ADULT = 0x5502
+        const val ID_TALK_CHILD = 0x5503
+        const val ID_ADULT = 0x5510   // «Для взрослого»: its fields in order, from here
+
         /** Is Пульк switched on in Android's list of keyboards? */
         fun enabled(ctx: Context) = (ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
             .enabledInputMethodList.any { it.packageName == ctx.packageName }

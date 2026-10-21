@@ -182,7 +182,12 @@ class PulkService : InputMethodService() {
         if (!restarting) view?.open(sound = true) // a new field: the keyboard comes out again if it was hidden
     }
 
-    override fun onFinishInputView(finishingInput: Boolean) { save(); super.onFinishInputView(finishingInput) }
+    override fun onFinishInputView(finishingInput: Boolean) {
+        save(); keyStar.reset(); stickJabs = null   // a key or stick held as the field closed types nothing later
+        super.onFinishInputView(finishingInput)
+    }
+    /** Android is short of memory and may close Пульк without a word: the learned words are written down first. */
+    override fun onTrimMemory(level: Int) { save(); super.onTrimMemory(level) }
 
     /** Reads what kind of field this is. Separate from the Android callback so it can be tested. */
     fun startInput(info: EditorInfo) {
@@ -236,11 +241,11 @@ class PulkService : InputMethodService() {
         Words(list, l).also { w ->
             try { w.loadNext(assets.open("next_$l.txt").bufferedReader().readLines()) } catch (_: Exception) {}
             val pf = pairsFile(l)
-            if (pf.exists()) pf.readLines().forEach { line ->
+            if (pf.exists()) lines(pf).forEach { line ->
                 val p = line.split('\t'); if (p.size == 3) p[2].toIntOrNull()?.let { c -> w.pairs.getOrPut(p[0]) { HashMap() }[p[1]] = c }
             }
             val f = userFile(l)
-            if (f.exists()) f.readLines().forEach { line ->
+            if (f.exists()) lines(f).forEach { line ->
                 val p = line.split('\t'); if (p.size == 2) p[1].toIntOrNull()?.let { w.user[p[0]] = it }
             }
             familyInto(w)
@@ -254,6 +259,13 @@ class PulkService : InputMethodService() {
     internal fun mergeFamily() { for ((_, w) in synchronized(this) { dicts.toMap() }) familyInto(w) }
     private fun userFile(l: String) = File(filesDir, "words_$l.txt")
     private fun pairsFile(l: String) = File(filesDir, "pairs_$l.txt")
+    /** A file of words that cannot be read is as if empty: the keyboard opens anyway. */
+    private fun lines(f: File): List<String> = try { f.readLines() } catch (_: Exception) { emptyList() }
+    /** All or nothing: written beside and then put in place, so a phone that dies mid-write keeps the old words. */
+    private fun writeWhole(f: File, text: String) {
+        val tmp = File(f.path + ".new")
+        try { tmp.writeText(text); if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) } } catch (_: Exception) { tmp.delete() }
+    }
 
     private fun save() {
         if (unsaved == 0) return
@@ -261,14 +273,14 @@ class PulkService : InputMethodService() {
         for ((l, w) in synchronized(this) { dicts.toMap() }) {
             if (w.user.isEmpty()) continue
             val top = w.user.entries.sortedByDescending { it.value }.take(5000)
-            try { userFile(l).writeText(top.joinToString("\n") { "${it.key}\t${it.value}" }) } catch (_: Exception) {}
+            writeWhole(userFile(l), top.joinToString("\n") { "${it.key}\t${it.value}" })
             val ps = w.pairs.flatMap { (a, m) -> m.map { Triple(a, it.key, it.value) } }.sortedByDescending { it.third }.take(20000)
-            try { pairsFile(l).writeText(ps.joinToString("\n") { "${it.first}\t${it.second}\t${it.third}" }) } catch (_: Exception) {}
+            writeWhole(pairsFile(l), ps.joinToString("\n") { "${it.first}\t${it.second}\t${it.third}" })
         }
     }
 
     /** Clears the words this keyboard has learned (from the settings screen). */
-    fun forget() { synchronized(this) { dicts.values.forEach { it.user.clear() } }; listOf("ru", "en").forEach { userFile(it).delete(); pairsFile(it).delete() }; synchronized(this) { dicts.values.forEach { it.pairs.clear() } } }
+    fun forget() { synchronized(this) { dicts.values.forEach { it.user.clear() } }; listOf("ru", "en").forEach { l -> for (f in listOf(userFile(l), pairsFile(l))) { f.delete(); File(f.path + ".new").delete() } }; synchronized(this) { dicts.values.forEach { it.pairs.clear() } } }
 
     private fun currentWord(): String = Regex("\\p{L}[\\p{L}']*$").find(io.before(48))?.value ?: ""
 

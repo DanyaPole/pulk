@@ -212,10 +212,12 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
         if (exploring()) { announcer?.invoke(text); return }
         val lang = if (text.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }) "ru" else ttsLang.ifEmpty { prefs.lang }
         if (tts == null) {
-            tts = TextToSpeech(ctx.applicationContext) { status ->
-                ttsReady = status == TextToSpeech.SUCCESS
-                if (ttsReady) speakNow(text, rate, lang)
-            }
+            tts = try {
+                TextToSpeech(ctx.applicationContext) { status ->
+                    ttsReady = status == TextToSpeech.SUCCESS && tts != null
+                    if (ttsReady) speakNow(text, rate, lang)
+                }
+            } catch (_: Exception) { null }   // no speech engine: the keyboard goes on silently
             return
         }
         if (ttsReady) speakNow(text, rate, lang)
@@ -223,12 +225,14 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     private fun speakNow(text: String, rate: Float, lang: String) {
         val t = tts ?: return
-        if (ttsLang != lang) { t.language = if (lang == "ru") Locale("ru", "RU") else Locale.US; ttsLang = lang }
-        t.setSpeechRate(rate)
-        t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pulk")
+        try {   // an engine that throws must not take the keyboard down with it
+            if (ttsLang != lang) { t.language = if (lang == "ru") Locale("ru", "RU") else Locale.US; ttsLang = lang }
+            t.setSpeechRate(rate)
+            t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pulk")
+        } catch (_: Exception) {}
     }
 
-    fun shutdown() { tts?.shutdown(); tts = null; ttsReady = false }
+    fun shutdown() { try { tts?.shutdown() } catch (_: Exception) {}; tts = null; ttsReady = false }
 
     private val ruNames = mapOf(
         'а' to "а", 'б' to "бэ", 'в' to "вэ", 'г' to "гэ", 'д' to "дэ", 'е' to "е", 'ё' to "ё", 'ж' to "жэ", 'з' to "зэ", 'и' to "и",

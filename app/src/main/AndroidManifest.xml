@@ -23,7 +23,7 @@
         </service>
 
         <activity
-            android:name=".SettingsActivity"
+            android:name=".SettingsActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:windowSoftInputMode="stateHidden">
             <intent-filter>
@@ -32,28 +32,28 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".TutorialActivity"
+            android:name=".TutorialActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="false"
             android:label="Обучение"
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <activity
-            android:name=".CalibrationActivity"
+            android:name=".CalibrationActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="false"
             android:label="Настройка под руку"
             android:screenOrientation="portrait" />
-        <activity android:name=".OptionsActivity" android:exported="false" android:label="Настройки" />
-        <activity android:name=".WizardActivity" android:exported="false" android:label="Пульк" />
-        <activity android:name=".SpeedActivity" android:exported="false" android:label="Проверка скорости" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
-        <activity android:name=".AudienceActivity" android:exported="false" android:label="Кому и как помогает" />
-        <activity android:name=".SpeakActivity" android:exported="false" android:label="Говорить" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
-        <activity android:name=".SpeakLessonActivity" android:exported="false" android:label="Учимся говорить" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".MyPhrasesActivity" android:exported="false" android:label="Мои фразы" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".DrillsActivity" android:exported="false" android:label="Тренировки" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".PondActivity" android:exported="false" android:label="Мой пруд" />
-        <activity android:name=".TalkActivity" android:exported="false" android:label="Разговор" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
-        <activity android:name=".ParentsActivity" android:exported="false" android:label="Как помочь ребёнку" />
-        <activity android:name=".BubblesActivity" android:exported="false" android:label="Пузыри" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
-        <activity android:name=".ComfortActivity" android:exported="false" android:label="Удобство" />
-        <activity android:name=".CheckActivity" android:exported="false" android:label="Проверка на телефоне" />
+        <activity android:name=".OptionsActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Настройки" />
+        <activity android:name=".WizardActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Пульк" />
+        <activity android:name=".SpeedActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Проверка скорости" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity android:name=".AudienceActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Кому и как помогает" />
+        <activity android:name=".SpeakActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Говорить" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity android:name=".SpeakLessonActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Учимся говорить" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".MyPhrasesActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Мои фразы" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".DrillsActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Тренировки" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".PondActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Мой пруд" />
+        <activity android:name=".TalkActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Разговор" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity android:name=".ParentsActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Как помочь ребёнку" />
+        <activity android:name=".BubblesActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Пузыри" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity android:name=".ComfortActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Удобство" />
+        <activity android:name=".CheckActivity" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" android:exported="false" android:label="Проверка на телефоне" />
     </application>
 </manifest>

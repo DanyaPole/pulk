@@ -2,7 +2,6 @@ package app.pulk
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
@@ -19,7 +18,6 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.io.File
 import java.util.Locale
 
 /**
@@ -42,7 +40,7 @@ class SpeakActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = Prefs(this); ui = Ui(this)
-        voice = Voice(this, prefs)
+        voice = Voice(this, prefs, onTrouble = { runOnUiThread { if (!isFinishing && !isDestroyed) build() } })   // no voice: say so and where to get one
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         build()
     }
@@ -79,7 +77,7 @@ class SpeakActivity : Activity() {
     /** A button with a photo above its word (the family's words, options of a choice). */
     internal fun photoButton(label: String, photo: String?, main: Boolean = false, onClick: () -> Unit): Button {
         val b = ui.button(label, main) { onClick() }
-        val bmp = photo?.let { File(it) }?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
+        val bmp = Photos.load(photo)
         if (bmp != null) {
             val d = BitmapDrawable(resources, bmp).apply { setBounds(0, 0, ui.px(72), ui.px(72)) }
             b.setCompoundDrawables(null, d, null, null); b.compoundDrawablePadding = ui.px(4); b.setPadding(ui.px(6), ui.px(10), ui.px(6), ui.px(10))
@@ -91,6 +89,7 @@ class SpeakActivity : Activity() {
         val keep = if (::field.isInitialized) field.text.toString() else ""   // what was being typed survives a rebuild
         val body = ui.column(16)
         val family = Together.family(prefs.family)
+        voice.trouble?.let { body.addView(ui.card(ui.text(it, 16f, ui.urgent, true), ui.note(Voice.HOW))) }
 
         // a choice the adult offered: big, first, said with one touch; a family photo shows on its option
         Together.decode(prefs.choice)?.let { c ->
@@ -126,6 +125,7 @@ class SpeakActivity : Activity() {
         body.addView(r0)
 
         field = EditText(this).apply {
+            id = Ui.ID_SPEAK
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_SEND            // ⏎ on the keyboard says it
             textSize = 28f; setTextColor(ui.ink); setHintTextColor(ui.muted); hint = "Печатай — я скажу"

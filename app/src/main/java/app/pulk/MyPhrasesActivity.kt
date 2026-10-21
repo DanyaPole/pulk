@@ -2,8 +2,6 @@ package app.pulk
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.text.InputType
 import android.widget.EditText
@@ -17,19 +15,27 @@ import java.io.File
  * own phrases, and help for a hand that shakes. Own words matter more than any ready ones.
  */
 class MyPhrasesActivity : Activity() {
-    companion object { const val CHOICE = "choice"; private const val PICK = 7 }
+    companion object { const val CHOICE = "choice"; private const val PICK = 7; private const val PHOTO = "photo" }
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
     private lateinit var list: LinearLayout
     private lateinit var famBox: LinearLayout
     private lateinit var about: EditText
-    private var photo: String? = null
+    internal var photo: String? = null
     private var photoButton: android.widget.Button? = null
 
-    override fun onCreate(b: Bundle?) { super.onCreate(b); prefs = Prefs(this); ui = Ui(this); build() }
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b); prefs = Prefs(this); ui = Ui(this)
+        photo = b?.getString(PHOTO)?.takeIf { File(it).isFile }   // a photo chosen before Android closed the screen
+        build()
+        if (photo != null) photoButton?.text = "Фото ✓"
+    }
+    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); photo?.let { out.putString(PHOTO, it) } }
     override fun onPause() { if (::about.isInitialized) prefs.aboutMe = about.text.toString().trim(); super.onPause() }
 
+    private var fields = 0   // counted anew at each build, so each field keeps its id (see [Ui.ID_SPEAK])
     private fun field(hint: String, value: String, lines: Int = 1) = EditText(this).apply {
+        id = Ui.ID_ADULT + fields++
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or (if (lines > 1) InputType.TYPE_TEXT_FLAG_MULTI_LINE else 0)
         textSize = 20f; setTextColor(ui.ink); setHintTextColor(ui.muted); this.hint = hint; setText(value); minLines = lines
     }
@@ -45,6 +51,7 @@ class MyPhrasesActivity : Activity() {
     }
 
     private fun build() {
+        fields = 0
         val body = ui.column()
         body.addView(ui.title("Для взрослого"))
         val wk = Together.week(prefs.journal, java.time.LocalDate.now())
@@ -142,17 +149,8 @@ class MyPhrasesActivity : Activity() {
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
         super.onActivityResult(req, res, data)
         val uri = data?.data; if (req != PICK || res != RESULT_OK || uri == null) return
-        try {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            var sample = 1; while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 240) sample *= 2
-            val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return
-            val side = minOf(bmp.width, bmp.height)
-            val sq = Bitmap.createScaledBitmap(Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side), 240, 240, true)
-            val dir = File(filesDir, "family").apply { mkdirs() }
-            val out = File(dir, "${System.currentTimeMillis()}.jpg")
-            out.outputStream().use { sq.compress(Bitmap.CompressFormat.JPEG, 80, it) }
-            photo = out.path; photoButton?.text = "Фото ✓"
-        } catch (_: Exception) { photoButton?.text = "Фото не открылось" }
+        val made = try { Photos.square({ contentResolver.openInputStream(uri) }, File(filesDir, "family")) } catch (_: Throwable) { null }   // OutOfMemoryError too
+        if (made != null) { photo?.let { File(it).delete() }; photo = made.path; photoButton?.text = "Фото ✓" }
+        else photoButton?.text = "Фото не открылось — другое?"
     }
 }

@@ -66,6 +66,7 @@ class TalkActivity : Activity() {
 
         val ar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         adult = EditText(this).apply {
+            id = Ui.ID_TALK_ADULT
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; imeOptions = EditorInfo.IME_ACTION_SEND
             textSize = 18f; setTextColor(ui.ink); setHintTextColor(ui.muted); hint = "Взрослый: вопрос или ответ"
             setOnEditorActionListener { _, a, _ -> if (a == EditorInfo.IME_ACTION_SEND) { yours(text.toString()); true } else false }
@@ -81,6 +82,7 @@ class TalkActivity : Activity() {
         body.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(q) })
 
         child = EditText(this).apply {
+            id = Ui.ID_TALK_CHILD
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; imeOptions = EditorInfo.IME_ACTION_SEND
             textSize = 26f; setTextColor(ui.ink); setHintTextColor(ui.muted); hint = "Ответ — звездой"; minLines = 2; gravity = Gravity.TOP
             setOnEditorActionListener { _, a, _ -> if (a == EditorInfo.IME_ACTION_SEND) { mine(text.toString()); true } else false }
