@@ -45,6 +45,17 @@ class ScreensTest {
         val f = all(sp.window.decorView).filterIsInstance<android.widget.EditText>().first()
         f.setText("Я скоро буду"); f.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
         assertTrue(prefs.phrases.first() == "Я скоро буду" && f.text.isEmpty() && sp.lastSaid == "Я скоро буду")
+        prefs.choice = Together.encode(Together.Choice("Что будешь пить?", listOf("Сок", "Вода", "Молоко")))
+        prefs.family = Together.familyLines(listOf(Together.Word("Мама", ""), Together.Word("Барсик", ""), Together.Word("Качели", "")))
+        prefs.aboutMe = "Меня зовут Костя. Я не говорю, но всё понимаю."
+        shot(Robolectric.buildActivity(SpeakActivity::class.java).setup().get(), "screen-speak-choice")
+        prefs.talk = Together.said(Together.said(emptyList(), false, "Ты хочешь гулять?"), true, "Да, на качели")
+        shot(Robolectric.buildActivity(TalkActivity::class.java).setup().get(), "screen-talk")
+        shot(Robolectric.buildActivity(MyPhrasesActivity::class.java).setup().get(), "screen-adult")
+        shot(Robolectric.buildActivity(ParentsActivity::class.java).setup().get(), "screen-parents")
+        shot(Robolectric.buildActivity(SpeakLessonActivity::class.java).setup().get().also { l -> l.step = 3; l.show() }, "screen-speak-lesson-guided")
+        prefs.choice = ""; prefs.family = emptyList(); prefs.talk = emptyList(); prefs.aboutMe = ""
+        Coach.reset()
         prefs.drops = 33
         shot(Robolectric.buildActivity(PondActivity::class.java).setup().get(), "screen-pond")
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()

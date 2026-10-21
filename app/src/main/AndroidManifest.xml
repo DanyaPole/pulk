@@ -50,5 +50,7 @@
         <activity android:name=".MyPhrasesActivity" android:exported="false" android:label="Мои фразы" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".DrillsActivity" android:exported="false" android:label="Тренировки" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".PondActivity" android:exported="false" android:label="Мой пруд" />
+        <activity android:name=".TalkActivity" android:exported="false" android:label="Разговор" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity android:name=".ParentsActivity" android:exported="false" android:label="Как помочь ребёнку" />
     </application>
 </manifest>

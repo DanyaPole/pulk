@@ -128,14 +128,23 @@ class LessonsTest {
         fun tap(label: String) = all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == label }.performClick()
         tap("Да"); idle(1200); assertEquals(1, a.step)
         tap("Нет"); idle(1200); assertEquals(2, a.step)
-        val field = all(a.window.decorView).filterIsInstance<EditText>().single()
-        field.setText("папа"); field.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)   // said, not «wrong»
-        assertEquals("папа", a.lastSaid); assertEquals(2, a.step)
-        field.setText("папа"); field.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
-        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Показать, как набрать «мама»?" })
-        field.setText("мама"); field.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND); idle(1200)
-        assertEquals(3, a.step)
-        tap("Хочу пить"); idle(1200)
+        // «а» with the way lit on the star
+        var field = all(a.window.decorView).filterIsInstance<EditText>().single()
+        assertTrue(Coach.active && Coach.next == "а" && Coach.help == 2)
+        field.append("а"); idle(1200); assertEquals(3, a.step)
+        // «нет»: a different letter is not typed — it goes, and the way of the same letter is shown again
+        field = all(a.window.decorView).filterIsInstance<EditText>().single()
+        field.append("н"); assertEquals("е", Coach.next)
+        field.append("к"); assertEquals("н", field.text.toString()); assertEquals("е", Coach.next)
+        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString().startsWith("Это «к». Нужна «е»") })
+        field.append("к"); assertEquals(3, Coach.help)                      // after two tries: hand in hand
+        field.append("к"); assertEquals("не", field.text.toString())       // the third: Пульк types it itself
+        field.append("т"); idle(1200)
+        assertEquals("нет", a.lastSaid); assertEquals(4, a.step)
+        tap("Хочу пить"); idle(1200); assertEquals(5, a.step)
+        field = all(a.window.decorView).filterIsInstance<EditText>().single()
+        for (c in "мама") field.append(c.toString())
+        idle(1200); assertEquals(6, a.step)
         tap("Показать"); tap("Вернуться"); idle(1200)
         val f2 = all(a.window.decorView).filterIsInstance<EditText>().single()
         f2.setText("я дома"); f2.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND); idle(1200)

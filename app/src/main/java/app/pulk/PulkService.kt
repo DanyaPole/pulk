@@ -148,6 +148,7 @@ class PulkService : InputMethodService() {
     /** Reads what kind of field this is. Separate from the Android callback so it can be tested. */
     fun startInput(info: EditorInfo) {
         lang = prefs.lang
+        mergeFamily()
         prefs.applyBias()
         if (prefs.forget) { prefs.forget = false; forget() }
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
@@ -203,9 +204,15 @@ class PulkService : InputMethodService() {
             if (f.exists()) f.readLines().forEach { line ->
                 val p = line.split('\t'); if (p.size == 2) p[1].toIntOrNull()?.let { w.user[p[0]] = it }
             }
+            familyInto(w)
         }
     }
     private fun wordsIfReady(l: String): Words? = synchronized(this) { dicts[l] }
+    /** The family's words («Для взрослого» → «Словарь семьи») are this person's own: known, and first in suggestions. */
+    private fun familyInto(w: Words) {
+        for (f in Together.family(prefs.family)) { val k = Words.fold(f.word.lowercase()); if (k.length >= 2) w.user[k] = maxOf(w.user[k] ?: 0, 5) }
+    }
+    internal fun mergeFamily() { for ((_, w) in synchronized(this) { dicts.toMap() }) familyInto(w) }
     private fun userFile(l: String) = File(filesDir, "words_$l.txt")
     private fun pairsFile(l: String) = File(filesDir, "pairs_$l.txt")
 

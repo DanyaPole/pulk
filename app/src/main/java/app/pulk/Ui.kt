@@ -29,6 +29,8 @@ class Ui(private val a: Activity) {
     val accent = c(if (dark) "#4CC2DE" else "#0A6680")
     val onAccent = c(if (dark) "#032029" else "#FFFFFF")
     val line = c(if (dark) "#5E737D" else "#7F929C")
+    /** «Срочно» and warnings: warm, never used for «wrong». */
+    val urgent = c(if (dark) "#FF8A75" else "#A8321F")
     private fun c(h: String) = Color.parseColor(h)
     private val dp = a.resources.displayMetrics.density
     fun px(v: Int) = (v * dp).toInt()

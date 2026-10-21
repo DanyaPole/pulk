@@ -194,6 +194,29 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("drops", 0)
         set(v) = sp.edit().putInt("drops", v).apply()
 
+    /** «Предложить выбор» (see [Together]): the choice on screen (empty: none), the option touched, recent choices. */
+    var choice: String
+        get() = sp.getString("choice", "") ?: ""
+        set(v) = sp.edit().putString("choice", v).apply()
+    var choicePicked: Int
+        get() = sp.getInt("choice_picked", -1)
+        set(v) = sp.edit().putInt("choice_picked", v).apply()
+    var choices: List<String>
+        get() = (sp.getString("choices", "") ?: "").split('\n').filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("choices", v.joinToString("\n")).apply()
+    /** «Словарь семьи»: word + photo file per line. */
+    var family: List<String>
+        get() = (sp.getString("family", "") ?: "").split('\n').filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("family", v.joinToString("\n")).apply()
+    /** «Разговор»: the child's and the adult's lines in turns. */
+    var talk: List<String>
+        get() = (sp.getString("talk", "") ?: "").split('\n').filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("talk", v.joinToString("\n")).apply()
+    /** Accidental touches: 0 off, 1 light, 2 strong (a brush too short to be a letter, a bounce right after a touch). */
+    var guard: Int
+        get() = sp.getInt("guard", 0)
+        set(v) = sp.edit().putInt("guard", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

@@ -764,6 +764,24 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         c.drawPath(p, stroke)
         val e = Pulse.spot(s.petal, s.kind); val q = scr(e[0], e[1])
         stroke.strokeWidth = 2f * density; c.drawCircle(q[0], q[1], 14 * k, stroke)
+        // a dot runs the way: 1.3 s along it, 0.7 s rest; eased, so the start and the turn are easy to follow
+        val way = ArrayList<FloatArray>().apply { add(ctr); add(a); if (s.kind != 'c') add(q) }
+        var len = 0f; for (i in 1 until way.size) len += hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1])
+        val u = (android.os.SystemClock.uptimeMillis() % 2000L) / 1300f
+        if (u <= 1f && len > 0f) {
+            var d = (if (u < 0.5f) 2 * u * u else 1 - (-2 * u + 2) * (-2 * u + 2) / 2) * len
+            for (i in 1 until way.size) {
+                val sl = hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1])
+                if (d <= sl || i == way.size - 1) {
+                    val f = if (sl > 0f) minOf(d / sl, 1f) else 0f
+                    fill.color = col.accent
+                    c.drawCircle(way[i - 1][0] + (way[i][0] - way[i - 1][0]) * f, way[i - 1][1] + (way[i][1] - way[i - 1][1]) * f, 10 * k, fill)
+                    break
+                }
+                d -= sl
+            }
+        }
+        postInvalidateOnAnimation()
     }
 
     /** Where a letter the tutorial wants lives on the star, and what typing it there gives. */
@@ -821,6 +839,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var jabs: Pulse.Jabs? = null   // «Толчки»: this touch is a word
         var cursorX = Float.NaN        // holding space: the cursor follows the finger from here (screen x)
         var steady: Pulse.Steady? = null  // the stroke, smoothed and measured to this hand
+        var repeated = false              // ⌫ held: it already repeated
     }
     private val touches = HashMap<Int, Touch>()
     private var pressedFn: Pulse.Fn? = null
@@ -907,7 +926,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
+    /** Accidental touches (see [Prefs.guard]): shorter than this is a brush, not a letter; sooner than that after a touch, a bounce. */
+    private val guardMin = longArrayOf(0, 80, 160)
+    private val guardGap = longArrayOf(0, 120, 300)
+    private var lastUp = 0L
+
     private fun down(id: Int, x: Float, y: Float, tm: Long) {
+        val g = svc.prefs.guard.coerceIn(0, 2)
+        if (g > 0 && isOpen && anim == null && tm - lastUp < guardGap[g]) { touches[id] = Touch(null, -1, handle = true); return }   // a bounce
         if (isOpen) startRipple(x, y)
         heard = null
         lastX = x
@@ -939,8 +965,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             else -> {
                 pressedFn = fn.fn
                 if (fn.fn == Pulse.Fn.BKSP) {
-                    svc.backspace()
-                    val rep = object : Runnable { override fun run() { svc.backspace(); handler.postDelayed(this, 65) } }
+                    if (g == 0) svc.backspace()   // with the guard on, ⌫ waits for the finger to be sure (on release)
+                    val rep = object : Runnable { override fun run() { t.repeated = true; svc.backspace(); handler.postDelayed(this, 65) } }
                     t.repeat = rep; handler.postDelayed(rep, 420)
                 }
                 if (fn.fn == Pulse.Fn.SPACE && gest("cursor")) {   // held still: the cursor rides on the finger, left and right
@@ -1036,6 +1062,11 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val t = touches.remove(id) ?: return
         stopTimers(t)
         if (t.handle) return
+        val g = svc.prefs.guard.coerceIn(0, 2)
+        val brush = g > 0 && t.field == null && t.times.isNotEmpty() && tm - t.times[0] < guardMin[g]
+        lastUp = tm
+        if (brush) { cand = null; trail = null; pressedFn = null; pressedStrip = -1; invalidate(); return }
+        if (g > 0 && t.fn?.fn == Pulse.Fn.BKSP && !t.repeated) svc.backspace()
         t.field?.let { f ->
             if (f[0].isNaN()) { slideCursor(x, y); curText = null; invalidate(); return }
             val r = fieldRect()
