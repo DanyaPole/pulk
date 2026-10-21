@@ -104,6 +104,15 @@ class OptionsActivity : Activity() {
 
         body.addView(ui.h("О программе"))
         body.addView(ui.note("Пульк ${packageManager.getPackageInfo(packageName, 0).versionName}. Бесплатно, без рекламы и без интернета.\nСвободная программа, GPL-3.0.\nСловари: FrequencyWords (Hermit Dave), CC BY-SA 4.0. Следующее слово: предложения Tatoeba (tatoeba.org), CC BY 2.0 FR. Фильтр дрожи: 1€ filter (Casiez, Roussel, Vogel, 2012)."))
+        body.addView(ui.h("Передать устройство"))
+        body.addView(ui.note("Для центра, где планшет переходит от ребёнка к ребёнку. Сотрёт всё, что хранит Пульк: настройки, фразы, «Про меня», слова семьи и фото, разговор, журнал, капли и выученные слова. Как после установки."))
+        var sure = false
+        body.addView(ui.button("Передать устройство чистым") {
+            val b = it as Button
+            if (!sure) { sure = true; b.text = "Точно стереть всё? Нажмите ещё раз"; b.setTextColor(ui.urgent); return@button }
+            Clean.all(this)
+            startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        })
         body.addView(ui.button("Проверка на телефоне и «Сообщить о проблеме»") { startActivity(Intent(this, CheckActivity::class.java)) })
         val bottom = ui.bottomBar()
         bottom.addView(ui.button("Назад", main = true) { finish() })
