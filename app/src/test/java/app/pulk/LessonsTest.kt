@@ -86,7 +86,7 @@ class LessonsTest {
         val buttons = all(a.window.decorView).filterIsInstance<Button>().filter { it.text.toString() == "Начать" }
         buttons.last().performClick()             // level 4
         assertTrue(Coach.hideLabels); assertEquals("voice", prefs.sound); assertTrue(prefs.blind)
-        click(a, "← Меню")
+        click(a, "Меню")
         assertEquals("off", prefs.sound); assertFalse(prefs.blind); assertFalse(Coach.active)
     }
 
@@ -107,6 +107,6 @@ class LessonsTest {
         val start = all(a.window.decorView).filterIsInstance<Button>().filter { it.text.toString() == "Начать" }
         start[4].performClick()                   // the first level of «Толчки»
         assertTrue(Coach.active && Coach.jabs)
-        click(a, "← Меню"); assertFalse(Coach.active)
+        click(a, "Меню"); assertFalse(Coach.active)
     }
 }

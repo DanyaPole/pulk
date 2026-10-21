@@ -106,5 +106,15 @@ class Prefs(ctx: Context) {
         get() = sp.getString("compass", "off") ?: "off"
         set(v) = sp.edit().putString("compass", v).apply()
 
+    /** Простой режим: letters, space, ⌫, ⏎, ?123, hide and one suggestion; no hidden gestures, no autocorrection. */
+    var simple: Boolean
+        get() = sp.getBoolean("simple", false)
+        set(v) = sp.edit().putBoolean("simple", v).apply()
+
+    /** The first-start wizard was gone through (or closed). */
+    var wizardDone: Boolean
+        get() = sp.getBoolean("wizard_done", false)
+        set(v) = sp.edit().putBoolean("wizard_done", v).apply()
+
     val left get() = hand == "left"
 }

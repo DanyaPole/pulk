@@ -1,0 +1,98 @@
+package app.pulk
+
+import android.app.Activity
+import android.content.Intent
+import android.os.Bundle
+import android.widget.Button
+import android.widget.SeekBar
+
+/**
+ * Settings in two steps, as the interface project asks: «Основные» — the few everyone needs; «Ещё» — the rest,
+ * in small groups, with the help on gestures and the credits.
+ */
+class OptionsActivity : Activity() {
+    private lateinit var prefs: Prefs
+    private lateinit var ui: Ui
+    private lateinit var drops: Feedback   // to hear a «пульк» sound when choosing it
+
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b)
+        prefs = Prefs(this); ui = Ui(this); drops = Feedback(this, prefs)
+        if (intent.getBooleanExtra(MORE, false)) more() else main()
+    }
+    override fun onDestroy() { drops.shutdown(); super.onDestroy() }
+
+    private fun main() {
+        val body = ui.column()
+        body.addView(ui.title("Настройки"))
+        body.addView(ui.choice("Способ набора", listOf("pulse" to "Пульс", "jabs" to "Толчки", "taps" to "Два касания"), { prefs.mode }) { prefs.mode = it })
+        body.addView(ui.note("Пульс — смах на букву. Толчки — слово одним касанием, не отрывая пальца. Два касания — без смахов: коснись лепестка, он раскроется крупно, коснись буквы."))
+        body.addView(ui.choice("Рука", listOf("left" to "Левая", "right" to "Правая"), { prefs.hand }) { prefs.hand = it })
+        body.addView(ui.choice("Где начинать смах", listOf("corner" to "Звезда в углу", "screen" to "Весь экран"), { prefs.zone }) { prefs.zone = it })
+        body.addView(ui.note("Весь экран: смах начинается где угодно, звезда появляется под пальцем. Пока клавиатура открыта, приложение за ней не нажимается: чтобы нажать «Отправить», спрячь клавиатуру ⌄."))
+        body.addView(ui.choice("Звук", listOf("off" to "Без звука", "clicks" to "Щелчки", "voice" to "Голос"), { prefs.sound }) { prefs.sound = it })
+        body.addView(ui.onOff("Вибрация", { prefs.haptics }) { prefs.haptics = it })
+        body.addView(ui.onOff("Простой режим", { prefs.simple }) { prefs.simple = it })
+        body.addView(ui.note("Только буквы, пробел, ⌫, ⏎, цифры и одна подсказка — без скрытых жестов и автоисправления."))
+        body.addView(ui.text("Размер клавиатуры", 16f, ui.ink, true))
+        body.addView(SeekBar(this).apply {
+            max = 35; progress = prefs.size - 80
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { prefs.size = 80 + p }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        })
+        body.addView(ui.note("Настройки применяются, когда клавиатура открывается заново."))
+        val bottom = ui.bottomBar()
+        bottom.addView(ui.button("Ещё настройки и справка") { startActivity(Intent(this, OptionsActivity::class.java).putExtra(MORE, true)) })
+        bottom.addView(ui.button("Готово", main = true) { finish() })
+        setContentView(ui.screen(body, bottom))
+    }
+
+    private fun more() {
+        val body = ui.column()
+        body.addView(ui.title("Ещё"))
+
+        body.addView(ui.h("Не глядя"))
+        body.addView(ui.onOff("Вслепую", { prefs.blind }) {
+            prefs.blind = it
+            if (it && prefs.sound == "off") prefs.sound = "voice"   // eyes-free needs sound
+            if (it && prefs.compass == "off") prefs.compass = "voice"
+        })
+        body.addView(ui.note("Звезда крупнее, касание без движения в любом месте — пробел, включается голос."))
+        body.addView(ui.choice("Звуковой компас", listOf("off" to "Выкл", "notes" to "Ноты", "voice" to "Голос"), { prefs.compass }) { prefs.compass = it })
+        body.addView(ui.note("Пока ведёшь палец, слышно, какая буква выйдет, если отпустить сейчас. С TalkBack включается сам."))
+
+        body.addView(ui.h("Слова"))
+        body.addView(ui.onOff("Подсказки слов", { prefs.suggest }) { prefs.suggest = it })
+        body.addView(ui.onOff("Следующее слово", { prefs.predict }) { prefs.predict = it })
+        body.addView(ui.onOff("Автоисправление", { prefs.autocorrect }) { prefs.autocorrect = it })
+        body.addView(ui.note("⌫ сразу после — вернуть своё. Так же ⌫ сразу после отменяет взятую подсказку и стёртое смахом слово."))
+        body.addView(ui.onOff("Запоминать мои слова", { prefs.learn }) { prefs.learn = it })
+        body.addView(ui.button("Забыть мои слова") { prefs.forget = true; (it as Button).text = "Забудет при следующем открытии клавиатуры" })
+        body.addView(ui.note("Слова хранятся только на телефоне. В полях паролей, адресов и в режиме инкогнито клавиатура ничего не запоминает."))
+
+        body.addView(ui.h("Вид и звук"))
+        body.addView(ui.choice("Звук «пульк» при появлении", listOf("bul" to "Буль", "glass" to "Стакан", "drip" to "Капелька", "off" to "Выкл"), { prefs.dropKind }) { prefs.dropKind = it; drops.drop(it) })
+        body.addView(ui.onOff("Окно текста над клавиатурой", { prefs.textWindow }) { prefs.textWindow = it })
+
+        body.addView(ui.h("Жесты — справка"))
+        body.addView(ui.text(
+            "Пульс: прямой смах — крупная буква; смах с поворотом — мелкая снаружи; туда и обратно — мелкая у центра; касание в центре — пробел. " +
+            "Задержи палец в конце: е → ё, ь → ъ, ? → !.\n\n" +
+            "Толчки: палец не отрываешь — толчок к букве и назад = буква; поднял палец — пробел; двойная буква — два толчка.\n\n" +
+            "Два касания: коснись лепестка — он раскроется крупно, коснись буквы; центр — пробел или закрыть.\n\n" +
+            "Пробел: смах наружу — точка, внутрь — запятая, вниз по дуге — стереть слово, вверх — лучшая подсказка; удержи и веди — курсор.\n" +
+            "⌫ — вдоль правого края: удержание стирает подряд, смах к звезде — слово. ⌫ сразу после действия клавиатуры — отменить его.\n" +
+            "Удержи RU/EN — список клавиатур; удержи ⌄ — эти настройки.", 15f))
+
+        body.addView(ui.h("О программе"))
+        body.addView(ui.note("Пульк ${packageManager.getPackageInfo(packageName, 0).versionName}. Бесплатно, без рекламы и без интернета.\nСловари: FrequencyWords (Hermit Dave), CC BY-SA 4.0. Следующее слово: предложения Tatoeba (tatoeba.org), CC BY 2.0 FR. Фильтр дрожи: 1€ filter (Casiez, Roussel, Vogel, 2012)."))
+        val bottom = ui.bottomBar()
+        bottom.addView(ui.button("Назад", main = true) { finish() })
+        setContentView(ui.screen(body, bottom))
+    }
+
+    companion object { const val MORE = "more" }
+}

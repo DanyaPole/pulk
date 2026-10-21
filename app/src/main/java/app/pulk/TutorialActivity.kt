@@ -117,7 +117,6 @@ class TutorialActivity : Activity() {
     private fun build() {
         root.removeAllViews()
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        top.addView(button("← Меню", small = true) { endLevel(keep = false); menu() }.apply { (layoutParams as LinearLayout.LayoutParams).topMargin = 0 })
         top.addView(text("", 14f, muted).apply { id = ID_STEP; setPadding(px(12), 0, 0, 0) })
         root.addView(top)
         root.addView(schedule().apply { id = ID_SCHEDULE })
@@ -148,6 +147,7 @@ class TutorialActivity : Activity() {
         row.addView(button("Подсказать", small = true) { moreHelp() })
         row.addView(button("Послушать", small = true) { listen() })
         row.addView(button("Пропустить", small = true) { advance(success = false) })
+        row.addView(button("Меню", small = true) { endLevel(keep = false); menu() })   // at the bottom, under the thumb
         root.addView(row)
         offerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; visibility = View.GONE; setPadding(0, px(6), 0, 0)

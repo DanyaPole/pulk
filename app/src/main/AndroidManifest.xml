@@ -41,5 +41,7 @@
             android:exported="false"
             android:label="Настройка под руку"
             android:screenOrientation="portrait" />
+        <activity android:name=".OptionsActivity" android:exported="false" android:label="Настройки" />
+        <activity android:name=".WizardActivity" android:exported="false" android:label="Пульк" />
     </application>
 </manifest>

@@ -34,11 +34,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private val density = resources.displayMetrics.density
 
     private class Colors(val bg: Int, val key: Int, val fn: Int, val zone: Int, val press: Int, val line: Int,
-                         val fg: Int, val muted: Int, val accent: Int, val accentFg: Int)
-    private val light = Colors(0xFFD4DCE1.toInt(), 0xFFFFFFFF.toInt(), 0xFFC3CDD3.toInt(), 0xFFE3F1F5.toInt(), 0xFFA9D3E0.toInt(),
-        0xFFC6D0D6.toInt(), 0xFF152027.toInt(), 0xFF5B6A73.toInt(), 0xFF0B6E8A.toInt(), 0xFFFFFFFF.toInt())
-    private val dark = Colors(0xFF0A0E10.toInt(), 0xFF20292E.toInt(), 0xFF2C373D.toInt(), 0xFF1B323B.toInt(), 0xFF2F6070.toInt(),
-        0xFF29343A.toInt(), 0xFFE4EBEE.toInt(), 0xFF8B9AA2.toInt(), 0xFF55BAD7.toInt(), 0xFF06222B.toInt())
+                         val fg: Int, val muted: Int, val accent: Int, val accentFg: Int, val halo: Int, val glassEdge: Int)
+    // the design system «Пульк», concept «Лепестки»: bg is unused (the keyboard is see-through), key = petal,
+    // fn = glass (its own transparency), zone = coach-zone, line = petal-edge, fg = ink, muted = ink-muted, accentFg = on-accent
+    private val light = Colors(0, 0xFFFFFFFF.toInt(), 0x8CFFFFFF.toInt(), 0xFFE6F3F7.toInt(), 0xFFCFE8F0.toInt(),
+        0xFF7F929C.toInt(), 0xFF0F1E26.toInt(), 0xFF4A5B64.toInt(), 0xFF0A6680.toInt(), 0xFFFFFFFF.toInt(),
+        halo = 0xFFFFFFFF.toInt(), glassEdge = 0x2E0F1E26)
+    private val dark = Colors(0, 0xFF1B262C.toInt(), 0x991B262C.toInt(), 0xFF1E3944.toInt(), 0xFF244A5B.toInt(),
+        0xFF5E737D.toInt(), 0xFFEDF3F6.toInt(), 0xFFA3B4BC.toInt(), 0xFF4CC2DE.toInt(), 0xFF032029.toInt(),
+        halo = 0xFF0B1114.toInt(), glassEdge = 0x2EFFFFFF)
     private fun colors() = if (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) dark else light
 
     // ---- geometry ----
@@ -53,6 +57,9 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun jabsMode() = if (Coach.active) Coach.jabs else svc.prefs.mode == "jabs"
     /** The whole screen is where a stroke may start, and the star comes to the finger. Lessons keep the star in place. */
     private fun screenZone() = svc.prefs.zone == "screen" && !Coach.active && !tapsMode()
+    /** Простой режим: ⇧ and RU/EN are not shown (capitals come by themselves); the space key has no gestures. */
+    private fun simple() = svc.prefs.simple && !Coach.active
+    private fun hiddenInSimple(fn: Pulse.Fn) = simple() && (fn == Pulse.Fn.SHIFT || fn == Pulse.Fn.LANG)
     /** «Два касания»: for a hand that can tap but not stroke. Strokes still work as in «Пульс». */
     private fun tapsMode() = !Coach.active && svc.prefs.mode == "taps"
     /** The petal opened by the first tap, its letters waiting for the second (-1: none). */
@@ -196,12 +203,23 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         // one pass, so a see-through key has no darker rim
         fill.color = color; fill.style = Paint.Style.FILL_AND_STROKE; fill.strokeWidth = cr * 2; fill.strokeJoin = Paint.Join.ROUND
         c.drawPath(path, fill); fill.style = Paint.Style.FILL
+        if (edge != 0) { stroke.color = edge; stroke.strokeWidth = density; c.drawPath(path, stroke) }
     }
-    /** Keys are glass over the app: the app shows through, the label stays sharp. */
-    private fun glass(color: Int) = (color and 0x00FFFFFF) or (0x6E shl 24)
-    private fun label(c: Canvas, s: String, x: Float, y: Float, sizeDp: Float, color: Int, bold: Boolean = false) {
-        txt.color = color; txt.textSize = sizeDp * density * max(kDp, 0.85f); txt.isFakeBoldText = bold
-        c.drawText(s, x, y - (txt.ascent() + txt.descent()) / 2, txt)
+    private var edge = 0
+    /** Sizes of the design are for 1 unit = 1.232 dp; the keyboard scales with the screen. */
+    private fun ds() = density * max(kDp, 0.85f) / 1.232f
+    /**
+     * A label. On glass ([halo] not 0) it gets a 3 dp halo of the halo colour first: that keeps it readable
+     * (WCAG AA) over whatever app is behind the see-through keyboard.
+     */
+    private fun label(c: Canvas, s: String, x: Float, y: Float, sizeDp: Float, color: Int, bold: Boolean = false, halo: Int = 0) {
+        txt.textSize = sizeDp * ds(); txt.isFakeBoldText = bold
+        val by = y - (txt.ascent() + txt.descent()) / 2
+        if (halo != 0) {
+            txt.style = Paint.Style.STROKE; txt.strokeWidth = 3 * density * 2; txt.strokeJoin = Paint.Join.ROUND; txt.color = halo
+            c.drawText(s, x, by, txt); txt.style = Paint.Style.FILL
+        }
+        txt.color = color; c.drawText(s, x, by, txt)
     }
 
     // the stroke being drawn now: the candidate letter shows in the middle of the star
@@ -219,7 +237,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val items = chipText()
         if (items.isEmpty()) return emptyList()
         txt.textSize = 17f * density; txt.isFakeBoldText = true
-        val pad = 14 * density; val gap = 8 * density; val h = 38 * density
+        val pad = 18 * density; val gap = 8 * density; val h = 48 * density
         val top = (height - cornerH) + (stripH - h) / 2   // above the corner keyboard, whatever the zone
         val out = ArrayList<RectF>()
         var edge = width - 8 * density  // from the thumb's side
@@ -345,29 +363,32 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         drawChips(c, col)
         // service keys
         for (key in Pulse.FN_KEYS) {
+            if (hiddenInSimple(key.fn)) continue
             val active = (key.fn == Pulse.Fn.SHIFT && (svc.shiftLock || svc.shiftOnce))
             val color = when {
                 key.fn == Pulse.Fn.SHIFT && svc.shiftLock -> col.accent
                 active || pressedFn == key.fn -> col.press
                 else -> col.fn
             }
-            drawKey(c, key, if (color == col.fn) glass(color) else color)
+            edge = 0   // the glass is its own edge: a line on the rounded shape doubles it
+            drawKey(c, key, color); edge = 0
+            val h = if (color == col.fn) col.halo else 0
             val rm = (key.r0 + key.r1) / 2; val am = (key.a0 + key.a1) / 2
             val p = pt(rm, am)
             val ink = if (key.fn == Pulse.Fn.SHIFT && svc.shiftLock) col.accentFg else col.fg
             when (key.fn) {
-                Pulse.Fn.SHIFT -> icon(c, 0, p[0], p[1], ink)
-                Pulse.Fn.BKSP -> icon(c, 1, p[0], p[1], ink)
-                Pulse.Fn.ENTER -> icon(c, 2, p[0], p[1], ink)
-                Pulse.Fn.HIDE -> icon(c, 3, p[0], p[1], ink)
-                Pulse.Fn.LANG -> label(c, svc.lang.uppercase(), p[0], p[1], 15f, ink, true)
-                Pulse.Fn.SYM -> label(c, if (sym) (if (svc.lang == "ru") "абв" else "abc") else "?123", p[0], p[1], 13f, ink, true)
+                Pulse.Fn.SHIFT -> icon(c, 0, p[0], p[1], ink, h)
+                Pulse.Fn.BKSP -> icon(c, 1, p[0], p[1], ink, h)
+                Pulse.Fn.ENTER -> icon(c, 2, p[0], p[1], ink, h)
+                Pulse.Fn.HIDE -> icon(c, 3, p[0], p[1], ink, h)
+                Pulse.Fn.LANG -> label(c, svc.lang.uppercase(), p[0], p[1], 18f, ink, true, h)
+                Pulse.Fn.SYM -> label(c, if (sym) (if (svc.lang == "ru") "абв" else "abc") else "?123", p[0], p[1], 16f, ink, true, h)
                 Pulse.Fn.SPACE -> {
-                    label(c, if (svc.lang == "ru") "пробел" else "space", p[0], p[1], 14f, col.muted)
+                    label(c, if (svc.lang == "ru") "пробел" else "space", p[0], p[1], 17f, col.muted, false, h)
                     val o = pt(key.r1 - 11, am); val i = pt(key.r0 + 11, am)
-                    label(c, ".", o[0], o[1], 17f, col.muted); label(c, ",", i[0], i[1], 17f, col.muted)
+                    label(c, ".", o[0], o[1], 21f, col.muted, false, h); label(c, ",", i[0], i[1], 21f, col.muted, false, h)
                     // along the arc upwards: the best suggestion
-                    if (svc.cands.isNotEmpty()) { val u = pt(rm, key.a0 + 9); label(c, "↑", u[0], u[1], 15f, col.accent, true) }
+                    if (svc.cands.isNotEmpty() && !simple()) { val u = pt(rm, key.a0 + 9); label(c, "↑", u[0], u[1], 18f, col.accent, true, h) }
                 }
             }
         }
@@ -379,21 +400,25 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val dy = if (origin != null) scr(origin[0], origin[1])[1] - home[1] else 0f
         c.save(); c.translate(dx, dy)
         val centre = home
-        fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(centre[0], centre[1], (Pulse.R * k).toFloat(), fill)
-        stroke.color = col.line; stroke.strokeWidth = density; c.drawCircle(centre[0], centre[1], (Pulse.R * k).toFloat(), stroke)
-        // the wedge under the finger, or the one the tutorial points at
+        // eight petals with air between them; the one under the finger steps out, the tutorial's goal is tinted
         val live = cand
         val goal = if (Coach.active && Coach.help >= 2) Coach.next?.let { target(it) } else null
-        if (goal != null && goal.first.petal >= 0) { fill.color = col.zone; c.drawPath(wedge(goal.first.petal), fill) }
-        if (live != null && live.petal >= 0) { fill.color = col.press; c.drawPath(wedge(live.petal), fill) }
-        // separators
-        stroke.color = col.line; stroke.strokeWidth = density
+        val round = android.graphics.CornerPathEffect(5 * ds())
         for (p in 0 until 8) {
-            val a = p * 45.0 - 22.5
-            val s0 = starPt(15.0, a); val s1 = starPt(Pulse.R, a)
-            c.drawLine(s0[0], s0[1], s1[0], s1[1], stroke)
+            val pressed = live != null && live.petal == p
+            val lift = if (pressed) 6 * ds() else 0f
+            val a = p * 45 * PI / 180
+            c.save(); c.translate(mx(cx + cos(a).toFloat() * lift) - mx(cx), -sin(a).toFloat() * lift)
+            fill.pathEffect = round; stroke.pathEffect = round
+            fill.style = Paint.Style.FILL
+            fill.color = when { pressed -> col.press; goal != null && goal.first.petal == p -> col.zone; else -> col.key }
+            c.drawPath(wedge(p), fill)
+            stroke.color = if (pressed) col.accent else col.line; stroke.strokeWidth = (if (pressed) 2f else 1f) * density
+            c.drawPath(wedge(p), stroke)
+            fill.pathEffect = null; stroke.pathEffect = null
+            c.restore()
         }
-        fill.color = col.fn; c.drawCircle(centre[0], centre[1], (13 * k), fill)
+        fill.color = col.accent; c.drawCircle(centre[0], centre[1], 16 * ds(), fill)   // the drop
         if (goal != null) drawPath(c, goal.first, col)
         // letters of the star
         val up = svc.shiftActive()
@@ -405,8 +430,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             val q = scr(s[0], s[1])
             val big = kind == 'c'
             val isGoal = goal != null && goal.first.petal == p && goal.first.kind == kind
-            label(c, if (up) v.uppercase() else v, q[0], q[1], if (big) 21f else if (kind == 'b') 11f else 14f,
-                if (isGoal) col.accent else if (big) col.fg else col.muted, isGoal)
+            label(c, if (up) v.uppercase() else v, q[0], q[1], if (big) 28f else if (kind == 'b') 14f else 17f,
+                if (isGoal) col.accent else if (big) col.fg else col.muted, big || isGoal)
         }
         c.restore()
         // the finger's trail: what the keyboard sees of the stroke
@@ -507,15 +532,21 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun wedge(p: Int): Path = wedgePaths[p] ?: makeWedge(p).also { wedgePaths[p] = it }
     private fun makeWedge(p: Int): Path {
         val path = Path(); val a0 = p * 45.0 - 22.5; val a1 = p * 45.0 + 22.5
-        for (i in 0..8) { val q = starPt(Pulse.R - 1, a0 + (a1 - a0) * i / 8); if (i == 0) path.moveTo(q[0], q[1]) else path.lineTo(q[0], q[1]) }
-        for (i in 8 downTo 0) { val q = starPt(15.0, a0 + (a1 - a0) * i / 8); path.lineTo(q[0], q[1]) }
+        val inner = 22 / 1.232                       // petal-inner, in base units
+        val gapOut = Math.toDegrees(2.0 / 1.232 / Pulse.R); val gapIn = Math.toDegrees(2.0 / 1.232 / inner)   // half of the 4 dp gap
+        for (i in 0..8) { val q = starPt(Pulse.R - 1, a0 + gapOut + (a1 - a0 - 2 * gapOut) * i / 8); if (i == 0) path.moveTo(q[0], q[1]) else path.lineTo(q[0], q[1]) }
+        for (i in 8 downTo 0) { val q = starPt(inner, a0 + gapIn + (a1 - a0 - 2 * gapIn) * i / 8); path.lineTo(q[0], q[1]) }
         path.close(); return path
     }
 
     /** 0 shift, 1 backspace, 2 enter, 3 hide, drawn as paths so no font glyph can be missing. */
-    private fun icon(c: Canvas, which: Int, x: Float, y: Float, color: Int) {
-        val u = 7f * density * max(kDp, 0.85f)
-        fill.style = Paint.Style.STROKE; fill.color = color; fill.strokeWidth = 1.8f * density; fill.strokeJoin = Paint.Join.ROUND; fill.strokeCap = Paint.Cap.ROUND
+    private fun icon(c: Canvas, which: Int, x: Float, y: Float, color: Int, halo: Int = 0) {
+        if (halo != 0) { iconPath(c, which, x, y, halo, 1.8f * density + 6 * density) }
+        iconPath(c, which, x, y, color, 1.8f * density)
+    }
+    private fun iconPath(c: Canvas, which: Int, x: Float, y: Float, color: Int, width: Float) {
+        val u = 8.5f * ds()
+        fill.style = Paint.Style.STROKE; fill.color = color; fill.strokeWidth = width; fill.strokeJoin = Paint.Join.ROUND; fill.strokeCap = Paint.Cap.ROUND
         val p = Path()
         when (which) {
             0 -> { p.moveTo(x, y - u); p.lineTo(x + u, y); p.lineTo(x + u * .4f, y); p.lineTo(x + u * .4f, y + u); p.lineTo(x - u * .4f, y + u); p.lineTo(x - u * .4f, y); p.lineTo(x - u, y); p.close() }
@@ -641,7 +672,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val b = doubleArrayOf(bx(x), by(y))
         val chip = if (svc.cands.isNotEmpty()) chipAt(x, y) else -1
         val inStrip = chip >= 0
-        val fn = if (inStrip) null else Pulse.hit(b[0], b[1])
+        val fn = if (inStrip) null else Pulse.hit(b[0], b[1])?.takeUnless { hiddenInSimple(it.fn) }
         val t = Touch(fn, chip, handle = false)
         if (fn == null && !inStrip) t.steady = Pulse.Steady(b[0], b[1], svc.prefs.tol.toDouble(), svc.prefs.smooth.toDouble())
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm); t.anchorX = b[0]; t.anchorY = b[1]
@@ -657,7 +688,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     val rep = object : Runnable { override fun run() { svc.backspace(); handler.postDelayed(this, 65) } }
                     t.repeat = rep; handler.postDelayed(rep, 420)
                 }
-                if (fn.fn == Pulse.Fn.SPACE) {   // held still: the cursor rides on the finger, left and right
+                if (fn.fn == Pulse.Fn.SPACE && !simple()) {   // held still: the cursor rides on the finger, left and right
                     val r = Runnable {
                         val moved = hypot(t.pts[t.pts.size - 2] - t.pts[0], t.pts[t.pts.size - 1] - t.pts[1])
                         if (moved < Pulse.GAP_MIN / 2) { t.cursorX = lastX; svc.feedback.mode(); invalidate() }
@@ -787,7 +818,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     Pulse.Fn.ENTER -> svc.enter()
                     // a swipe along ⌫ towards the star: the rest of the word goes too
                     Pulse.Fn.BKSP -> if (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN) == "ccw") svc.deleteWord()
-                    Pulse.Fn.SPACE -> if (!t.cursorX.isNaN()) Unit else when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
+                    Pulse.Fn.SPACE -> if (!t.cursorX.isNaN()) Unit else if (simple()) svc.space() else when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
                         "out" -> svc.punct(".")
                         "in" -> svc.punct(",")
                         "ccw" -> svc.deleteWord()
@@ -814,7 +845,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     companion object {
-        const val STRIP_DP = 52f
+        const val STRIP_DP = 60f
         const val CURSOR_HOLD_MS = 380L
         const val CURSOR_STEP_DP = 9f
         const val FIELD_BAND_DP = 68f

@@ -482,4 +482,33 @@ class KeyboardTest {
         letter("о")                                   // and strokes still work as in «Пульс»
         assertEquals("Ма о", field.sb.toString())
     }
+
+    @Test fun backspaceRightAfterTakesBackWhatTheKeyboardDid() {
+        for (c in "прив") letter(c.toString()); stripTap(0)          // took «Привет »
+        fnTap(Pulse.Fn.BKSP)
+        assertEquals("Прив", field.sb.toString())                    // the suggestion is taken back
+        spaceTap(); for (c in "дом") letter(c.toString()); spaceTap()
+        spaceSwipe(-1.0)                                               // the word swiped away…
+        assertEquals("Прив ", field.sb.toString())
+        fnTap(Pulse.Fn.BKSP)
+        assertEquals("Прив дом ", field.sb.toString())                // …comes back
+        fnTap(Pulse.Fn.BKSP)
+        assertEquals("Прив дом", field.sb.toString())                 // and then ⌫ is ⌫ again
+    }
+
+    @Test fun simpleModeKeepsOnlyTheBasics() {
+        svc.prefs.simple = true; svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES })
+        try {
+            picture("simple")
+            for (c in "прив") letter(c.toString())
+            assertEquals(1, svc.cands.size)                       // one suggestion
+            spaceSwipe(-1.0)                                       // no hidden gestures: just a space
+            assertEquals("Прив ", field.sb.toString())
+            assertTrue("no next word", svc.cands.isEmpty())
+            for (c in "нама") letter(c.toString()); spaceTap()
+            assertEquals("Прив нама ", field.sb.toString())       // no autocorrection
+            fnTap(Pulse.Fn.SHIFT)                                  // the corner where ⇧ was: nothing happens
+            assertTrue(!svc.shiftOnce)
+        } finally { svc.prefs.simple = false }
+    }
 }

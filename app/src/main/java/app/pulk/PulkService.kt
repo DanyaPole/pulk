@@ -47,7 +47,12 @@ class PulkService : InputMethodService() {
     private var learnHere = false     // and may teach the keyboard new words
     var cands: List<String> = emptyList(); private set
     /** The last autocorrection, so ⌫ right after it brings back what was typed. */
-    private var undo: Pair<String, String>? = null
+    /**
+     * What ⌫ right after would take back: the text that was there ([was]) instead of what the keyboard put
+     * ([now], just before the cursor); [keep] — the typed word refused a correction, remember it.
+     */
+    private class Undo(val was: String, val now: String, val keep: String? = null)
+    private var undo: Undo? = null
     private val refused = HashSet<String>()
     private var unsaved = 0
 
@@ -145,7 +150,7 @@ class PulkService : InputMethodService() {
                 variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS || variation == InputType.TYPE_TEXT_VARIATION_FILTER
         val noSuggest = info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0
         suggestHere = text && !secure && !address && prefs.suggest
-        correctHere = suggestHere && !noSuggest && prefs.autocorrect
+        correctHere = suggestHere && !noSuggest && prefs.autocorrect && !prefs.simple
         learnHere = suggestHere && prefs.learn && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         editor = info
         selStart = info.initialSelStart; selEnd = info.initialSelEnd
@@ -215,8 +220,8 @@ class PulkService : InputMethodService() {
         val dict = wordsIfReady(lang)
         cands = when {
             !suggestHere || symbols || Coach.active || dict == null -> emptyList()
-            w.isNotEmpty() -> dict.suggest(w)
-            prefs.predict -> prevWord()?.let { p -> dict.next(p).map { if (shiftActive()) it.replaceFirstChar { c -> c.uppercase() } else it } } ?: emptyList()
+            w.isNotEmpty() -> if (prefs.simple) dict.suggest(w, 1) else dict.suggest(w)
+            prefs.predict && !prefs.simple -> prevWord()?.let { p -> dict.next(p).map { if (shiftActive()) it.replaceFirstChar { c -> c.uppercase() } else it } } ?: emptyList()
             else -> emptyList()
         }
     }
@@ -254,7 +259,7 @@ class PulkService : InputMethodService() {
             val fix = dict.correction(w)
             if (fix != null && fix != w) {
                 io.deleteBefore(w.length); io.commit(fix)
-                undo = w to fix
+                undo = Undo(w, fix, keep = w)
                 return fix
             }
         }
@@ -293,7 +298,7 @@ class PulkService : InputMethodService() {
         val w = cands.getOrNull(i) ?: return
         val typed = currentWord()
         io.deleteBefore(typed.length); io.commit("$w ")
-        undo = null
+        undo = Undo(typed, "$w ", keep = typed)   // refusing a suggestion also says: this word is mine
         learn(w)
         feedback.space(w, secure)
         after()
@@ -317,7 +322,8 @@ class PulkService : InputMethodService() {
     fun deleteWord() {
         val before = io.before(60)
         val m = Regex("\\S+\\s*$").find(before)?.value?.length ?: return // the word and the spaces after it
-        io.deleteBefore(m); undo = null
+        undo = Undo(before.takeLast(m), "")
+        io.deleteBefore(m)
         feedback.backspace(); after()
     }
 
@@ -326,14 +332,13 @@ class PulkService : InputMethodService() {
         val u = undo
         undo = null
         if (u != null) {
-            val (typed, fix) = u
-            val tail = io.before(fix.length + 1)
-            if (tail == "$fix " || tail.endsWith(fix)) {
-                // ⌫ right after a correction: the typed word comes back and stays
-                io.deleteBefore(if (tail.endsWith(" ")) fix.length + 1 else fix.length)
-                io.commit(typed)
-                refused.add(Words.fold(typed.lowercase()))
-                if (learnHere) { wordsIfReady(lang)?.keep(typed); unsaved++ }
+            // the correction may have been followed by its space: take that back too
+            val tail = io.before(u.now.length + 1)
+            val n = when { u.now.isEmpty() -> 0; tail == u.now + " " -> u.now.length + 1; tail.endsWith(u.now) -> u.now.length; else -> -1 }
+            if (n >= 0) {
+                if (n > 0) io.deleteBefore(n)
+                io.commit(u.was)
+                u.keep?.let { typed -> refused.add(Words.fold(typed.lowercase())); if (learnHere) { wordsIfReady(lang)?.keep(typed); unsaved++ } }
                 feedback.backspace(); after(); return
             }
         }
