@@ -134,4 +134,10 @@ class ScreensTest {
         assertTrue(chosen.isNotEmpty())
         assertTrue(chosen.all { it.contentDescription?.contains(": ") == true && !it.contentDescription.contains("✓") })
     }
+
+    @Test fun thePondIsDescribedInWords() {
+        Prefs(org.robolectric.RuntimeEnvironment.getApplication()).drops = 31
+        val v = all(Robolectric.buildActivity(PondActivity::class.java).setup().get().window.decorView)
+        assertTrue(v.any { it.contentDescription?.contains("рыбки") == true })
+    }
 }

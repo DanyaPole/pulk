@@ -51,6 +51,7 @@ class PondActivity : Activity() {
     /** The pond: drops as soft circles, placed by a fixed pattern so they never jump around between visits. */
     private class PondView(ctx: Context, val n: Int, val accent: Int, val edge: Int, val water: Int) : View(ctx) {
         private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        init { contentDescription = "Пруд, капель: $n" + (if (n >= 5) ", разноцветные" else "") + (if (n >= 30) ", плавают две рыбки" else "") }
         override fun onDraw(c: Canvas) {
             val cx = width / 2f; val cy = height / 2f; val r = minOf(cx, cy) - 8
             // 50 drops, after six in the evening: the pond glows

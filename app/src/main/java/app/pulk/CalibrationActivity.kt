@@ -94,7 +94,13 @@ class CalibrationActivity : Activity() {
         private fun restX() = if (left) width * 0.3f else width * 0.7f
         private fun restY() = height * 0.72f
 
+        /** What TalkBack says: the same words the screen draws; read aloud whenever they change. */
+        private fun say() = if (step < 0) "Настройка под руку. Положи большой палец на круг внизу и держи, не двигая, 2 секунды"
+            else "Смахни ${Lessons.dir(plan[step] * 45, left)}, с любого места. ${step + 1} из ${plan.size}. $note".trim()
+
         override fun onDraw(c: Canvas) {
+            val s = say()
+            if (contentDescription != s) { contentDescription = s; announceForAccessibility(s) }
             c.drawColor(bg)
             txt.textSize = 22f * dp; txt.isFakeBoldText = true; txt.color = fg
             val cx = restX(); val cy = restY()
