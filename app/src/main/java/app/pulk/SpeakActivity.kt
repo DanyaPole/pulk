@@ -132,8 +132,9 @@ class SpeakActivity : Activity() {
             field.setText(p); field.setSelection(p.length); sayAll()
         })
     }
-    /** Situations, with the person's own phrases first when there are any. */
-    private fun situations() = (if (prefs.myPhrases.isNotEmpty()) listOf("Мои" to prefs.myPhrases) else emptyList()) + Phrases.SITUATIONS
+    /** Situations: the person's own phrases first when there are any, then what fits this part of the day. */
+    private fun situations() = (if (prefs.myPhrases.isNotEmpty()) listOf("Мои" to prefs.myPhrases) else emptyList()) +
+        listOf(Phrases.now(java.time.LocalTime.now().hour)) + Phrases.SITUATIONS
     private fun paintSituation() {
         // the chosen situation: filled and ticked, not by colour alone
         cats.removeAllViews()

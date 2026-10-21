@@ -19,6 +19,27 @@ object Phrases {
         "Срочно" to listOf("Мне нужна помощь", "Вызовите скорую", "Мне плохо", "Позвоните моим близким"),
     )
 
+    /**
+     * «Мой день»: phrases for the part of the day it is now — not only asking for things, also sharing and asking
+     * back. Words without he/she endings where possible. Each part: name, the hour it starts, phrases.
+     */
+    val DAY: List<Triple<String, Int, List<String>>> = listOf(
+        Triple("Утро", 5, listOf("Доброе утро", "Хочу ещё поспать", "Хочу завтракать", "Мне нужно в туалет", "Помоги, пожалуйста, одеться",
+            "Не хочу это надевать", "Что сегодня будет?")),
+        Triple("День", 11, listOf("Хочу обедать", "Можно перерыв?", "Мне нужна тишина", "Хочу гулять", "Мне скучно",
+            "Когда домой?", "Мне нужно в туалет")),
+        Triple("Вечер", 17, listOf("Хочу ужинать", "Как прошёл твой день?", "Сегодня было хорошо", "Сегодня было трудно",
+            "Хочу поиграть", "Хочу в душ", "Хочу спать", "Спокойной ночи")),
+        Triple("Ночь", 22, listOf("Не могу уснуть", "Мне страшно", "Посиди со мной", "Оставь свет", "Выключи свет",
+            "Мне нужно в туалет", "Мне плохо")),
+    )
+
+    /** The part of the day for this hour, shown first as «Сейчас»: what is likely needed is one touch away. */
+    fun now(hour: Int): Pair<String, List<String>> {
+        val part = DAY.lastOrNull { hour >= it.second } ?: DAY.last()   // before 5 it is still night
+        return "Сейчас · " + part.first to part.third
+    }
+
     private fun norm(s: String) = s.lowercase().replace('ё', 'е').trim()
 
     /**
@@ -28,7 +49,7 @@ object Phrases {
     fun complete(typed: String, history: List<String>, n: Int = 3, mine: List<String> = emptyList()): List<String> {
         val t = norm(typed)
         if (t.length < 2) return emptyList()
-        val all = (mine + history + SITUATIONS.flatMap { it.second } + QUICK).distinctBy { norm(it) }
+        val all = (mine + history + SITUATIONS.flatMap { it.second } + DAY.flatMap { it.third } + QUICK).distinctBy { norm(it) }
         val starts = all.filter { norm(it).startsWith(t) && norm(it) != t }
         val byWords = all.filter { it !in starts && wordsMatch(norm(it), t) }
         return (starts + byWords).take(n)
