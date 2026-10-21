@@ -121,4 +121,25 @@ class LessonsTest {
         assertTrue(texts.any { it.startsWith("Три дня") })
         assertTrue(texts.any { it.startsWith("Сегодня: «День 1 · утро»") })
     }
+
+    @Test fun learningToSpeakStepByStep() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()); prefs.speakLessonDone = false
+        val a = Robolectric.buildActivity(SpeakLessonActivity::class.java).setup().get()
+        fun tap(label: String) = all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == label }.performClick()
+        tap("Да"); idle(1200); assertEquals(1, a.step)
+        tap("Нет"); idle(1200); assertEquals(2, a.step)
+        val field = all(a.window.decorView).filterIsInstance<EditText>().single()
+        field.setText("папа"); field.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)   // said, not «wrong»
+        assertEquals("папа", a.lastSaid); assertEquals(2, a.step)
+        field.setText("папа"); field.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
+        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Показать, как набрать «мама»?" })
+        field.setText("мама"); field.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND); idle(1200)
+        assertEquals(3, a.step)
+        tap("Хочу пить"); idle(1200)
+        tap("Показать"); tap("Вернуться"); idle(1200)
+        val f2 = all(a.window.decorView).filterIsInstance<EditText>().single()
+        f2.setText("я дома"); f2.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND); idle(1200)
+        assertTrue(prefs.speakLessonDone)
+        Coach.reset()
+    }
 }

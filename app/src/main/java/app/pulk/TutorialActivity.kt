@@ -244,7 +244,8 @@ class TutorialActivity : Activity() {
     private fun advance(success: Boolean) {
         lock = true
         if (success) {
-            status?.apply { setTextColor(accent); text = "Получилось!" }
+            val n = Pond.add(prefs)
+            status?.apply { setTextColor(accent); text = "Получилось! +1 капля — в пруду $n" }
             if (help > 0) help-- // help steps down by itself
         }
         offerRow?.visibility = View.GONE

@@ -552,4 +552,23 @@ class KeyboardTest {
             svc.onKeyDown(KeyEvent.KEYCODE_SPACE, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE))   // an outside switch works the same
         } finally { svc.prefs.mode = "pulse" }
     }
+
+    @Test fun familiarRowsWithABridgeToTheStar() {
+        svc.prefs.mode = "classic"; view.refresh(); measure()
+        try {
+            fun key(ch: Char) {   // find the key on the drawn rows and tap it
+                for (yy in view.gridTop() until view.height step 20) for (xx in 0 until view.width step 10)
+                    if (view.classicKey(xx.toFloat(), yy.toFloat()) == ch) {
+                        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, floatArrayOf(xx + 5f, yy + 5f)))
+                        view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, floatArrayOf(xx + 5f, yy + 5f))); return
+                    }
+                error("no key $ch")
+            }
+            key('м'); key('а'); key('м'); key('а'); key('S')
+            assertEquals("Мама ", field.sb.toString())
+            picture("classic")
+            key('<')
+            assertEquals("Мама", field.sb.toString())
+        } finally { svc.prefs.mode = "pulse" }
+    }
 }

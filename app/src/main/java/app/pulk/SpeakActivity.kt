@@ -50,7 +50,8 @@ class SpeakActivity : Activity() {
         val e = tts ?: return
         if (!ttsReady) return
         e.language = if (t.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }) Locale("ru", "RU") else Locale.US
-        e.setSpeechRate(prefs.speakRate)
+        e.setSpeechRate(if (prefs.calm) minOf(prefs.speakRate, 0.9f) else prefs.speakRate)
+        e.setPitch(if (prefs.calm) 0.95f else 1f)
         e.speak(t, TextToSpeech.QUEUE_FLUSH, null, "pulk-say")
     }
     internal var lastSaid = ""
@@ -73,6 +74,11 @@ class SpeakActivity : Activity() {
 
     private fun build() {
         val body = ui.column(20)
+        body.addView(ui.button(if (prefs.speakLessonDone) "Учиться ещё раз — 2 минуты" else "Научиться — 2 минуты, 6 шагов", main = !prefs.speakLessonDone) {
+            startActivity(android.content.Intent(this, SpeakLessonActivity::class.java))
+        })
+        body.addView(ui.button("Мой пруд: ${prefs.drops} капель") { startActivity(android.content.Intent(this, PondActivity::class.java)) })
+        body.addView(ui.button("Тренировки по ситуациям: просьбы, самочувствие, чувства…") { startActivity(android.content.Intent(this, DrillsActivity::class.java)) })
         field = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_SEND            // ⏎ on the keyboard says it
@@ -97,9 +103,18 @@ class SpeakActivity : Activity() {
 
         body.addView(ui.h("Быстро"))
         val q1 = row(); val q2 = row()
+        if (prefs.aboutMe.isNotEmpty()) q1.addView(chip("Про меня", strong = true) { say(prefs.aboutMe); showToPartner(prefs.aboutMe) })
         Phrases.QUICK.forEachIndexed { i, p -> (if (i < 3) q1 else q2).addView(chip(p) { say(p) }) }
         body.addView(scroll(q1)); body.addView(scroll(q2))
 
+        if (prefs.calm) {   // calm: only what is needed now — the field, the quick replies, the own phrases
+            for (p in prefs.myPhrases) body.addView(ui.button(p) { say(p) })
+            val bottom = ui.bottomBar()
+            bottom.addView(ui.button("Сказать", main = true) { sayAll() })
+            bottom.addView(ui.button("Показать собеседнику") { showToPartner() })
+            body.addView(ui.onOff("Спокойный режим", { prefs.calm }) { prefs.calm = it; build() })
+            setContentView(ui.screen(body, bottom)); field.requestFocus(); return
+        }
         body.addView(ui.h("Фразы"))
         cats = row()
         body.addView(scroll(cats))
@@ -110,6 +125,9 @@ class SpeakActivity : Activity() {
         historyBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(historyBox); paintHistory()
 
+        body.addView(ui.onOff("Спокойный режим", { prefs.calm }) { prefs.calm = it; build() })
+        body.addView(ui.note("Мягче и медленнее голос, без звука «пульк» и ряби, меньше кнопок на экране."))
+        body.addView(ui.button("Мои фразы и «Про меня» — для взрослого") { startActivity(android.content.Intent(this, MyPhrasesActivity::class.java)) })
         body.addView(ui.onOff("Говорить по словам, пока печатаю", { prefs.speakWords }) { prefs.speakWords = it })
         body.addView(ui.choice("Темп голоса", listOf("0.8" to "Медленно", "1.0" to "Обычно", "1.3" to "Быстро"), { "%.1f".format(Locale.US, prefs.speakRate) }) { prefs.speakRate = it.toFloat() })
 
@@ -122,16 +140,18 @@ class SpeakActivity : Activity() {
 
     private fun paintCompletions(t: String) {
         completions.removeAllViews()
-        for (p in Phrases.complete(t, prefs.phrases)) completions.addView(chip(p, strong = completions.childCount == 0) {
+        for (p in Phrases.complete(t, prefs.phrases, mine = prefs.myPhrases)) completions.addView(chip(p, strong = completions.childCount == 0) {
             field.setText(p); field.setSelection(p.length); sayAll()
         })
     }
+    /** Situations, with the person's own phrases first when there are any. */
+    private fun situations() = (if (prefs.myPhrases.isNotEmpty()) listOf("Мои" to prefs.myPhrases) else emptyList()) + Phrases.SITUATIONS
     private fun paintSituation() {
         // the chosen situation: filled and ticked, not by colour alone
         cats.removeAllViews()
-        Phrases.SITUATIONS.forEachIndexed { i, (name, _) -> cats.addView(chip(if (i == situation) "✓ $name" else name, strong = i == situation) { situation = i; paintSituation() }) }
+        situations().forEachIndexed { i, (name, _) -> cats.addView(chip(if (i == situation) "✓ $name" else name, strong = i == situation) { situation = i; paintSituation() }) }
         situationBox.removeAllViews()
-        for (p in Phrases.SITUATIONS[situation].second) situationBox.addView(ui.button(p) { say(p); prefs.phrases = Phrases.remember(prefs.phrases, p); paintHistory() })
+        for (p in situations()[situation].second) situationBox.addView(ui.button(p) { say(p); prefs.phrases = Phrases.remember(prefs.phrases, p); paintHistory() })
     }
     private fun paintHistory() {
         historyBox.removeAllViews()
@@ -141,8 +161,8 @@ class SpeakActivity : Activity() {
     }
 
     /** The text, huge, for the person opposite: it can be turned upside down to face them across a table. */
-    private fun showToPartner() {
-        val text = field.text.toString().trim().ifEmpty { lastSaid.ifEmpty { prefs.phrases.firstOrNull() ?: "" } }
+    private fun showToPartner(given: String? = null) {
+        val text = given ?: field.text.toString().trim().ifEmpty { lastSaid.ifEmpty { prefs.phrases.firstOrNull() ?: "" } }
         val big = TextView(this).apply {
             this.text = text; textSize = 44f; setTextColor(ui.ink); setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding(ui.px(24), ui.px(24), ui.px(24), ui.px(24))

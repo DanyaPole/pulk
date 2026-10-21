@@ -71,6 +71,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun gest(g: String) = Coach.active || (svc.prefs.has(g) && !simple())
     private fun hiddenInSimple(fn: Pulse.Fn) = simple() && (fn == Pulse.Fn.SHIFT || fn == Pulse.Fn.LANG)
     /** «Два касания»: for a hand that can tap but not stroke. Strokes still work as in «Пульс». */
+    /** «Привычная»: the familiar rows of keys — for someone used to them; the star shows how each letter would be stroked. */
+    private fun classicMode() = !Coach.active && svc.prefs.mode == "classic"
     private fun tapsMode() = !Coach.active && svc.prefs.mode == "taps"
     /** The petal opened by the first tap, its letters waiting for the second (-1: none). */
     internal var openPetal = -1
@@ -144,6 +146,11 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     fun touchRegion(out: Region) {
         if (!isOpen) { out.set(handleRect()); return }
         if (screenZone()) { out.set(0, 0, width, height); return }   // all of it: the finger may start anywhere
+        if (classicMode()) {
+            val r = Region(0, gridTop(), width, height)
+            for (rc in chipRects()) r.op(Rect(rc.left.toInt(), rc.top.toInt(), rc.right.toInt(), rc.bottom.toInt()), Region.Op.UNION)
+            out.set(r); return
+        }
         val r = Region(shapeRegion())
         fieldRect()?.let { f -> r.op(Rect(f.left.toInt(), f.top.toInt(), f.right.toInt(), f.bottom.toInt()), Region.Op.UNION) }
         for (rc in chipRects()) r.op(Rect(rc.left.toInt(), rc.top.toInt(), rc.right.toInt(), rc.bottom.toInt()), Region.Op.UNION)
@@ -154,6 +161,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     fun contentTop(): Int {
         if (!isOpen) return height
         if (screenZone()) return max(0, (cy - 75 * k).toInt())        // the app shows down to the keys at the bottom
+        if (classicMode()) return max(0, gridTop() - (STRIP_DP * density).toInt())
         val dx = (width / 2f - 4 * density) / k
         val r = Pulse.OUTER
         val hBase = if (dx < r) sqrt(r * r - dx * dx) else 0.0
@@ -368,10 +376,127 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         fill.alpha = 255; stroke.alpha = 255
     }
 
+    // ---- «Привычная» ----
+    private val ROWS_RU = listOf("йцукенгшщзхъ", "фывапролджэ", "^ячсмитьбю<")
+    private val ROWS_EN = listOf("qwertyuiop", "asdfghjkl", "^zxcvbnm<")
+    private val ROWS_SYM = listOf("1234567890", "-/:;()₽&@\"", "^.,?!'<")
+    private fun rows() = if (svc.symbols) ROWS_SYM else if (svc.lang == "ru") ROWS_RU else ROWS_EN
+    private fun keyH() = 54 * density
+    internal fun gridTop() = (height - keyH() * 4 - 6 * density).toInt()
+    /** The key under a point: a character, or ^ (shift), < (⌫), S (space), E (⏎), L (language), N (?123); null outside. */
+    internal fun classicKey(x: Float, y: Float): Char? {
+        val top = gridTop(); if (y < top) return null
+        val row = ((y - top) / keyH()).toInt().coerceIn(0, 3)
+        if (row == 3) {
+            val f = x / width
+            return when { f < 0.15f -> 'N'; f < 0.28f -> 'L'; f < 0.72f -> 'S'; f < 0.85f -> '.'; else -> 'E' }
+        }
+        val keys = rows()[row]; val w = width.toFloat() / keys.length
+        return keys[(x / w).toInt().coerceIn(0, keys.length - 1)]
+    }
+    private fun drawClassic(c: Canvas, col: Colors) {
+        val top = gridTop().toFloat(); val kh = keyH(); val gap = 3 * density
+        fill.style = Paint.Style.FILL
+        // a plate under the rows: the app behind must not show between the keys
+        fill.color = (col.line and 0x00FFFFFF) or (0xF2 shl 24); c.drawRect(0f, top - 3 * density, width.toFloat(), height.toFloat(), fill)
+        for ((ri, keys) in rows().withIndex()) {
+            val w = width.toFloat() / keys.length
+            for ((i, ch) in keys.withIndex()) {
+                val r = RectF(i * w + gap, top + ri * kh + gap, (i + 1) * w - gap, top + (ri + 1) * kh - gap)
+                fill.color = if (classicPressed == ch) col.press else if (ch == '^' || ch == '<') col.fn else col.key
+                c.drawRoundRect(r, 8 * density, 8 * density, fill)
+                when (ch) {
+                    '^' -> icon(c, 0, r.centerX(), r.centerY(), if (svc.shiftLock) col.accent else col.fg)
+                    '<' -> icon(c, 1, r.centerX(), r.centerY(), col.fg)
+                    else -> { txt.color = col.fg; txt.textSize = 20 * density; txt.isFakeBoldText = false
+                        val s = if (svc.shiftActive() && !svc.symbols) ch.uppercaseChar().toString() else ch.toString()
+                        c.drawText(s, r.centerX(), r.centerY() - (txt.ascent() + txt.descent()) / 2, txt) }
+                }
+            }
+        }
+        val y0 = top + 3 * kh
+        for ((code, f0, f1, label) in listOf(Quad('N', 0f, .15f, if (svc.symbols) "абв" else "?123"), Quad('L', .15f, .28f, svc.lang.uppercase()),
+                Quad('S', .28f, .72f, if (svc.lang == "ru") "пробел" else "space"), Quad('.', .72f, .85f, "."), Quad('E', .85f, 1f, "⏎"))) {
+            val r = RectF(width * f0 + gap, y0 + gap, width * f1 - gap, y0 + kh - gap)
+            fill.color = if (classicPressed == code) col.press else if (code == 'S' || code == '.') col.key else col.fn
+            c.drawRoundRect(r, 8 * density, 8 * density, fill)
+            if (code == 'E') icon(c, 2, r.centerX(), r.centerY(), col.fg)
+            else { txt.color = col.fg; txt.textSize = 16 * density; c.drawText(label, r.centerX(), r.centerY() - (txt.ascent() + txt.descent()) / 2, txt) }
+        }
+        drawBridge(c, col)
+    }
+    private data class Quad(val a: Char, val b: Float, val c: Float, val d: String)
+
+    /**
+     * The bridge to the star: after each letter, a small star above the keys shows how the same letter is stroked —
+     * the petal lit and the way the finger goes. The star is learned along the way, without a lesson.
+     */
+    private var bridge: Pulse.Slot? = null
+    private var bridgeT = 0L
+    private fun drawBridge(c: Canvas, col: Colors) {
+        val s = bridge ?: return
+        if (!svc.prefs.bridge || android.os.SystemClock.uptimeMillis() - bridgeT > 2500) return
+        val rr = 46 * density
+        val ox = if (left) rr + 12 * density else width - rr - 12 * density
+        val oy = gridTop() - rr - 10 * density
+        fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(ox, oy, rr, fill)
+        stroke.color = col.line; stroke.strokeWidth = density; c.drawCircle(ox, oy, rr, stroke)
+        fun pt(deg: Double, f: Float): FloatArray { var a = deg; if (left) a = 180 - a; val r = a * PI / 180; return floatArrayOf(ox + cos(r).toFloat() * rr * f, oy - sin(r).toFloat() * rr * f) }
+        for (p in 0 until 8) { val a = pt(p * 45.0 - 22.5, .18f); val b = pt(p * 45.0 - 22.5, 1f); c.drawLine(a[0], a[1], b[0], b[1], stroke) }
+        // the way: out to the petal, then the turn or the way back
+        stroke.color = col.accent; stroke.strokeWidth = 3 * density; stroke.strokeCap = Paint.Cap.ROUND
+        val out = pt(s.petal * 45.0, .55f); val path = Path(); path.moveTo(ox, oy); path.lineTo(out[0], out[1])
+        when (s.kind) { 'l' -> { val e = pt(s.petal * 45.0 + 18, .9f); path.lineTo(e[0], e[1]) }; 'r' -> { val e = pt(s.petal * 45.0 - 18, .9f); path.lineTo(e[0], e[1]) }; 'b' -> path.lineTo(ox, oy) }
+        c.drawPath(path, stroke)
+        fill.color = col.accent; c.drawCircle(ox, oy, 13 * density, fill)
+        txt.color = col.accentFg; txt.textSize = 16 * density; txt.isFakeBoldText = true
+        c.drawText(s.v, ox, oy - (txt.ascent() + txt.descent()) / 2, txt)
+        postInvalidateDelayed(2600)
+    }
+    private fun showBridge(ch: String) {
+        val t = Pulse.table(svc.lang, false)
+        val base = Pulse.ALT.entries.firstOrNull { it.value == ch }?.key ?: ch
+        for (p in 0 until 8) for ((i, kd) in Pulse.KINDS.withIndex()) if (t[p][i] == base) { bridge = Pulse.Slot(p, kd, ch); bridgeT = android.os.SystemClock.uptimeMillis(); return }
+        bridge = null
+    }
+
+    private var classicPressed: Char? = null
+    private var classicRepeat: Runnable? = null
+    private fun classicTouch(e: MotionEvent): Boolean {
+        val x = e.x; val y = e.y
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                chipRects().indexOfFirst { it.contains(x, y) }.takeIf { it >= 0 && svc.cands.isNotEmpty() }?.let { svc.pick(it); return true }
+                val k = classicKey(x, y) ?: return true
+                classicPressed = k; svc.feedback.touch()
+                if (k == '<') { svc.backspace(); val r = object : Runnable { override fun run() { svc.backspace(); handler.postDelayed(this, 65) } }; classicRepeat = r; handler.postDelayed(r, 420) }
+                invalidate()
+            }
+            MotionEvent.ACTION_UP -> {
+                classicRepeat?.let { handler.removeCallbacks(it) }; classicRepeat = null
+                val k = classicPressed ?: return true
+                classicPressed = null
+                when (k) {
+                    '<' -> {}
+                    '^' -> svc.shiftTap(false)
+                    'S' -> svc.space()
+                    'E' -> svc.enter()
+                    'L' -> svc.switchLang()
+                    'N' -> svc.toggleSymbols()
+                    else -> { val s = k.toString(); svc.typeLetter(s, Pulse.Slot(0, 'c', s)); if (!svc.symbols) showBridge(s.lowercase()) }
+                }
+                invalidate()
+            }
+            MotionEvent.ACTION_CANCEL -> { classicRepeat?.let { handler.removeCallbacks(it) }; classicPressed = null; invalidate() }
+        }
+        return true
+    }
+
     private fun drawBody(c: Canvas, col: Colors) {
         val sym = svc.symbols
         val table = Pulse.table(svc.lang, sym)
         drawChips(c, col)
+        if (classicMode()) { drawClassic(c, col); return }
         // service keys
         for (key in Pulse.FN_KEYS) {
             if (hiddenInSimple(key.fn)) continue
@@ -516,7 +641,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private var rippleT0 = 0L
     private fun animationsOn() = android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
     private fun startRipple(x: Float, y: Float) {
-        if (svc.prefs.look != "ripples" || !animationsOn()) return   // «remove animations» in the phone's settings: no ripples
+        if (svc.prefs.look != "ripples" || !animationsOn() || svc.prefs.calm) return   // «remove animations» in the phone's settings: no ripples
         rippleAt = floatArrayOf(x, y); rippleT0 = android.os.SystemClock.uptimeMillis(); invalidate()
     }
     private fun drawRipple(c: Canvas, col: Colors) {
@@ -739,6 +864,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         // scanning: the whole keyboard is one big button (the hidden keyboard's circle still opens it)
+        if (classicMode() && isOpen && anim == null) return classicTouch(e)
         if (scanMode() && isOpen && anim == null) { if (e.actionMasked == MotionEvent.ACTION_DOWN) scanPress(); return true }
         // with TalkBack the finger comes as hover; its double-tap would type a second time
         if (exploring()) return true

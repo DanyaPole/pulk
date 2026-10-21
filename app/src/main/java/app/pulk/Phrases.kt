@@ -25,10 +25,10 @@ object Phrases {
      * Whole phrases that begin like what is typed (at least two letters): the person's own first (most recent first),
      * then the ready ones. A phrase also matches when typed letters start any of its words in order («ск ст» → «Сколько это стоит?»).
      */
-    fun complete(typed: String, history: List<String>, n: Int = 3): List<String> {
+    fun complete(typed: String, history: List<String>, n: Int = 3, mine: List<String> = emptyList()): List<String> {
         val t = norm(typed)
         if (t.length < 2) return emptyList()
-        val all = (history + SITUATIONS.flatMap { it.second } + QUICK).distinctBy { norm(it) }
+        val all = (mine + history + SITUATIONS.flatMap { it.second } + QUICK).distinctBy { norm(it) }
         val starts = all.filter { norm(it).startsWith(t) && norm(it) != t }
         val byWords = all.filter { it !in starts && wordsMatch(norm(it), t) }
         return (starts + byWords).take(n)

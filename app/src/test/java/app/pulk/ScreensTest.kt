@@ -45,6 +45,8 @@ class ScreensTest {
         val f = all(sp.window.decorView).filterIsInstance<android.widget.EditText>().first()
         f.setText("Я скоро буду"); f.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
         assertTrue(prefs.phrases.first() == "Я скоро буду" && f.text.isEmpty() && sp.lastSaid == "Я скоро буду")
+        prefs.drops = 33
+        shot(Robolectric.buildActivity(PondActivity::class.java).setup().get(), "screen-pond")
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()
         shot(wiz, "screen-wizard-hand")
         all(wiz.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Правой" }.performClick()

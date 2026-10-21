@@ -46,5 +46,9 @@
         <activity android:name=".SpeedActivity" android:exported="false" android:label="Проверка скорости" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <activity android:name=".AudienceActivity" android:exported="false" android:label="Кому и как помогает" />
         <activity android:name=".SpeakActivity" android:exported="false" android:label="Говорить" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <activity android:name=".SpeakLessonActivity" android:exported="false" android:label="Учимся говорить" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".MyPhrasesActivity" android:exported="false" android:label="Мои фразы" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".DrillsActivity" android:exported="false" android:label="Тренировки" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".PondActivity" android:exported="false" android:label="Мой пруд" />
     </application>
 </manifest>

@@ -130,7 +130,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
      * Silent when the phone is on silent or vibrate.
      */
     fun drop(kind: String = prefs.dropKind) {
-        if (kind == "off") return
+        if (kind == "off" || prefs.calm) return
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
         if (am.ringerMode != android.media.AudioManager.RINGER_MODE_NORMAL) return
         // bubbles: start s, from Hz, to Hz, rise s, decay s, level

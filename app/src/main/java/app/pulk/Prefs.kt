@@ -163,6 +163,37 @@ class Prefs(ctx: Context) {
         get() = sp.getFloat("speak_rate", 1.0f)
         set(v) = sp.edit().putFloat("speak_rate", v).apply()
 
+    var speakLessonDone: Boolean
+        get() = sp.getBoolean("speak_lesson", false)
+        set(v) = sp.edit().putBoolean("speak_lesson", v).apply()
+
+    /** «Говорить»: about me (said and shown with one touch), the person's own phrases, and the calm mode. */
+    var aboutMe: String
+        get() = sp.getString("about_me", "") ?: ""
+        set(v) = sp.edit().putString("about_me", v).apply()
+    var myPhrases: List<String>
+        get() = (sp.getString("my_phrases", "") ?: "").split('\n').filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("my_phrases", v.joinToString("\n")).apply()
+    /** Calm: a softer, slower voice, no «пульк», no ripples, fewer things on the «Говорить» screen. */
+    var calm: Boolean
+        get() = sp.getBoolean("calm", false)
+        set(v) = sp.edit().putBoolean("calm", v).apply()
+
+    /** «Тренировки по ситуациям»: themes gone through (bits). */
+    var drillsDone: Int
+        get() = sp.getInt("drills_done", 0)
+        set(v) = sp.edit().putInt("drills_done", v).apply()
+
+    /** «Привычная»: after each letter, a small star shows how it is stroked (the bridge to «Пульс»). */
+    var bridge: Boolean
+        get() = sp.getBoolean("bridge", true)
+        set(v) = sp.edit().putBoolean("bridge", v).apply()
+
+    /** «Мой пруд»: drops gathered for steps that worked. Only ever grows. */
+    var drops: Int
+        get() = sp.getInt("drops", 0)
+        set(v) = sp.edit().putInt("drops", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }
