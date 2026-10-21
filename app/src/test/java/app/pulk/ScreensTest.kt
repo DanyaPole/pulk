@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,10 +72,28 @@ class ScreensTest {
     }
 
     @Test fun theWizardTurnsOnWhatHelps() {
-        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; wizardDone = false }
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; guard = 0; wizardDone = false; doors = "" }
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()
         fun click(label: String) = all(wiz.window.decorView).filterIsInstance<Button>().first { it.text.toString() == label }.performClick()
-        click("Левой"); click("Без смахов — касаниями"); click("Попроще, без лишнего"); click("С выбранным — дальше")
-        assertTrue(prefs.left && prefs.mode == "taps" && prefs.simple)
+        click("Левой"); click("Подстроить под человека — 2 минуты")
+        click("Да, смахивать трудно"); click("Нет"); click("Да"); click("Да"); click("Нет")   // hands, eyes, speech, calm, helper
+        assertTrue(prefs.left && prefs.mode == "taps" && prefs.simple && prefs.calm && prefs.guard == 2)
+        assertEquals(mapOf("hands" to 2, "eyes" to 0, "speech" to 1, "calm" to 1, "helper" to 0), Comfort.decode(prefs.doors))
+        assertTrue(all(wiz.window.decorView).filterIsInstance<android.widget.TextView>().any { it.text.toString().startsWith("Включено: левая рука, защита от случайных касаний (сильная)") })
+        shot(wiz, "screen-wizard-summary")
+        val c = Robolectric.buildActivity(ComfortActivity::class.java).setup().get()
+        shot(c, "screen-comfort")
+        assertTrue(all(c.window.decorView).filterIsInstance<android.widget.TextView>().any { it.text.toString() == "Внимание" })
+    }
+
+    @Test fun startingAtOnceAsksNothingMore() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; guard = 0; wizardDone = false; doors = ""; offered = false; calibrated = false }
+        val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()
+        fun click(label: String) = all(wiz.window.decorView).filterIsInstance<Button>().first { it.text.toString() == label }.performClick()
+        click("Правой"); click("Начать сразу")
+        assertTrue(prefs.doors == "quick" && prefs.mode == "pulse" && !prefs.simple && prefs.guard == 0)
+        prefs.wizardDone = true
+        val home = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+        assertTrue(all(home.window.decorView).filterIsInstance<android.widget.TextView>().any { it.text.toString().startsWith("Подстроить Пульк под человека") })
     }
 }

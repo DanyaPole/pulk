@@ -15,16 +15,24 @@ import android.widget.EditText
 import android.widget.LinearLayout
 
 /**
- * The first start, step by step: which hand → what would help → switch the keyboard on → choose it →
- * fit it to the hand (or later) → the first word. Back from Android's settings the step checks itself.
+ * The first start, step by step: which hand → «Начать сразу» or «Подстроить под человека» (five doors, see
+ * [Comfort]) → switch the keyboard on → choose it → fit it to the hand (or later) → the first word.
+ * Back from Android's settings the step checks itself. With [DOORS_ONLY] it asks the five questions again and ends.
  */
 class WizardActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
+    companion object { const val DOORS_ONLY = "doors_only" }
     private var step = 0
-    private val helps = HashSet<String>()
+    internal var door = -1                      // -1: the fork; 0..4: a question; 5: what is on now
+    private val answers = LinkedHashMap<String, Int>()
+    private val doorsOnly get() = intent.getBooleanExtra(DOORS_ONLY, false)
 
-    override fun onCreate(b: Bundle?) { super.onCreate(b); prefs = Prefs(this); ui = Ui(this); show() }
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b); prefs = Prefs(this); ui = Ui(this)
+        if (doorsOnly) { step = 1; door = 0 }
+        show()
+    }
 
     override fun onResume() {
         super.onResume()
@@ -57,19 +65,31 @@ class WizardActivity : Activity() {
                 })
                 body.addView(row)
             }
-            1 -> {
-                // preferences, not diagnoses: nobody is asked what is wrong with them
-                head(1, "Как тебе удобнее?", body)
-                body.addView(ui.note("Выбери, что нравится, — или сразу «Как обычно». Всё можно поменять потом."))
-                bottom.addView(ui.button("Как обычно", main = true) { step = 2; show() })
-                for ((k, label) in listOf("sight" to "Крупнее и контрастнее", "taps" to "Без смахов — касаниями", "shake" to "Сгладить дрожание пальца",
-                        "ear" to "На слух, не глядя", "simple" to "Попроще, без лишнего", "speak" to "Говорить с помощью телефона")) {
-                    body.addView(ui.button(label) { b ->
-                        if (!helps.add(k)) helps.remove(k)
-                        (b as Button).text = if (k in helps) "✓ $label" else label
-                    })
+            1 -> when {
+                door < 0 -> {   // the fork: most people go straight on; the rest get five questions, not a list of switches
+                    head(1, "Как начнём?", body)
+                    body.addView(ui.text("«Начать сразу» — обычные настройки, поменять можно потом в «Удобстве»."))
+                    body.addView(ui.note("«Подстроить» — пять вопросов о том, что трудно и что мешает. Настраиваете для ребёнка или ученика — выберите это."))
+                    bottom.addView(ui.button("Начать сразу", main = true) { prefs.doors = "quick"; step = 2; show() })
+                    bottom.addView(ui.button("Подстроить под человека — 2 минуты") { door = 0; show() })
                 }
-                bottom.addView(ui.button("С выбранным — дальше") { applyHelps(); step = 2; show() })
+                door < Comfort.DOORS.size -> {   // one question at a time, big answers; nothing is a diagnosis
+                    val d = Comfort.DOORS[door]
+                    body.addView(ui.note("Вопрос ${door + 1} из ${Comfort.DOORS.size}"))
+                    body.addView(ui.title(d.title))
+                    body.addView(ui.note(d.note))
+                    for ((label, v) in d.answers) body.addView(ui.button(label) { answers[d.key] = v; door++; if (door == Comfort.DOORS.size) Comfort.apply(prefs, answers); show() }.apply { textSize = 19f; minHeight = ui.px(64) })
+                    if (door > 0) bottom.addView(ui.button("← Назад") { door--; show() })
+                }
+                else -> {   // what is on now, in words
+                    val on = Comfort.summary(prefs)
+                    body.addView(ui.title("Готово — подстроено"))
+                    body.addView(ui.text(if (on.isEmpty()) "Обычные настройки." else "Включено: ${on.joinToString(", ")}."))
+                    if (answers["hands"] == 1 || answers["hands"] == 2 || answers["hands"] == Comfort.UNKNOWN)
+                        body.addView(ui.note("Дальше — «Под твою руку»: 30 секунд, и Пульк узнает дрожь и длину смахов."))
+                    bottom.addView(ui.button(if (doorsOnly) "Готово" else "Дальше", main = true) { if (doorsOnly) finishDoors() else { step = 2; show() } })
+                    bottom.addView(ui.button("← Изменить ответы") { answers.clear(); door = 0; show() })
+                }
             }
             2 -> {
                 head(2, "Включи клавиатуру", body)
@@ -116,15 +136,13 @@ class WizardActivity : Activity() {
         setContentView(ui.screen(body, bottom))
     }
 
-    /** «Что поможет»: each answer turns on what is meant for it. */
-    private fun applyHelps() {
-        if ("shake" in helps && prefs.smooth == 0f) prefs.smooth = 0.55f          // until the calibration measures it
-        if ("taps" in helps) prefs.mode = "taps"
-        if ("sight" in helps) { prefs.size = maxOf(prefs.size, 112); prefs.theme = "contrast"; if (prefs.compass == "off") prefs.compass = "voice"; if (prefs.sound == "off") prefs.sound = "voice" }
-        if ("simple" in helps) prefs.simple = true
-        if ("speak" in helps) prefs.mode = "jabs"   // a word per touch: the closest to speaking; «Говорить» is on the home screen
-        if ("ear" in helps) { if (prefs.sound == "off") prefs.sound = "voice"; if (prefs.compass == "off") prefs.compass = "voice" }
+    /** After the doors: speaking is hard → «Говорить» opens; an adult beside → their minute of reading on top of it. */
+    private fun afterDoors() {
+        val a = Comfort.decode(prefs.doors)
+        if (a["speech"] == 1) startActivity(Intent(this, SpeakActivity::class.java))
+        if (a["helper"] == 1) startActivity(Intent(this, ParentsActivity::class.java))
     }
+    private fun finishDoors() { afterDoors(); finish() }
 
     /** Back out of the wizard: it was seen; it does not come back every time the app opens. */
     @Deprecated("Back skips the rest of the wizard")
@@ -133,6 +151,9 @@ class WizardActivity : Activity() {
     private fun finishWizard() {
         // a newcomer starts with the basic gestures; the others are offered after the lessons (or «Ещё» → «Новые жесты»)
         if (!prefs.calibrated && prefs.lessonsDone == 0 && !prefs.wizardDone) prefs.gestures = emptySet()
-        prefs.wizardDone = true; finish()
+        val first = !prefs.wizardDone
+        prefs.wizardDone = true
+        if (first) afterDoors()
+        finish()
     }
 }

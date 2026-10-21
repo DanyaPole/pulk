@@ -217,6 +217,14 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("guard", 0)
         set(v) = sp.edit().putInt("guard", v).apply()
 
+    /** «Подстроить под человека» (see [Comfort]): the answers, «quick» for «Начать сразу»; a gentle offer made once. */
+    var doors: String
+        get() = sp.getString("doors", "") ?: ""
+        set(v) = sp.edit().putString("doors", v).apply()
+    var offered: Boolean
+        get() = sp.getBoolean("offered", false)
+        set(v) = sp.edit().putBoolean("offered", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

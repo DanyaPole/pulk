@@ -52,5 +52,6 @@
         <activity android:name=".PondActivity" android:exported="false" android:label="Мой пруд" />
         <activity android:name=".TalkActivity" android:exported="false" android:label="Разговор" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <activity android:name=".ParentsActivity" android:exported="false" android:label="Как помочь ребёнку" />
+        <activity android:name=".ComfortActivity" android:exported="false" android:label="Удобство" />
     </application>
 </manifest>
