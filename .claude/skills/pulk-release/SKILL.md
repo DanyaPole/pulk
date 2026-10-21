@@ -1,15 +1,25 @@
 ---
 name: pulk-release
-description: Как собрать, проверить и выложить новую версию Android-клавиатуры Пульк (C:\dev\pulk) на страницу danyapole.github.io/duga/pulk/. Использовать, когда нужно выпустить версию, прогнать тесты или посмотреть клавиатуру картинками.
+description: Как проверить и выпустить Пульк в обеих версиях — Android-клавиатура (C:\dev\pulk) и веб-версия (C:\dev\duga\pulk\web) — на danyapole.github.io/duga/pulk/. Использовать, когда нужно прогнать тесты, проверить экраны, выпустить версию или обновить страницу скачивания и инструкции.
 ---
 
-# Выпуск Пулька
+# Проверка и выпуск Пулька
 
-1. Тесты и картинки: `C:\dev\pulk\gw.ps1 testDebugUnitTest` (через PowerShell или `powershell -NoProfile -File gw.ps1 …` из bash в C:\dev\pulk). Сводка: число тестов по файлам. Упавшие: читать `app/build/test-results/testDebugUnitTest/*.xml` (вывод PowerShell в cp866 ломает русский). Картинки клавиатуры и экранов — `app/build/shots/*.png`, смотреть их глазами после правок вида.
-2. Версия: в `app/build.gradle.kts` поднять `versionCode` и `versionName`.
-3. Сборка: `gw.ps1 assembleRelease` → `app/build/outputs/apk/release/app-release.apk`, подписан ключом из `keys/` (не в git, автор хранит копию). Скопировать в `dist/pulk-<версия>.apk`, старый удалить. Проверить: `aapt2 dump badging` — версия и единственное разрешение VIBRATE.
-4. Коммит в `C:\dev\pulk` от `DanyaPole <DanyaPole@users.noreply.github.com>` с подписью `Co-Authored-By`.
-5. Страница: скопировать APK в `C:\dev\duga\pulk\pulk.apk`, в `pulk/index.html` поменять номер в кнопке «Скачать» и, если надо, карточки «Что внутри»; `node tools/build-pages.js`; коммит и `git push` в репозитории duga (Pages соберутся сами). Дождаться, пока `https://danyapole.github.io/duga/pulk/pulk.apk` отдаёт новый размер.
-6. Отправить APK автору файлом и коротко описать, что нового и что не проверено на телефоне.
+## Проверка после каждого шага
+1. Android: `powershell -NoProfile -File gw.ps1 testDebugUnitTest` в `C:\dev\pulk`, в фоне; пока идёт — файлы не править (иначе компилирует полуготовое). Сводка: `grep -ho 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml` и сложить; упавшие — читать эти xml (вывод PowerShell в cp866). Картинки — `app/build/shots/*.png`, смотреть глазами после правок вида.
+2. Общие данные изменились в Kotlin (буквы, фразы, тренировки, пруд) → `node tools/build-pulk-web.js` в `C:\dev\duga`.
+3. Веб: `node tools/build-pages.js` в `C:\dev\duga` — сначала идут 12 тестов ядра (`tools/test-pulk-web.js`), упал тест — сборка останавливается. Затем превью `duga-site` (порт 5174, `/pulk/web/index.html`), прогнать экраны через JS: окно превью часто скрыто — скриншоты обрезаются, rAF не идёт. Консоль без ошибок.
+4. Честно сказать автору, что проверено (тесты, браузер на компьютере), а что нет (живой телефон).
 
-Подводные камни: в `local.properties` путь `C:/Android/sdk` (прямые слэши); большие правки Kotlin — через node-скрипт в scratchpad с проверкой якорей, а не sed с кириллицей и кавычками; таймеры и звук в Robolectric — `idleFor`.
+## Выпуск Android
+1. Версия: `versionCode`/`versionName` в `app/build.gradle.kts`.
+2. `gw.ps1 assembleRelease` → `app/build/outputs/apk/release/app-release.apk` (подпись из `keys/`, не в git). Скопировать в `dist/pulk-<версия>.apk`. По желанию `aapt2 dump badging`: версия и единственное разрешение VIBRATE.
+3. Коммит в `C:\dev\pulk`: `git -c user.name=DanyaPole -c user.email=DanyaPole@users.noreply.github.com commit …` с `Co-Authored-By`.
+
+## Сайт (обе версии)
+1. APK → `C:\dev\duga\pulk\pulk.apk`; номер в кнопке «Скачать» на `pulk/index.html`.
+2. Изменились возможности — обновить таблицу «Android или браузер» (`pulk/index.html`, id="diff") и инструкции: тексты в `tools/make-guides.js`, потом `node tools/make-guides.js`.
+3. `node tools/build-pages.js`; коммит и `git push` в duga; дождаться, что страница отдаёт новое (`curl` по адресу, размер APK).
+4. Коротко автору: что нового, что не проверено на телефоне.
+
+Подводные камни: `local.properties` — `C:/Android/sdk`; большие правки — node-скрипт в scratchpad с проверкой якорей (в JS-шаблонах экранировать `${…}`, после вставки проверить `\n` в Kotlin-строках); таймеры в Robolectric — `shadowOf(Looper.getMainLooper()).idleFor(Duration)`; локальный сервер не отдаёт папку без `index.html` в адресе.
