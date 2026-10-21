@@ -35,5 +35,23 @@ object Together {
         return (lines + "${if (me) "me" else "you"}\t$at\t$t").takeLast(100)
     }
 
+    /** The week, kept on this phone only: «2026-10-21:12:3» — a day, phrases said, phrases said for the first time. */
+    fun logged(lines: List<String>, day: String, fresh: Boolean): List<String> {
+        val m = LinkedHashMap<String, IntArray>()
+        for (l in lines) { val p = l.split(':'); if (p.size == 3) m[p[0]] = intArrayOf(p[1].toIntOrNull() ?: 0, p[2].toIntOrNull() ?: 0) }
+        val v = m.getOrPut(day) { intArrayOf(0, 0) }; v[0]++; if (fresh) v[1]++
+        return m.entries.toList().takeLast(60).map { "${it.key}:${it.value[0]}:${it.value[1]}" }
+    }
+    /** Said, new and days over the last seven days, today included. */
+    fun week(lines: List<String>, today: java.time.LocalDate): IntArray {
+        val out = intArrayOf(0, 0, 0)
+        for (l in lines) {
+            val p = l.split(':'); if (p.size != 3) continue
+            val d = try { java.time.LocalDate.parse(p[0]) } catch (_: Exception) { continue }
+            if (!d.isAfter(today) && d.isAfter(today.minusDays(7))) { out[0] += p[1].toIntOrNull() ?: 0; out[1] += p[2].toIntOrNull() ?: 0; out[2]++ }
+        }
+        return out
+    }
+
     private fun norm(s: String) = s.lowercase().replace('ё', 'е').trim()
 }

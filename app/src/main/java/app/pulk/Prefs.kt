@@ -241,6 +241,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("letters", "") ?: ""
         set(v) = sp.edit().putString("letters", v).apply()
 
+    /** The week's journal (see [Together.logged]). */
+    var journal: List<String>
+        get() = (sp.getString("journal", "") ?: "").split('\n').filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("journal", v.joinToString("\n")).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

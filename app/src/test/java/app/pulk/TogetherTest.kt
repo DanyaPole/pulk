@@ -86,6 +86,13 @@ class TogetherTest {
         assertTrue(edit.size >= 4)
     }
 
+    @Test fun theWeekIsCounted() {
+        var j = Together.logged(emptyList(), "2026-10-20", true)
+        j = Together.logged(j, "2026-10-21", false); j = Together.logged(j, "2026-10-21", true); j = Together.logged(j, "2026-10-01", true)
+        val w = Together.week(j, java.time.LocalDate.parse("2026-10-21"))
+        assertEquals(listOf(3, 2, 2), w.toList())   // three said, two new, two days — the old day is outside the week
+    }
+
     @Test fun bubblesPopAndHardLettersComeMoreOften() {
         assertTrue(BubblesActivity.pool(0).containsAll(listOf("а", "н", "т")) && BubblesActivity.pool(0).size == 8)
         assertTrue(BubblesActivity.pool(2).size > BubblesActivity.pool(1).size)

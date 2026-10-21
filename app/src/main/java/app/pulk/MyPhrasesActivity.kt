@@ -47,6 +47,9 @@ class MyPhrasesActivity : Activity() {
     private fun build() {
         val body = ui.column()
         body.addView(ui.title("Для взрослого"))
+        val wk = Together.week(prefs.journal, java.time.LocalDate.now())
+        body.addView(ui.card(ui.text(todayTip(), 17f, ui.ink, true),
+            ui.note(if (wk[0] > 0) "За неделю: сказано ${wk[0]} раз, новых фраз — ${wk[1]}, дней с Пульком — ${wk[2]}. Всё это хранится только на этом телефоне." else "Здесь появится, сколько сказано за неделю. Хранится только на этом телефоне.")))
 
         val choiceAt = ui.h("Предложить выбор"); body.addView(choiceAt)
         body.addView(ui.note("Спросите вслух и напишите варианты. Ребёнок коснётся — телефон скажет. Фото из словаря семьи появятся на кнопках сами."))
@@ -100,6 +103,15 @@ class MyPhrasesActivity : Activity() {
         setContentView(screen)
         if (intent.getBooleanExtra(CHOICE, false)) q.requestFocus()
         else (screen as? LinearLayout)?.getChildAt(0)?.let { (it as? ScrollView)?.scrollTo(0, 0) }
+    }
+
+    /** One small step for today, from what has (not) been tried yet. */
+    private fun todayTip(): String = when {
+        !prefs.speakLessonDone -> "Сегодня — урок «Учиться говорить», 3 минуты. Вы рядом, палец — его."
+        prefs.choices.isEmpty() -> "Сегодня — выбор из двух: «Предложить выбор» → «сок, вода». Спросите вслух и подождите."
+        prefs.family.size < 3 -> "Сегодня — словарь семьи: три слова с фото (мама, любимая игрушка, питомец)."
+        else -> listOf("Сегодня — фразы «Близким»: покажите «Обними меня» и «Посмотри!».", "Сегодня — ответьте через Пульк сами: напечатайте ему короткую фразу.",
+            "Сегодня — один вопрос с выбором за едой.", "Сегодня — «Пузыри» в «Тренировках», один раунд.", "Сегодня — пусть он напечатает одно своё слово. Любое.")[(java.time.LocalDate.now().toEpochDay() % 5).toInt()]
     }
 
     internal fun addFamily(word: String, photoPath: String) {

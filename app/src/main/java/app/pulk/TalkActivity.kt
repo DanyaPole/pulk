@@ -37,7 +37,8 @@ class TalkActivity : Activity() {
     override fun onDestroy() { voice.shutdown(); super.onDestroy() }
     internal val lastSaid get() = voice.last
 
-    private fun mine(t: String) { val s = t.trim(); if (s.isEmpty()) return; voice.say(s); prefs.phrases = Phrases.remember(prefs.phrases, s); prefs.talk = Together.said(prefs.talk, true, s); build() }
+    private fun mine(t: String) { val s = t.trim(); if (s.isEmpty()) return; voice.say(s)
+        prefs.journal = Together.logged(prefs.journal, java.time.LocalDate.now().toString(), prefs.phrases.none { it.equals(s, ignoreCase = true) }); prefs.phrases = Phrases.remember(prefs.phrases, s); prefs.talk = Together.said(prefs.talk, true, s); build() }
     private fun yours(t: String) { val s = t.trim(); if (s.isEmpty()) return; prefs.talk = Together.said(prefs.talk, false, s); build() }
 
     private fun bubble(l: Together.Line) = TextView(this).apply {

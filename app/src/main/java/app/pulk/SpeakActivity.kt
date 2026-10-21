@@ -55,6 +55,7 @@ class SpeakActivity : Activity() {
     /** Said by the child: aloud, remembered in the history and in the conversation. */
     private fun sayMine(t: String, history: Boolean = true) {
         say(t)
+        prefs.journal = Together.logged(prefs.journal, java.time.LocalDate.now().toString(), prefs.phrases.none { it.equals(t.trim(), ignoreCase = true) })
         if (history) prefs.phrases = Phrases.remember(prefs.phrases, t)
         prefs.talk = Together.said(prefs.talk, true, t)
     }
