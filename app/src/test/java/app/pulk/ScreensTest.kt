@@ -37,6 +37,7 @@ class ScreensTest {
         shot(Robolectric.buildActivity(SettingsActivity::class.java).setup().get(), "screen-home")
         shot(Robolectric.buildActivity(OptionsActivity::class.java).setup().get(), "screen-settings")
         shot(Robolectric.buildActivity(OptionsActivity::class.java, android.content.Intent().putExtra(OptionsActivity.MORE, true)).setup().get(), "screen-more")
+        shot(Robolectric.buildActivity(AudienceActivity::class.java).setup().get(), "screen-audience")
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()
         shot(wiz, "screen-wizard-hand")
         all(wiz.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Правой" }.performClick()
@@ -53,7 +54,7 @@ class ScreensTest {
         val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; wizardDone = false }
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()
         fun click(label: String) = all(wiz.window.decorView).filterIsInstance<Button>().first { it.text.toString() == label }.performClick()
-        click("Левой"); click("Трудно смахивать"); click("Хочу попроще"); click("Дальше")
+        click("Левой"); click("Без смахов — касаниями"); click("Попроще, без лишнего"); click("С выбранным — дальше")
         assertTrue(prefs.left && prefs.mode == "taps" && prefs.simple)
     }
 }

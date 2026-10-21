@@ -74,8 +74,8 @@ class LessonsTest {
         assertEquals("«а»: смахни вверх", Coach.hint)
         // the steps of level 1: а, о, е, н, space
         for (s in listOf("а", "о", "е", "н", " ")) { field.setText(s); idle(800) }
-        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "«Первые смахи» — получилось!" })
-        assertEquals(1, prefs.lessonsDone and 1)
+        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "«День 1 · утро» — получилось!" })
+        assertEquals(1 shl 8, prefs.lessonsDone and (1 shl 8))   // the first «Начать» is «День 1 · утро»
         assertFalse(Coach.next != null)
     }
 
@@ -91,7 +91,7 @@ class LessonsTest {
     }
 
     @Test fun jabsCourse() {
-        assertEquals(8, Lessons.LEVELS.size)
+        assertEquals(14, Lessons.LEVELS.size); assertEquals(14, Lessons.ABOUT.size)
         assertEquals("толкни вправо, поверни вверх и вернись", Lessons.how("м", "ru", false, jabs = true))
         val a = Lessons.steps(4, "ru", false)[0]
         assertEquals(Lessons.Verdict.Done, Lessons.check(a, "а "))      // the lifted finger adds a space
@@ -105,8 +105,20 @@ class LessonsTest {
         assertTrue(texts.any { it.startsWith("«Толчки»") })
         assertTrue(texts.any { it.startsWith("«Пульс»") })
         val start = all(a.window.decorView).filterIsInstance<Button>().filter { it.text.toString() == "Начать" }
-        start[4].performClick()                   // the first level of «Толчки»
+        start[10].performClick()   // the first level of «Толчки» (after «Три дня» and «Пульс»)
         assertTrue(Coach.active && Coach.jabs)
         click(a, "Меню"); assertFalse(Coach.active)
+    }
+
+    @Test fun threeDaysInShortSessions() {
+        assertEquals(listOf(1, 1, 2, 2, 3, 3), (8..13).map { Lessons.dayOf(it) })
+        assertTrue(Lessons.isBlind(13) && !Lessons.isJabs(9))
+        for (l in 8..13) assertTrue(Lessons.steps(l, "ru", false).size in 3..6)
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication())
+        prefs.lessonsDone = 0; prefs.course3Start = -1
+        val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
+        val texts = all(a.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
+        assertTrue(texts.any { it.startsWith("Три дня") })
+        assertTrue(texts.any { it.startsWith("Сегодня: «День 1 · утро»") })
     }
 }

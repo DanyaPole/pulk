@@ -8,7 +8,8 @@ package app.pulk
 object Lessons {
     /** Levels 0–3 teach «Пульс» (a stroke per letter), 4–7 «Толчки» (a word per touch). */
     val LEVELS = listOf("Первые смахи", "Мелкие буквы", "Слова", "Не глядя",
-        "Первые толчки", "Слово одним касанием", "Повороты и двойные", "Толчки не глядя")
+        "Первые толчки", "Слово одним касанием", "Повороты и двойные", "Толчки не глядя",
+        "День 1 · утро", "День 1 · вечер", "День 2 · утро", "День 2 · вечер", "День 3 · утро", "День 3 · вечер")
     val ABOUT = listOf(
         "Крупные буквы и пробел: один прямой смах.",
         "Поворот и «туда и обратно» — мелкие буквы. Удержание — ё.",
@@ -18,11 +19,22 @@ object Lessons {
         "Буква за буквой, не отрывая пальца: каждое возвращение — буква.",
         "Толчок с поворотом — мелкая буква, короткий толчок — буква у центра, два толчка — двойная.",
         "Буквы скрыты: слово целиком на слух и на ощупь.",
+        "3 минуты: крупные буквы и пробел.",
+        "4 минуты: первые слова из крупных букв.",
+        "3 минуты: мелкие буквы — поворот и «туда и обратно».",
+        "4 минуты: слова с мелкими буквами.",
+        "5 минут: короткие фразы, как в переписке.",
+        "4 минуты: те же слова — не глядя, на слух.",
     )
     const val PER_COURSE = 4
-    fun isJabs(level: Int) = level >= PER_COURSE
-    fun isBlind(level: Int) = level % PER_COURSE == PER_COURSE - 1
-    fun courseOf(level: Int) = level / PER_COURSE
+    /** Courses: «Пульс» 0–3, «Толчки» 4–7, «Три дня» 8–13 (short sessions, «Пульс», a night between days). */
+    val COURSES = listOf(0..3, 4..7, 8..13)
+    const val THREE_DAYS = 2
+    fun isJabs(level: Int) = level in 4..7
+    fun isBlind(level: Int) = level == 3 || level == 7 || level == 13
+    fun courseOf(level: Int) = COURSES.indexOfFirst { level in it }
+    /** «Три дня»: which day a session belongs to (1–3), 0 for the other courses. */
+    fun dayOf(level: Int) = if (level >= 8) (level - 8) / 2 + 1 else 0
     val HELP_NAMES = listOf("", "подсказка", "пример", "рука в руке")
 
     /** One step: [want] is a single letter (or " "), or a whole [word]. */
@@ -78,6 +90,15 @@ object Lessons {
             )
             2 -> (if (lang == "ru") listOf("сон", "тесто", "мама", "привет") else listOf("sea", "tea", "notes", "hello"))
                 .map { Step("Набери слово «$it». Если сбился — сотри ⌫, это нормально.", word = it) }
+            8 -> steps(0, lang, left)
+            9 -> (if (lang == "ru") listOf("сон", "нос", "тот", "сено", "тесто") else listOf("one", "tea", "rose", "seat", "near"))
+                .map { Step("Набери «$it» — только крупные буквы, прямые смахи.", word = it) }
+            10 -> steps(1, lang, left)
+            11 -> (if (lang == "ru") listOf("мама", "дом", "кот", "лук", "мир") else listOf("map", "dog", "cup", "home", "big"))
+                .map { Step("Набери «$it». В нём есть мелкие буквы — поворот или «туда и обратно».", word = it) }
+            12 -> (if (lang == "ru") listOf("я дома", "как дела", "до встречи") else listOf("i am home", "see you", "how are you"))
+                .map { Step("Фраза «$it». Пробел — касание в центре звезды.", word = it) }
+            13 -> steps(3, lang, left)
             3 -> (if (lang == "ru") listOf("сон", "мама", "привет") else listOf("sea", "mama", "hello")).mapIndexed { i, w ->
                 Step(if (i == 0) "Буквы на звезде скрыты: слушай, а не смотри. Набери «$w». Каждая буква отзывается звуком и вибрацией; пробел — касание в любом месте."
                      else "Набери «$w», не глядя на звезду.", word = w)

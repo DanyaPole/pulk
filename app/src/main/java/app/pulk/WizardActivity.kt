@@ -58,16 +58,18 @@ class WizardActivity : Activity() {
                 body.addView(row)
             }
             1 -> {
-                head(1, "Что тебе поможет?", body)
-                body.addView(ui.note("Можно выбрать несколько или пропустить. Всё меняется потом в настройках."))
-                for ((k, label) in listOf("shake" to "Рука дрожит", "taps" to "Трудно смахивать", "sight" to "Плохо вижу", "simple" to "Хочу попроще")) {
+                // preferences, not diagnoses: nobody is asked what is wrong with them
+                head(1, "Как тебе удобнее?", body)
+                body.addView(ui.note("Выбери, что нравится, — или сразу «Как обычно». Всё можно поменять потом."))
+                bottom.addView(ui.button("Как обычно", main = true) { step = 2; show() })
+                for ((k, label) in listOf("sight" to "Крупнее и контрастнее", "taps" to "Без смахов — касаниями", "shake" to "Сгладить дрожание пальца",
+                        "ear" to "На слух, не глядя", "simple" to "Попроще, без лишнего")) {
                     body.addView(ui.button(label) { b ->
                         if (!helps.add(k)) helps.remove(k)
                         (b as Button).text = if (k in helps) "✓ $label" else label
                     })
                 }
-                bottom.addView(ui.button("Дальше", main = true) { applyHelps(); step = 2; show() })
-                bottom.addView(ui.button("Пропустить") { step = 2; show() })
+                bottom.addView(ui.button("С выбранным — дальше") { applyHelps(); step = 2; show() })
             }
             2 -> {
                 head(2, "Включи клавиатуру", body)
@@ -93,12 +95,21 @@ class WizardActivity : Activity() {
                 body.addView(ui.text("Набери «он»: смахни вверх-вправо — «о», потом вправо — «н». Ошибся — ничего страшного, просто ещё раз."))
                 val field = EditText(this).apply { hint = "Здесь"; textSize = 24f; setTextColor(ui.ink); setHintTextColor(ui.muted) }
                 val done = ui.text("", 18f, ui.accent, true)
+                var tries = 0; var lastLen = 0
+                val offer = ui.card(ui.text("Можно и без смахов: «Два касания» — коснись лепестка, потом буквы. Попробовать?"),
+                    ui.button("Попробовать касаниями") { prefs.mode = "taps"; (it as Button).text = "✓ Включено — набери «он» касаниями" }).apply { visibility = android.view.View.GONE }
                 field.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                     override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                    override fun afterTextChanged(s: Editable?) { if (Lessons.closeEnough(s.toString().trim(), "он") && s.toString().trim().length >= 2) done.text = "✓ Получилось! Дальше — в «Обучении»." }
+                    override fun afterTextChanged(s: Editable?) {
+                        val t = s.toString().trim()
+                        if (Lessons.closeEnough(t, "он") && t.length >= 2) { done.text = "✓ Получилось! Дальше — в «Обучении»."; offer.visibility = android.view.View.GONE; return }
+                        if (t.length < lastLen) tries++   // erased: one more try
+                        lastLen = t.length
+                        if (tries >= 3 && prefs.mode == "pulse") offer.visibility = android.view.View.VISIBLE
+                    }
                 })
-                body.addView(field); body.addView(done)
+                body.addView(field); body.addView(done); body.addView(offer)
                 bottom.addView(ui.button("Готово", main = true) { finishWizard() })
             }
         }
@@ -111,6 +122,7 @@ class WizardActivity : Activity() {
         if ("taps" in helps) prefs.mode = "taps"
         if ("sight" in helps) { prefs.size = maxOf(prefs.size, 112); prefs.theme = "contrast"; if (prefs.compass == "off") prefs.compass = "voice"; if (prefs.sound == "off") prefs.sound = "voice" }
         if ("simple" in helps) prefs.simple = true
+        if ("ear" in helps) { if (prefs.sound == "off") prefs.sound = "voice"; if (prefs.compass == "off") prefs.compass = "voice" }
     }
 
     private fun finishWizard() {

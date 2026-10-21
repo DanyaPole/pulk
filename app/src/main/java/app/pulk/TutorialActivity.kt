@@ -74,24 +74,37 @@ class TutorialActivity : Activity() {
     // ---- the menu ----
     private fun menu() {
         level = -1; root.removeAllViews(); field = null
-        root.addView(text("Обучение «Пульсу»", 28f, fg, true))
-        root.addView(text("Четыре коротких уровня, каждый — пара минут. Печатаешь самой клавиатурой Пульк, подсказки появляются прямо на звезде.", 15f, muted))
+        root.addView(text("Обучение", 28f, fg, true))
+        root.addView(text("Печатаешь самой клавиатурой Пульк, подсказки появляются прямо на звезде. Быстро — за один раз, или спокойно — по три-пять минут три дня.", 15f, muted))
         val done = prefs.lessonsDone
-        for (l in Lessons.LEVELS.indices) {
-            if (l % Lessons.PER_COURSE == 0) root.addView(text(if (Lessons.isJabs(l)) "«Толчки» — слово за одно касание" else "«Пульс» — буква за смах", 20f, fg, true).apply { setPadding(0, px(22), 0, 0) })
+        // «Три дня» first: short sessions are the gentlest way in
+        for (l in Lessons.COURSES[Lessons.THREE_DAYS] + (0..7)) {
+            val c = Lessons.courseOf(l)
+            if (l == Lessons.COURSES[c].first) root.addView(text(when (c) { 0 -> "«Пульс» — буква за смах"; 1 -> "«Толчки» — слово за одно касание"; else -> "Три дня по чуть-чуть" }, 20f, fg, true).apply { setPadding(0, px(22), 0, 0) })
+            if (l == Lessons.COURSES[c].first && c == Lessons.THREE_DAYS) root.addView(text(courseNote(), 14f, accent))
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(px(16), px(14), px(16), px(14))
                 background = GradientDrawable().apply { cornerRadius = px(14).toFloat(); setColor(panel); setStroke(px(1), line) }
                 layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) }
             }
             val mark = if (done and (1 shl l) != 0) "  ✓" else ""
-            card.addView(text("${l % Lessons.PER_COURSE + 1}. ${Lessons.LEVELS[l]}$mark", 18f, fg, true))
+            card.addView(text((if (Lessons.dayOf(l) > 0) "" else "${l - Lessons.COURSES[c].first + 1}. ") + "${Lessons.LEVELS[l]}$mark", 18f, fg, true))
             card.addView(text(Lessons.ABOUT[l], 14f, muted))
             card.addView(button(if (done and (1 shl l) != 0) "Ещё раз" else "Начать", primary = l == firstUndone(Lessons.courseOf(l))) { startLevel(l) })
             root.addView(card)
         }
     }
-    private fun firstUndone(course: Int) = (course * Lessons.PER_COURSE until (course + 1) * Lessons.PER_COURSE).firstOrNull { prefs.lessonsDone and (1 shl it) == 0 } ?: course * Lessons.PER_COURSE
+    private fun firstUndone(course: Int) = Lessons.COURSES[course].firstOrNull { prefs.lessonsDone and (1 shl it) == 0 } ?: Lessons.COURSES[course].first
+
+    /** «Три дня»: where the person is — today's sessions, or «tomorrow» after a day is done. */
+    private fun courseNote(): String {
+        val next = Lessons.COURSES[Lessons.THREE_DAYS].firstOrNull { prefs.lessonsDone and (1 shl it) == 0 } ?: return "✓ Три дня пройдены. Можно повторить любое занятие."
+        val day = Lessons.dayOf(next)
+        val today = java.time.LocalDate.now().toEpochDay()
+        val start = prefs.course3Start
+        return if (start < 0 || today >= start + day - 1) "Сегодня: «${Lessons.LEVELS[next]}» — ${Lessons.ABOUT[next]}"
+        else "Сегодня всё сделано. Следующее занятие — завтра: привычка крепнет во сне."
+    }
 
     // ---- a level ----
     private fun startLevel(l: Int) {
@@ -173,7 +186,7 @@ class TutorialActivity : Activity() {
             }
             row.addView(d)
         }
-        row.addView(text("уровень ${level % Lessons.PER_COURSE + 1} из ${Lessons.PER_COURSE}", 13f, muted).apply { setPadding(px(8), 0, 0, 0) })
+        row.addView(text((if (Lessons.dayOf(level) > 0) "занятие ${level - 7} из 6" else "уровень ${level % Lessons.PER_COURSE + 1} из ${Lessons.PER_COURSE}"), 13f, muted).apply { setPadding(px(8), 0, 0, 0) })
         return row
     }
 
@@ -245,6 +258,7 @@ class TutorialActivity : Activity() {
 
     private fun levelDone() {
         prefs.lessonsDone = prefs.lessonsDone or (1 shl level)
+        if (Lessons.dayOf(level) > 0 && prefs.course3Start < 0) prefs.course3Start = java.time.LocalDate.now().toEpochDay()
         Coach.next = null; Coach.hint = null; Coach.changed()
         val l = level
         root.removeAllViews(); field = null
@@ -253,6 +267,11 @@ class TutorialActivity : Activity() {
             root.addView(text("Ты печатаешь, не глядя на звезду. Звук и режим «вслепую» можно оставить: в нём касание в любом месте — пробел, звезда крупнее.", 15f, muted))
             root.addView(button("Оставить звук и «вслепую»", primary = true) { endLevel(keep = true); menu() })
             root.addView(button("Вернуть как было") { endLevel(keep = false); menu() })
+        } else if (Lessons.dayOf(l) > 0) {
+            // short sessions: a pause is part of learning, so the next one is not pushed
+            root.addView(text(if (l % 2 == 0) "Отдохни. Вечернее занятие — когда будет пара минут." else "На сегодня всё. Завтра — следующий день: привычка крепнет во сне.", 15f, muted))
+            root.addView(button("Готово", primary = true) { endLevel(keep = false); menu() })
+            root.addView(button("Продолжить сейчас") { startLevel(l + 1) })
         } else {
             offerGestures(l)
             root.addView(text("Дальше: «${Lessons.LEVELS[l + 1]}». ${Lessons.ABOUT[l + 1]}", 15f, muted))

@@ -411,9 +411,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val dy = if (origin != null) scr(origin[0], origin[1])[1] - home[1] else 0f
         c.save(); c.translate(dx, dy)
         val centre = home
-        // eight petals with air between them; the one under the finger steps out, the tutorial's goal is tinted
         val live = cand
         val goal = if (Coach.active && Coach.help >= 2) Coach.next?.let { target(it) } else null
+        if (svc.prefs.look == "ripples") drawWater(c, col, centre, live, goal) else {
+        // eight petals with air between them; the one under the finger steps out, the tutorial's goal is tinted
         val round = android.graphics.CornerPathEffect(5 * ds())
         for (p in 0 until 8) {
             val pressed = live != null && live.petal == p
@@ -429,8 +430,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             fill.pathEffect = null; stroke.pathEffect = null
             c.restore()
         }
+        }
         fill.color = col.accent; c.drawCircle(centre[0], centre[1], 16 * ds(), fill)   // the drop
         if (scanMode()) drawScan(c, col)
+        drawRipple(c, col)
         if (goal != null) drawPath(c, goal.first, col)
         // letters of the star
         val up = svc.shiftActive()
@@ -485,6 +488,48 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         // the centre closes it (in scanning: lit when «назад» is the choice)
         if (back) { fill.color = col.accent; c.drawCircle(ctr[0], ctr[1], 22 * density, fill) }
         label(c, "×", ctr[0], ctr[1], 18f, if (back) col.accentFg else col.muted, true)
+    }
+
+    // ---- «Круги на воде» ----
+    /**
+     * The star as still water: a disc, three thin wave rings where the three tiers of letters sit (inner, big, outer),
+     * no dividing lines. The direction under the finger is a soft sector of light; the tutorial's goal too.
+     */
+    private fun drawWater(c: Canvas, col: Colors, centre: FloatArray, live: Pulse.Slot?, goal: Pair<Pulse.Slot, String>?) {
+        val r = (Pulse.R * k).toFloat()
+        fill.style = Paint.Style.FILL; fill.color = col.key; c.drawCircle(centre[0], centre[1], r, fill)
+        stroke.color = col.line; stroke.strokeWidth = density; c.drawCircle(centre[0], centre[1], r, stroke)
+        for (p in 0 until 8) if ((live != null && live.petal == p) || (goal != null && goal.first.petal == p)) {
+            fill.color = if (live != null && live.petal == p) col.press else col.zone
+            c.drawPath(wedge(p), fill)
+        }
+        // the wave rings: the letters' own circles, the outer ones fainter like waves that travelled further
+        for ((rr, a) in listOf(24.0 to 0x90, 52.0 to 0x70, 86.0 to 0x50)) {
+            stroke.color = (col.accent and 0x00FFFFFF) or (a shl 24); stroke.strokeWidth = 1.5f * density
+            c.drawCircle(centre[0], centre[1], (rr * k).toFloat(), stroke)
+        }
+        stroke.alpha = 255
+    }
+
+    // a ripple from where the finger touched: rings that spread and fade — the «пульк» of each touch
+    private var rippleAt: FloatArray? = null
+    private var rippleT0 = 0L
+    private fun animationsOn() = android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+    private fun startRipple(x: Float, y: Float) {
+        if (svc.prefs.look != "ripples" || !animationsOn()) return   // «remove animations» in the phone's settings: no ripples
+        rippleAt = floatArrayOf(x, y); rippleT0 = android.os.SystemClock.uptimeMillis(); invalidate()
+    }
+    private fun drawRipple(c: Canvas, col: Colors) {
+        val at = rippleAt ?: return
+        val t = (android.os.SystemClock.uptimeMillis() - rippleT0) / RIPPLE_MS.toFloat()
+        if (t >= 1f) { rippleAt = null; return }
+        for (j in 0 until 3) {
+            val tt = t - j * 0.18f; if (tt <= 0f) continue
+            stroke.color = col.accent; stroke.alpha = ((1 - tt) * 150).toInt().coerceIn(0, 255); stroke.strokeWidth = 2f * density
+            c.drawCircle(at[0], at[1], (10 + tt * 70) * density, stroke)
+        }
+        stroke.alpha = 255
+        postInvalidateOnAnimation()
     }
 
     // ---- «Сканирование»: the keyboard points at things in turn; one press of any button picks the one lit ----
@@ -740,6 +785,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
     private fun down(id: Int, x: Float, y: Float, tm: Long) {
+        if (isOpen) startRipple(x, y)
         heard = null
         lastX = x
         if (!isOpen || anim != null) {
@@ -933,6 +979,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     companion object {
         const val STRIP_DP = 60f
+        const val RIPPLE_MS = 650L
         const val SCAN_SPACE = -1
         const val SCAN_BKSP = -2
         const val SCAN_ENTER = -3

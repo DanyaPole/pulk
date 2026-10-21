@@ -142,6 +142,16 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("scan_ms", 1200)
         set(v) = sp.edit().putInt("scan_ms", v).apply()
 
+    /** «Три дня»: the day (epoch day) the first session was done, -1 not started. */
+    var course3Start: Long
+        get() = sp.getLong("course3_start", -1)
+        set(v) = sp.edit().putLong("course3_start", v).apply()
+
+    /** How the star looks: petals (a flower) or ripples (circles on water from a drop). */
+    var look: String
+        get() = sp.getString("look", "petals") ?: "petals"
+        set(v) = sp.edit().putString("look", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

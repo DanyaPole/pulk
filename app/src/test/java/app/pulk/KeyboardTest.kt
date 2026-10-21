@@ -139,6 +139,9 @@ class KeyboardTest {
         svc.prefs.blind = false; view.refresh(); measure()
         svc.toggleSymbols(); picture("symbols"); svc.toggleSymbols()
         svc.prefs.theme = "contrast"; picture("contrast"); svc.prefs.theme = "auto"
+        svc.prefs.look = "ripples"; picture("ripples")
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(Pulse.PH[0] + 20, Pulse.PH[1] + 10))); picture("ripples-touch")
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_CANCEL, px(Pulse.PH[0] + 20, Pulse.PH[1] + 10))); svc.prefs.look = "petals"
         svc.switchLang(); picture("right-en"); svc.switchLang()
     }
 

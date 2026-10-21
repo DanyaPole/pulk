@@ -82,7 +82,9 @@ object Pulse {
         val r = OUTER.toFloat()
         var kd = minOf(wdp, 440f) / (r * 1.047f) * size / 100f * (if (blind) 1.1f else 1f)
         kd = minOf(kd, (wdp + 4f - 6f) / r)
-        kd = minOf(kd, vhdp * (if (blind) 0.5f else 0.42f) / (r + 4f))
+        // on its side the screen is low: the keyboard may take a bit more of it, or the star gets too small to hit
+        val share = if (wdp > vhdp) 0.6f else if (blind) 0.5f else 0.42f
+        kd = minOf(kd, vhdp * share / (r + 4f))
         return kd
     }
 
