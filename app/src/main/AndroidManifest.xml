@@ -45,5 +45,6 @@
         <activity android:name=".WizardActivity" android:exported="false" android:label="Пульк" />
         <activity android:name=".SpeedActivity" android:exported="false" android:label="Проверка скорости" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <activity android:name=".AudienceActivity" android:exported="false" android:label="Кому и как помогает" />
+        <activity android:name=".SpeakActivity" android:exported="false" android:label="Говорить" android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
     </application>
 </manifest>

@@ -38,6 +38,13 @@ class ScreensTest {
         shot(Robolectric.buildActivity(OptionsActivity::class.java).setup().get(), "screen-settings")
         shot(Robolectric.buildActivity(OptionsActivity::class.java, android.content.Intent().putExtra(OptionsActivity.MORE, true)).setup().get(), "screen-more")
         shot(Robolectric.buildActivity(AudienceActivity::class.java).setup().get(), "screen-audience")
+        val sp = Robolectric.buildActivity(SpeakActivity::class.java).setup().get()
+        prefs.phrases = listOf("Принеси, пожалуйста, чай")
+        shot(sp, "screen-speak")
+        // ⏎ on the keyboard says the phrase and keeps it in the history
+        val f = all(sp.window.decorView).filterIsInstance<android.widget.EditText>().first()
+        f.setText("Я скоро буду"); f.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
+        assertTrue(prefs.phrases.first() == "Я скоро буду" && f.text.isEmpty() && sp.lastSaid == "Я скоро буду")
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()
         shot(wiz, "screen-wizard-hand")
         all(wiz.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Правой" }.performClick()

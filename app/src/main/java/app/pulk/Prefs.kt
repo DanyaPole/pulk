@@ -152,6 +152,17 @@ class Prefs(ctx: Context) {
         get() = sp.getString("look", "petals") ?: "petals"
         set(v) = sp.edit().putString("look", v).apply()
 
+    /** «Говорить»: the phrases said, newest first; say each word as it is typed; the voice's pace. */
+    var phrases: List<String>
+        get() = (sp.getString("phrases", "") ?: "").split("\n").filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("phrases", v.joinToString("\n")).apply()
+    var speakWords: Boolean
+        get() = sp.getBoolean("speak_words", false)
+        set(v) = sp.edit().putBoolean("speak_words", v).apply()
+    var speakRate: Float
+        get() = sp.getFloat("speak_rate", 1.0f)
+        set(v) = sp.edit().putFloat("speak_rate", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

@@ -35,6 +35,7 @@ class SettingsActivity : Activity() {
             on -> "Пульк включён, но выбрана другая клавиатура"
             else -> "Пульк ещё не включён"
         }, 16f, ui.ink, true), ui.note(if (on && sel) "Удержи ⌄ на клавиатуре — откроются настройки. Удержи RU/EN — список клавиатур." else "Кнопка «Включить» внизу проведёт по шагам.")))
+        body.addView(ui.button("Говорить — печатаю, телефон произносит") { startActivity(Intent(this, SpeakActivity::class.java)) })
         body.addView(ui.button("Кому и как помогает") { startActivity(Intent(this, AudienceActivity::class.java)) })
         body.addView(ui.h("Попробуй"))
         body.addView(EditText(this).apply {

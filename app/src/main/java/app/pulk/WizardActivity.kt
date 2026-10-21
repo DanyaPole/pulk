@@ -63,7 +63,7 @@ class WizardActivity : Activity() {
                 body.addView(ui.note("Выбери, что нравится, — или сразу «Как обычно». Всё можно поменять потом."))
                 bottom.addView(ui.button("Как обычно", main = true) { step = 2; show() })
                 for ((k, label) in listOf("sight" to "Крупнее и контрастнее", "taps" to "Без смахов — касаниями", "shake" to "Сгладить дрожание пальца",
-                        "ear" to "На слух, не глядя", "simple" to "Попроще, без лишнего")) {
+                        "ear" to "На слух, не глядя", "simple" to "Попроще, без лишнего", "speak" to "Говорить с помощью телефона")) {
                     body.addView(ui.button(label) { b ->
                         if (!helps.add(k)) helps.remove(k)
                         (b as Button).text = if (k in helps) "✓ $label" else label
@@ -122,6 +122,7 @@ class WizardActivity : Activity() {
         if ("taps" in helps) prefs.mode = "taps"
         if ("sight" in helps) { prefs.size = maxOf(prefs.size, 112); prefs.theme = "contrast"; if (prefs.compass == "off") prefs.compass = "voice"; if (prefs.sound == "off") prefs.sound = "voice" }
         if ("simple" in helps) prefs.simple = true
+        if ("speak" in helps) prefs.mode = "jabs"   // a word per touch: the closest to speaking; «Говорить» is on the home screen
         if ("ear" in helps) { if (prefs.sound == "off") prefs.sound = "voice"; if (prefs.compass == "off") prefs.compass = "voice" }
     }
 
