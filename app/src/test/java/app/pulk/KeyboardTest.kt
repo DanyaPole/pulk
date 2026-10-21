@@ -138,6 +138,7 @@ class KeyboardTest {
         svc.prefs.hand = "right"; svc.prefs.blind = true; view.refresh(); measure(); picture("right-blind")
         svc.prefs.blind = false; view.refresh(); measure()
         svc.toggleSymbols(); picture("symbols"); svc.toggleSymbols()
+        svc.prefs.theme = "contrast"; picture("contrast"); svc.prefs.theme = "auto"
         svc.switchLang(); picture("right-en"); svc.switchLang()
     }
 
@@ -510,5 +511,18 @@ class KeyboardTest {
             fnTap(Pulse.Fn.SHIFT)                                  // the corner where ⇧ was: nothing happens
             assertTrue(!svc.shiftOnce)
         } finally { svc.prefs.simple = false }
+    }
+
+    @Test fun extraGesturesOnlyWhenSwitchedOn() {
+        svc.prefs.gestures = emptySet()
+        try {
+            for (c in "дом") letter(c.toString())
+            spaceSwipe(-1.0)                                   // not on yet: the space key is just a space
+            assertEquals("Дом ", field.sb.toString())
+            svc.prefs.gestures = setOf("space")
+            for (c in "кот") letter(c.toString())
+            spaceSwipe(-1.0)                                   // on: the word goes
+            assertEquals("Дом ", field.sb.toString())
+        } finally { svc.prefs.gestures = Prefs.GESTURES }
     }
 }

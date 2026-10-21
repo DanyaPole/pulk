@@ -27,57 +27,55 @@ import kotlin.math.sin
  * the directions asked (their length and real aim). The keyboard then fits these: no settings to understand.
  */
 class CalibrationActivity : Activity() {
-    private val bg = Color.parseColor("#0D1215")
-    private val panel = Color.parseColor("#141B1F")
-    private val line = Color.parseColor("#29343A")
-    private val fg = Color.parseColor("#E4EBEE")
-    private val muted = Color.parseColor("#8B9AA2")
-    private val accent = Color.parseColor("#55BAD7")
-    private val accentFg = Color.parseColor("#06222B")
     private lateinit var prefs: Prefs
     private lateinit var feel: Feedback
+    private lateinit var ui: Ui
+    private val bg get() = ui.bg
+    private val line get() = ui.line
+    private val fg get() = ui.ink
+    private val muted get() = ui.muted
+    private val accent get() = ui.accent
     private val dp get() = resources.displayMetrics.density
-    private fun px(v: Int) = (v * dp).toInt()
+    /** Strokes that came out too short and were asked again: many of them say stroking is hard. */
+    private var retries = 0
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        prefs = Prefs(this); feel = Feedback(this, prefs)
+        prefs = Prefs(this); feel = Feedback(this, prefs); ui = Ui(this)
         start()
     }
     override fun onDestroy() { feel.shutdown(); super.onDestroy() }
 
-    private fun start() { setContentView(CalibView(this)) }
+    private fun start() { retries = 0; setContentView(CalibView(this)) }
 
+    /** «Что мы подстроили»: each thing found has its own switch; and if strokes were hard, «Два касания» is offered. */
     private fun done(r: Calibration.Result) {
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(20), px(32), px(20), px(24)); setBackgroundColor(bg) }
-        col.addView(text("Готово — Пульк знает твою руку", 24f, fg, true))
-        for (s in Calibration.describe(r)) col.addView(text(s, 16f, fg))
-        col.addView(text("Можно пройти заново в любой момент: «Настройки» → «Настройка под руку».", 13f, muted))
-        col.addView(button("Сохранить", true) {
-            prefs.tol = r.tol.toFloat(); prefs.smooth = r.smooth.toFloat()
-            prefs.bias = r.bias.joinToString(",") { "%.1f".format(java.util.Locale.US, it) }
+        val body = ui.column(32)
+        body.addView(ui.title("Что мы подстроили"))
+        val lines = Calibration.describe(r)
+        var useLen = true; var useShake = r.smooth > 0; var useAim = true
+        body.addView(ui.card(ui.text(lines[0])).also { it.addView(ui.onOff("Подстроить под длину смахов", { useLen }) { v -> useLen = v }) })
+        body.addView(ui.card(ui.text(lines[1])).also { it.addView(ui.onOff("Фильтр дрожи", { useShake }) { v -> useShake = v }) })
+        body.addView(ui.card(ui.text(lines[2])).also { it.addView(ui.onOff("Подстроить направления", { useAim }) { v -> useAim = v }) })
+        val hard = retries >= 4 || r.tremorMm >= 1.2
+        if (hard) body.addView(ui.card(ui.text("Смахивать тяжело? Есть способ без смахов: «Два касания» — коснись лепестка, потом буквы.", 16f, ui.ink, true),
+            ui.button("Включить «Два касания»") { prefs.mode = "taps"; (it as Button).text = "✓ «Два касания» включены" }))
+        body.addView(ui.note("Пройти заново можно в любой момент: главная → «Под мою руку»."))
+        val bottom = ui.bottomBar()
+        bottom.addView(ui.button("Сохранить", main = true) {
+            prefs.tol = if (useLen) r.tol.toFloat() else 1f
+            prefs.smooth = if (useShake) maxOf(r.smooth, 0.35).toFloat() else 0f
+            prefs.bias = if (useAim) r.bias.joinToString(",") { "%.1f".format(java.util.Locale.US, it) } else ""
             prefs.calibrated = true; prefs.applyBias(); finish()
         })
-        col.addView(button("Пройти ещё раз") { start() })
-        col.addView(button("Как было по умолчанию") { prefs.tol = 1f; prefs.smooth = 0f; prefs.bias = ""; prefs.calibrated = true; prefs.applyBias(); finish() })
-        setContentView(col)
-    }
-
-    private fun text(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
-        text = s; textSize = size; setTextColor(color); setLineSpacing(0f, 1.15f); if (bold) setTypeface(typeface, Typeface.BOLD); setPadding(0, px(6), 0, px(6))
-    }
-    private fun button(s: String, primary: Boolean = false, onClick: () -> Unit) = Button(this).apply {
-        text = s; isAllCaps = false; textSize = 16f; minHeight = px(52); minimumHeight = px(52)
-        setTextColor(if (primary) accentFg else fg)
-        background = GradientDrawable().apply { cornerRadius = px(12).toFloat(); setColor(if (primary) accent else panel); setStroke(px(1), if (primary) accent else line) }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(10) }
-        setOnClickListener { onClick() }
+        bottom.addView(ui.button("Пройти ещё раз") { start() })
+        setContentView(ui.screen(body, bottom))
     }
 
     /** The whole screen: the circle to hold, then the arrow of the direction asked for. */
     private inner class CalibView(ctx: Context) : View(ctx) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; color = fg }
+        private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
         private val plan = Calibration.plan()
         private var step = -1                          // -1: holding still; 0..15: strokes
         private val holdX = ArrayList<Double>(); private val holdY = ArrayList<Double>()
@@ -158,7 +156,7 @@ class CalibrationActivity : Activity() {
                     if (step < 0) { if (SystemClock.uptimeMillis() - holdStart >= 2000) finishHold() else { holdStart = 0; invalidate() } }
                     else {
                         val k = kDp() * dp
-                        if (far < 8 * dp) { note = "Ещё раз — чуть длиннее"; invalidate(); return true }
+                        if (far < 8 * dp) { note = "Ещё раз — чуть длиннее"; retries++; invalidate(); return true }
                         var bx = (farX - downX) / k; val by = -(farY - downY) / k
                         if (left) bx = -bx
                         strokes.add(Calibration.Stroke(plan[step], bx, by))

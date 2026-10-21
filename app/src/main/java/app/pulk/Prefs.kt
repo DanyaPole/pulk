@@ -116,5 +116,23 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("wizard_done", false)
         set(v) = sp.edit().putBoolean("wizard_done", v).apply()
 
+    /** Тема: auto (the phone's light or dark) · contrast (black and white, amber accent, bold letters — concept «Маяк»). */
+    var theme: String
+        get() = sp.getString("theme", "auto") ?: "auto"
+        set(v) = sp.edit().putString("theme", v).apply()
+    val contrast get() = theme == "contrast"
+
+    /**
+     * The extra gestures this person has switched on: "space" (stroke the space key: . , delete word, best word),
+     * "hold" (hold for ё ъ !), "cursor" (hold space and slide), "bkspword" (stroke ⌫ towards the star: a word).
+     * Not set yet (someone who used Пульк before) means all of them.
+     */
+    var gestures: Set<String>
+        get() = sp.getString("gestures", null)?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: GESTURES
+        set(v) = sp.edit().putString("gestures", v.joinToString(",")).apply()
+    fun has(g: String) = g in gestures
+
     val left get() = hand == "left"
+
+    companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }
 }

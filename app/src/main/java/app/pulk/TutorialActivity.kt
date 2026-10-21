@@ -27,14 +27,15 @@ import android.widget.TextView
  * offered after a couple of tries, declinable, and it steps down after each success.
  */
 class TutorialActivity : Activity() {
-    private val bg = Color.parseColor("#0D1215")
-    private val panel = Color.parseColor("#141B1F")
-    private val line = Color.parseColor("#29343A")
-    private val fg = Color.parseColor("#E4EBEE")
-    private val muted = Color.parseColor("#8B9AA2")
-    private val accent = Color.parseColor("#55BAD7")
-    private val accentFg = Color.parseColor("#06222B")
     private lateinit var prefs: Prefs
+    private lateinit var ui: Ui   // the design system's colours, light or dark as the phone is
+    private val bg get() = ui.bg
+    private val panel get() = ui.panel
+    private val line get() = ui.line
+    private val fg get() = ui.ink
+    private val muted get() = ui.muted
+    private val accent get() = ui.accent
+    private val accentFg get() = ui.onAccent
     private lateinit var voice: Feedback
     private val handler = Handler(Looper.getMainLooper())
     private val dp get() = resources.displayMetrics.density
@@ -56,7 +57,7 @@ class TutorialActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        prefs = Prefs(this); voice = Feedback(this, prefs)
+        prefs = Prefs(this); voice = Feedback(this, prefs); ui = Ui(this)
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(20), px(24), px(20), px(24)) }
         setContentView(ScrollView(this).apply { setBackgroundColor(bg); isFillViewport = true; addView(root) })
         menu()
@@ -143,12 +144,13 @@ class TutorialActivity : Activity() {
             })
         }
         root.addView(field, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(8) })
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, px(10), 0, 0) }
-        row.addView(button("Подсказать", small = true) { moreHelp() })
-        row.addView(button("Послушать", small = true) { listen() })
-        row.addView(button("Пропустить", small = true) { advance(success = false) })
-        row.addView(button("Меню", small = true) { endLevel(keep = false); menu() })   // at the bottom, under the thumb
-        root.addView(row)
+        // two rows of two, full width: every button is a big target, «Меню» at the bottom under the thumb
+        fun pair(a: Button, b: Button) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            for (x in listOf(a, b)) addView(x, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(px(3), px(8), px(3), 0) })
+        }
+        root.addView(pair(button("Подсказать", small = true) { moreHelp() }, button("Послушать", small = true) { listen() }))
+        root.addView(pair(button("Пропустить", small = true) { advance(success = false) }, button("Меню", small = true) { endLevel(keep = false); menu() }))
         offerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; visibility = View.GONE; setPadding(0, px(6), 0, 0)
             addView(text("Подсказать, как?", 15f, fg).apply { setPadding(0, 0, px(10), 0) })
@@ -252,11 +254,30 @@ class TutorialActivity : Activity() {
             root.addView(button("Оставить звук и «вслепую»", primary = true) { endLevel(keep = true); menu() })
             root.addView(button("Вернуть как было") { endLevel(keep = false); menu() })
         } else {
+            offerGestures(l)
             root.addView(text("Дальше: «${Lessons.LEVELS[l + 1]}». ${Lessons.ABOUT[l + 1]}", 15f, muted))
             root.addView(button("Дальше", primary = true) { startLevel(l + 1) })
             root.addView(button("В меню") { endLevel(keep = false); menu() })
         }
         level = -1
+    }
+
+    /** After a «Пульс» level: the gestures that fit what was just learned, offered (never switched on by themselves). */
+    private fun offerGestures(l: Int) {
+        val (keys, what) = when (l) {
+            0 -> setOf("space") to "смах по пробелу: наружу — точка, внутрь — запятая, вниз по дуге — стереть слово, вверх — лучшая подсказка"
+            1 -> setOf("hold") to "задержи палец в конце смаха: е → ё, ь → ъ, ? → !"
+            2 -> setOf("cursor", "bkspword") to "удержи пробел и веди — курсор; смах по ⌫ к звезде — стереть слово"
+            else -> return
+        }
+        if (prefs.gestures.containsAll(keys)) return
+        val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(14), px(10), px(14), px(10))
+            background = GradientDrawable().apply { cornerRadius = px(14).toFloat(); setColor(panel); setStroke(px(1), accent) } }
+        card.addView(text("Новое: $what. Включить?", 16f, fg))
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(button("Включить", primary = true, small = true) { prefs.gestures = prefs.gestures + keys; card.removeAllViews(); card.addView(text("✓ Включено", 16f, accent, true)) })
+        row.addView(button("Не сейчас", small = true) { root.removeView(card) })
+        card.addView(row); root.addView(card)
     }
 
     private fun paintIme() {

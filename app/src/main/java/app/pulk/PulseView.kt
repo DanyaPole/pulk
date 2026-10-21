@@ -43,7 +43,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private val dark = Colors(0, 0xFF1B262C.toInt(), 0x991B262C.toInt(), 0xFF1E3944.toInt(), 0xFF244A5B.toInt(),
         0xFF5E737D.toInt(), 0xFFEDF3F6.toInt(), 0xFFA3B4BC.toInt(), 0xFF4CC2DE.toInt(), 0xFF032029.toInt(),
         halo = 0xFF0B1114.toInt(), glassEdge = 0x2EFFFFFF)
-    private fun colors() = if (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) dark else light
+    /** «Контраст» (concept «Маяк»): for weak sight — black and white, an amber accent, nearly solid glass, bold letters. */
+    private val contrastLight = Colors(0, 0xFFFFFFFF.toInt(), 0xD9FFFFFF.toInt(), 0xFFFFE9C7.toInt(), 0xFFFFD58A.toInt(),
+        0xFF000000.toInt(), 0xFF000000.toInt(), 0xFF1A1A1A.toInt(), 0xFF9A4F00.toInt(), 0xFFFFFFFF.toInt(),
+        halo = 0xFFFFFFFF.toInt(), glassEdge = 0x66000000)
+    private val contrastDark = Colors(0, 0xFF000000.toInt(), 0xD9000000.toInt(), 0xFF3D2A00.toInt(), 0xFF5C3F00.toInt(),
+        0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 0xFFEDEDED.toInt(), 0xFFFFB000.toInt(), 0xFF000000.toInt(),
+        halo = 0xFF000000.toInt(), glassEdge = 0x66FFFFFF)
+    private fun night() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    private fun colors() = when { svc.prefs.contrast -> if (night()) contrastDark else contrastLight; night() -> dark; else -> light }
 
     // ---- geometry ----
     private var k = 1f          // pixels per base unit
@@ -59,6 +67,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun screenZone() = svc.prefs.zone == "screen" && !Coach.active && !tapsMode()
     /** Простой режим: ⇧ and RU/EN are not shown (capitals come by themselves); the space key has no gestures. */
     private fun simple() = svc.prefs.simple && !Coach.active
+    /** An extra gesture this person has switched on (lessons always have all of them). */
+    private fun gest(g: String) = Coach.active || (svc.prefs.has(g) && !simple())
     private fun hiddenInSimple(fn: Pulse.Fn) = simple() && (fn == Pulse.Fn.SHIFT || fn == Pulse.Fn.LANG)
     /** «Два касания»: for a hand that can tap but not stroke. Strokes still work as in «Пульс». */
     private fun tapsMode() = !Coach.active && svc.prefs.mode == "taps"
@@ -213,7 +223,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
      * (WCAG AA) over whatever app is behind the see-through keyboard.
      */
     private fun label(c: Canvas, s: String, x: Float, y: Float, sizeDp: Float, color: Int, bold: Boolean = false, halo: Int = 0) {
-        txt.textSize = sizeDp * ds(); txt.isFakeBoldText = bold
+        txt.textSize = sizeDp * ds(); txt.isFakeBoldText = bold || svc.prefs.contrast
         val by = y - (txt.ascent() + txt.descent()) / 2
         if (halo != 0) {
             txt.style = Paint.Style.STROKE; txt.strokeWidth = 3 * density * 2; txt.strokeJoin = Paint.Join.ROUND; txt.color = halo
@@ -688,7 +698,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     val rep = object : Runnable { override fun run() { svc.backspace(); handler.postDelayed(this, 65) } }
                     t.repeat = rep; handler.postDelayed(rep, 420)
                 }
-                if (fn.fn == Pulse.Fn.SPACE && !simple()) {   // held still: the cursor rides on the finger, left and right
+                if (fn.fn == Pulse.Fn.SPACE && gest("cursor")) {   // held still: the cursor rides on the finger, left and right
                     val r = Runnable {
                         val moved = hypot(t.pts[t.pts.size - 2] - t.pts[0], t.pts[t.pts.size - 1] - t.pts[1])
                         if (moved < Pulse.GAP_MIN / 2) { t.cursorX = lastX; svc.feedback.mode(); invalidate() }
@@ -735,6 +745,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     /** Holding still at the end of a stroke gives the alternative: е → ё, ь → ъ, ? → !. */
     private fun armHold(t: Touch) {
+        if (!gest("hold")) return
         t.hold?.let { handler.removeCallbacks(it) }
         val r = Runnable {
             val s = cand
@@ -817,8 +828,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     Pulse.Fn.HIDE -> if (!t.long) hide()
                     Pulse.Fn.ENTER -> svc.enter()
                     // a swipe along ⌫ towards the star: the rest of the word goes too
-                    Pulse.Fn.BKSP -> if (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN) == "ccw") svc.deleteWord()
-                    Pulse.Fn.SPACE -> if (!t.cursorX.isNaN()) Unit else if (simple()) svc.space() else when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
+                    Pulse.Fn.BKSP -> if (gest("bkspword") && Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN) == "ccw") svc.deleteWord()
+                    Pulse.Fn.SPACE -> if (!t.cursorX.isNaN()) Unit else if (!gest("space")) svc.space() else when (Pulse.dirOf(sx, sy, b[0] - sx, b[1] - sy, Pulse.GAP_MIN)) {
                         "out" -> svc.punct(".")
                         "in" -> svc.punct(",")
                         "ccw" -> svc.deleteWord()

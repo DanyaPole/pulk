@@ -109,9 +109,13 @@ class WizardActivity : Activity() {
     private fun applyHelps() {
         if ("shake" in helps && prefs.smooth == 0f) prefs.smooth = 0.55f          // until the calibration measures it
         if ("taps" in helps) prefs.mode = "taps"
-        if ("sight" in helps) { prefs.size = maxOf(prefs.size, 112); if (prefs.compass == "off") prefs.compass = "voice"; if (prefs.sound == "off") prefs.sound = "voice" }
+        if ("sight" in helps) { prefs.size = maxOf(prefs.size, 112); prefs.theme = "contrast"; if (prefs.compass == "off") prefs.compass = "voice"; if (prefs.sound == "off") prefs.sound = "voice" }
         if ("simple" in helps) prefs.simple = true
     }
 
-    private fun finishWizard() { prefs.wizardDone = true; finish() }
+    private fun finishWizard() {
+        // a newcomer starts with the basic gestures; the others are offered after the lessons (or «Ещё» → «Новые жесты»)
+        if (!prefs.calibrated && prefs.lessonsDone == 0 && !prefs.wizardDone) prefs.gestures = emptySet()
+        prefs.wizardDone = true; finish()
+    }
 }
