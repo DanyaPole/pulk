@@ -102,6 +102,20 @@ class ScreensTest {
         prefs.phrases = emptyList(); prefs.aboutMe = ""; prefs.family = emptyList(); prefs.talk = emptyList(); prefs.check = ""
     }
 
+    @Test fun bigTextMakesEveryScreenBigger() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { bigText = false; wizardDone = true }
+        fun titleSize() = all(Robolectric.buildActivity(ParentsActivity::class.java).setup().get().window.decorView)
+            .filterIsInstance<android.widget.TextView>().first { it.text.toString() == "Как помочь ребёнку" }.textSize
+        val plain = titleSize()
+        prefs.bigText = true
+        assertEquals(plain * 1.2f, titleSize(), 0.5f)
+        shot(Robolectric.buildActivity(ComfortActivity::class.java).setup().get(), "screen-comfort-big")
+        prefs.bigText = false
+        Comfort.apply(prefs, mapOf("eyes" to 1))
+        assertTrue(prefs.bigText && "крупный текст" in Comfort.summary(prefs))
+        prefs.bigText = false; prefs.theme = "auto"; prefs.size = 100; prefs.doors = ""
+    }
+
     @Test fun startingAtOnceAsksNothingMore() {
         val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; guard = 0; wizardDone = false; doors = ""; offered = false; calibrated = false }
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()

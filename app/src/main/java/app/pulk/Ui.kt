@@ -33,6 +33,8 @@ class Ui(private val a: Activity) {
     val urgent = c(if (dark) "#FF8A75" else "#A8321F")
     private fun c(h: String) = Color.parseColor(h)
     private val dp = a.resources.displayMetrics.density
+    /** «Крупный текст»: every size on the screen a fifth bigger, as the web version's. */
+    private val k = if (Prefs(a).bigText) 1.2f else 1f
     fun px(v: Int) = (v * dp).toInt()
 
     /** A screen: [body] scrolls at the top, [bottom] stays under the thumb. */
@@ -45,7 +47,7 @@ class Ui(private val a: Activity) {
     fun bottomBar() = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(px(16), px(8), px(16), px(20)); setBackgroundColor(bg) }
 
     fun text(s: String, size: Float = 16f, color: Int = ink, bold: Boolean = false) = TextView(a).apply {
-        text = s; textSize = size; setTextColor(color); setLineSpacing(0f, 1.18f)
+        text = s; textSize = size * k; setTextColor(color); setLineSpacing(0f, 1.18f)
         if (bold) setTypeface(typeface, Typeface.BOLD)
         setPadding(0, px(6), 0, px(6))
     }
@@ -55,7 +57,7 @@ class Ui(private val a: Activity) {
 
     /** A button: [main] is the screen's one big action (64 dp, filled), the others 52 dp outlined. */
     fun button(s: String, main: Boolean = false, onClick: (View) -> Unit) = Button(a).apply {
-        text = s; isAllCaps = false; textSize = if (main) 18f else 16f
+        text = s; isAllCaps = false; textSize = (if (main) 18f else 16f) * k
         setTypeface(typeface, if (main) Typeface.BOLD else Typeface.NORMAL)
         setTextColor(if (main) onAccent else ink)
         background = GradientDrawable().apply { cornerRadius = px(16).toFloat(); setColor(if (main) accent else panel); setStroke(px(if (main) 0 else 1), line) }
@@ -81,7 +83,7 @@ class Ui(private val a: Activity) {
         }
         for ((v, label) in options) {
             val b = Button(a).apply {
-                isAllCaps = false; textSize = 14f
+                isAllCaps = false; textSize = 14f * k
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(px(2), 0, px(2), 0) }
                 minHeight = px(52); minimumHeight = px(52); setPadding(px(6), px(8), px(6), px(8))
                 setOnClickListener { set(v); paint() }

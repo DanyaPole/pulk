@@ -34,8 +34,8 @@ object Comfort {
             UNKNOWN -> p.guard = maxOf(p.guard, 1)
         }
         when (a["eyes"]) {
-            1 -> { p.size = maxOf(p.size, 112); p.theme = "contrast" }
-            2 -> { p.blind = true; if (p.sound == "off") p.sound = "voice"; if (p.compass == "off") p.compass = "voice" }
+            1 -> { p.size = maxOf(p.size, 112); p.theme = "contrast"; p.bigText = true }
+            2 -> { p.blind = true; p.bigText = true; if (p.sound == "off") p.sound = "voice"; if (p.compass == "off") p.compass = "voice" }
         }
         if (a["calm"] == 1) { p.simple = true; p.calm = true }
         p.doors = encode(a)
@@ -51,6 +51,7 @@ object Comfort {
         when (p.mode) { "taps" -> on.add("набор касаниями"); "jabs" -> on.add("«Толчки»"); "scan" -> on.add("сканирование"); "classic" -> on.add("привычная клавиатура") }
         if (p.size > 100) on.add("крупная звезда")
         if (p.contrast) on.add("контрастная тема")
+        if (p.bigText) on.add("крупный текст")
         if (p.blind) on.add("набор вслепую")
         if (p.compass != "off") on.add("звуковой компас")
         if (p.simple) on.add("простой режим")

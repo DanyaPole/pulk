@@ -56,6 +56,10 @@ class ComfortActivity : Activity() {
 
         body.addView(ui.h("Глаза и уши"))
         body.addView(choice("Тема", listOf("auto" to "Как в телефоне", "contrast" to "Контраст"), { prefs.theme }) { prefs.theme = it })
+        body.addView(choice("Крупный текст на экранах", listOf("off" to "Выкл", "on" to "Вкл"), { if (prefs.bigText) "on" else "off" }) {
+            if (prefs.bigText != (it == "on")) { prefs.bigText = it == "on"; recreate() }   // seen at once, here and on every screen
+        })
+        body.addView(ui.note("Вдобавок к размеру шрифта в настройках телефона — его Пульк тоже учитывает."))
         body.addView(choice("Набор вслепую", listOf("off" to "Выкл", "on" to "Вкл"), { if (prefs.blind) "on" else "off" }) {
             prefs.blind = it == "on"
             if (prefs.blind && prefs.sound == "off") prefs.sound = "voice"   // eyes-free needs sound

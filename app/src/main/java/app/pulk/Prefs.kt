@@ -251,6 +251,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("check", "") ?: ""
         set(v) = sp.edit().putString("check", v).apply()
 
+    /** Bigger text on the app's screens (on top of the phone's own font size, which Android already applies). */
+    var bigText: Boolean
+        get() = sp.getBoolean("big_text", false)
+        set(v) = sp.edit().putBoolean("big_text", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }
