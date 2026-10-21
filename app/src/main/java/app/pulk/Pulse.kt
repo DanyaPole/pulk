@@ -120,6 +120,8 @@ object Pulse {
         }
     }
 
+    /** The letter of a petal and kind (an empty small letter falls back to the big one). */
+    fun at(t: Array<Array<String>>, p: Int, kind: Char): Slot = slot(t, p, kind)
     private fun slot(t: Array<Array<String>>, p: Int, kind: Char): Slot {
         val i = KINDS.indexOf(kind)
         val v = t[p][i]

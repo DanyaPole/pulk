@@ -199,4 +199,20 @@ class PulseTest {
             assertEquals(null, Pulse.tapPick(t, 3, Pulse.PH[0] + 5, Pulse.PH[1]))   // the centre closes it
         }
     }
+
+    @Test fun aNumberPadAndAStickAreTheStar() {
+        val k = Physical.Keys(); val n8 = android.view.KeyEvent.KEYCODE_NUMPAD_8; val n9 = android.view.KeyEvent.KEYCODE_NUMPAD_9
+        val n5 = android.view.KeyEvent.KEYCODE_NUMPAD_5; val n6 = android.view.KeyEvent.KEYCODE_NUMPAD_6
+        assertEquals(emptyList<Physical.Key>(), k.down(n8, false)); assertEquals(listOf(Physical.Key(2, 'c')), k.up(n8))      // 8: up, the big letter
+        k.down(n8, false); k.down(n5, false); assertEquals(listOf(Physical.Key(2, 'b')), k.up(n8))                         // with 5: the centre one
+        k.down(n6, false); k.down(n9, false); assertEquals(listOf(Physical.Key(0, 'l')), k.up(n6))                         // 6 with 9: the turn up
+        assertEquals(listOf(Physical.Key(-1, 's')), k.down(n5, false))                                                    // 5 alone: a space
+        assertEquals(listOf(Physical.Key(4, 'c')), k.down(n6, true).also { k.up(n6) }.let { k.down(n6, true); k.up(n6) }) // left hand: mirrored
+        // the stick: out and back up, then right — two big letters; a short push — the centre letter
+        val j = Pulse.Jabs(0.0, 0.0); val got = ArrayList<String>(); val t = Pulse.table("ru", false)
+        fun push(x: Float, y: Float) { for (i in 1..6) j.add(Physical.stick(x * i / 6, y * i / 6, false)[0], Physical.stick(x * i / 6, y * i / 6, false)[1])?.let { got.add(Pulse.jab(t, it).v) }
+            for (i in 5 downTo 0) j.add(Physical.stick(x * i / 6, y * i / 6, false)[0], Physical.stick(x * i / 6, y * i / 6, false)[1])?.let { got.add(Pulse.jab(t, it).v) } }
+        push(0f, -1f); push(1f, 0f); push(0f, -0.45f)
+        assertEquals(listOf(t[2][0], t[0][0], t[2][3]), got)
+    }
 }

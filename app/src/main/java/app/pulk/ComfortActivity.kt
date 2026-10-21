@@ -31,7 +31,7 @@ class ComfortActivity : Activity() {
         val names = voice?.ruVoices() ?: emptyList()
         if (names.isEmpty()) { box.addView(ui.note("Русский голос появится здесь, когда он есть на телефоне: Настройки → Специальные возможности → Синтез речи → русский язык.")); return }
         if (names.size < 2) return
-        box.addView(choice("Голос", names.mapIndexed { i, n -> n to "Голос " + (i + 1) }, { prefs.voice.ifEmpty { names[0] } }) { prefs.voice = it; voice?.say("Привет! Это мой голос.") })
+        box.addView(choice("Голос", names.take(4).mapIndexed { i, n -> n to "Голос " + (i + 1) }, { prefs.voice.ifEmpty { names[0] } }) { prefs.voice = it; voice?.say("Привет! Это мой голос.") })
     }
     override fun onResume() { super.onResume(); build() }   // back from the hand check or the questions: what is on has changed
 

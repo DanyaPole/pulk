@@ -13,8 +13,8 @@ android {
         applicationId = "app.pulk.keyboard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "0.9.12"
+        versionCode = 20
+        versionName = "0.9.13"
     }
     // the release key lives in keys/ (not in git); without it a release build is left unsigned
     val keyProps = rootProject.file("keys/keystore.properties").takeIf { it.exists() }?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }

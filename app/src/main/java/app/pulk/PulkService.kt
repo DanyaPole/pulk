@@ -104,7 +104,46 @@ class PulkService : InputMethodService() {
             if (event.repeatCount == 0) v.scanPress()
             return true
         }
+        if (isInputViewShown && physicalKey(keyCode, event, down = true)) return true
         return super.onKeyDown(keyCode, event)
+    }
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (isInputViewShown && physicalKey(keyCode, event, down = false)) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
+    // ---- a gamepad's buttons, the number pad and a joystick as the star (see [Physical]) ----
+    private val keyStar = Physical.Keys()
+    private var stickJabs: Pulse.Jabs? = null
+    internal fun physicalKey(code: Int, event: KeyEvent?, down: Boolean): Boolean {
+        val button = when (code) {
+            KeyEvent.KEYCODE_BUTTON_A -> { { space() } }
+            KeyEvent.KEYCODE_BUTTON_B -> { { backspace() } }
+            KeyEvent.KEYCODE_BUTTON_X -> { { enter() } }
+            KeyEvent.KEYCODE_BUTTON_Y -> { { shiftTap(false) } }
+            else -> null
+        }
+        if (button != null) { if (down && (event?.repeatCount ?: 0) == 0) button(); return true }
+        if (!Physical.isStarKey(code)) return false
+        if (down && (event?.repeatCount ?: 0) > 0) return true
+        (if (down) keyStar.down(code, prefs.left) else keyStar.up(code)).forEach { typeKey(it) }
+        return true
+    }
+    private fun typeKey(k: Physical.Key) {
+        if (k.petal < 0) { space(); return }
+        val s = Pulse.at(Pulse.table(lang, symbols), k.petal, k.kind); typeLetter(s.v, s)
+    }
+    /** A stick moved: each push out and back is a letter. */
+    internal fun stickAt(x: Float, y: Float) {
+        val b = Physical.stick(x, y, prefs.left)
+        val j = stickJabs ?: Pulse.Jabs(0.0, 0.0).also { stickJabs = it }
+        j.add(b[0], b[1])?.let { val s = Pulse.jab(Pulse.table(lang, symbols), it); typeLetter(s.v, s) }
+    }
+    override fun onGenericMotionEvent(e: android.view.MotionEvent): Boolean {
+        if (isInputViewShown && e.isFromSource(android.view.InputDevice.SOURCE_JOYSTICK) && e.actionMasked == android.view.MotionEvent.ACTION_MOVE) {
+            stickAt(e.getAxisValue(android.view.MotionEvent.AXIS_X), e.getAxisValue(android.view.MotionEvent.AXIS_Y)); return true
+        }
+        return super.onGenericMotionEvent(e)
     }
 
     override fun onWindowShown() {
