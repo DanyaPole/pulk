@@ -437,6 +437,23 @@ class KeyboardTest {
         assertTrue("reads per keystroke $perKey", perKey <= 3.0)
     }
 
+    @Test fun passwordsWithNotesAndClicksGiveNoDirectionAway() {
+        svc.prefs.haptics = true; svc.prefs.sound = "clicks"; svc.prefs.compass = "notes"
+        val log = ArrayList<String>(); svc.feedback.trace = { log.add(it) }
+        fun traceOf(ch: String): List<String> { log.clear(); letter(ch); idle(400); return log.toList() }
+        try {
+            // an ordinary field: the compass ticks and plays the direction's note, the letter has its own note
+            val plain = traceOf("м")
+            assertTrue("compass works as before: $plain", plain.contains("tick") && plain.count { it.startsWith("tone") } >= 2)
+            assertTrue(traceOf("а") != plain)
+            svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD })
+            val a = traceOf("а")
+            for (ch in listOf("м", "ь", "ю", "т", "щ")) assertEquals("«$ch» must sound and feel like «а»", a, traceOf(ch))
+            // the compass is silent and still: no note, no tick (how often it ticks would show where the finger went)
+            assertEquals(listOf("buzz 14", "tone 600.0/0.0/0.03 @0.18"), a.filter { it != "buzz 6" })
+        } finally { svc.feedback.trace = null; svc.prefs.compass = "off"; svc.prefs.sound = "off"; svc.prefs.haptics = false }
+    }
+
     @Test fun passwordsSoundAndFeelTheSameForEveryLetter() {
         svc.prefs.haptics = true; svc.prefs.sound = "voice"; svc.prefs.compass = "voice"
         val log = ArrayList<String>(); svc.feedback.trace = { log.add(it) }

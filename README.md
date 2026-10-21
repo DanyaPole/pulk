@@ -14,3 +14,8 @@
 
 Инструменты в `C:\Android` (JDK 17, Android SDK 34). `.\gw.ps1 testDebugUnitTest assembleRelease`.
 Ключ подписи в `keys/` (не в git). Без него релизная сборка не подписывается.
+
+## Лицензия
+
+- Код — [GPL-3.0](LICENSE): свободная программа, её можно изучать, менять и раздавать дальше на тех же условиях.
+- Словари — CC BY-SA 4.0 (FrequencyWords), следующее слово — CC BY 2.0 FR (Tatoeba). Подробно — в [THIRD_PARTY.md](THIRD_PARTY.md).
