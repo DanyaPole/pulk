@@ -85,4 +85,18 @@ class TogetherTest {
         val edit = all(Robolectric.buildActivity(MyPhrasesActivity::class.java).setup().get().window.decorView).filterIsInstance<EditText>()
         assertTrue(edit.size >= 4)
     }
+
+    @Test fun bubblesPopAndHardLettersComeMoreOften() {
+        assertTrue(BubblesActivity.pool(0).containsAll(listOf("а", "н", "т")) && BubblesActivity.pool(0).size == 8)
+        assertTrue(BubblesActivity.pool(2).size > BubblesActivity.pool(1).size)
+        val hard = mapOf("а" to intArrayOf(0, 9))
+        val picks = (0 until 400).map { BubblesActivity.next(0, hard, "", it / 400.0) }
+        assertTrue(picks.count { it == "а" } > 400 / 8 * 2)   // far more often than a fair share
+        val p = prefs(); p.popped = 0; p.letters = ""; val d0 = p.drops
+        val g = Robolectric.buildActivity(BubblesActivity::class.java).setup().get()
+        g.typed(if (g.letter == "о") "а" else "о"); assertEquals(0, g.n)          // a miss: nothing lost, the bubble waits
+        repeat(BubblesActivity.ROUND) { g.typed(g.letter); org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400)) }
+        assertEquals(BubblesActivity.ROUND, g.n); assertEquals(d0 + 1, p.drops); assertEquals(BubblesActivity.ROUND, p.popped)
+        Coach.reset()
+    }
 }

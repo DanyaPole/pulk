@@ -50,6 +50,8 @@ class DrillsActivity : Activity() {
         body.addView(ui.title("Тренировки"))
         body.addView(ui.button("Мой пруд: ${prefs.drops} капель") { startActivity(android.content.Intent(this, PondActivity::class.java)) })
         body.addView(ui.note("Короткие жизненные ситуации. Читаешь — отвечаешь: печатаешь или выбираешь. Телефон говорит твой ответ."))
+        body.addView(ui.card(ui.text("Пузыри — игра на буквы", 20f, ui.ink, true), ui.note("Лопай пузыри звездой. Трудные буквы попадаются чаще. Без времени и без проигрыша."),
+            ui.button("Играть", main = true) { startActivity(android.content.Intent(this, BubblesActivity::class.java)) }))
         themes().forEachIndexed { i, t ->
             val done = prefs.drillsDone and (1 shl bitOf(t)) != 0
             body.addView(ui.card(ui.text((if (done) "✓ " else "") + t.title, 20f, ui.ink, true), ui.note("${t.about} · ${t.tasks.size} ситуации"),

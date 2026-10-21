@@ -15,8 +15,24 @@ class ComfortActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
     private lateinit var head: TextView
+    private var voice: Voice? = null
+    private var voicesBox: LinearLayout? = null
 
-    override fun onCreate(b: Bundle?) { super.onCreate(b); prefs = Prefs(this); ui = Ui(this) }
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b); prefs = Prefs(this); ui = Ui(this)
+        voice = Voice(this, prefs) { runOnUiThread { paintVoices() } }   // the list comes when the engine is ready
+    }
+    override fun onDestroy() { voice?.shutdown(); super.onDestroy() }
+
+    /** The phone's own Russian voices; a touch chooses one and lets it speak. */
+    private fun paintVoices() {
+        val box = voicesBox ?: return
+        box.removeAllViews()
+        val names = voice?.ruVoices() ?: emptyList()
+        if (names.isEmpty()) { box.addView(ui.note("Русский голос появится здесь, когда он есть на телефоне: Настройки → Специальные возможности → Синтез речи → русский язык.")); return }
+        if (names.size < 2) return
+        box.addView(choice("Голос", names.mapIndexed { i, n -> n to "Голос " + (i + 1) }, { prefs.voice.ifEmpty { names[0] } }) { prefs.voice = it; voice?.say("Привет! Это мой голос.") })
+    }
     override fun onResume() { super.onResume(); build() }   // back from the hand check or the questions: what is on has changed
 
     private fun paintHead() { val on = Comfort.summary(prefs); head.text = if (on.isEmpty()) "Сейчас обычные настройки." else "Включено: ${on.joinToString(", ")}." }
@@ -58,6 +74,9 @@ class ComfortActivity : Activity() {
         body.addView(ui.h("Речь"))
         body.addView(ui.button("Говорить — печатаю, телефон произносит") { startActivity(Intent(this, SpeakActivity::class.java)) })
         body.addView(choice("Говорить по словам", listOf("off" to "Выкл", "on" to "Вкл"), { if (prefs.speakWords) "on" else "off" }) { prefs.speakWords = it == "on" })
+        voicesBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(voicesBox); paintVoices()
+        body.addView(choice("Высота голоса", listOf("1.0" to "Обычная", "1.3" to "Моложе"), { "%.1f".format(Locale.US, prefs.pitch) }) { prefs.pitch = it.toFloat(); voice?.say("Так я говорю.") })
         body.addView(choice("Темп голоса", listOf("0.8" to "Медленно", "1.0" to "Обычно", "1.3" to "Быстро"), { "%.1f".format(Locale.US, prefs.speakRate) }) { prefs.speakRate = it.toFloat() })
 
         body.addView(ui.h("Помощник рядом"))

@@ -225,6 +225,22 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("offered", false)
         set(v) = sp.edit().putBoolean("offered", v).apply()
 
+    /** The voice chosen in «Удобство» → «Речь» (empty: the phone's default) and its pitch (1.3 sounds younger). */
+    var voice: String
+        get() = sp.getString("voice", "") ?: ""
+        set(v) = sp.edit().putString("voice", v).apply()
+    var pitch: Float
+        get() = sp.getFloat("pitch", 1f)
+        set(v) = sp.edit().putFloat("pitch", v).apply()
+
+    /** «Пузыри»: bubbles popped (opens new letters) and hits/misses per letter (hard letters come more often). */
+    var popped: Int
+        get() = sp.getInt("popped", 0)
+        set(v) = sp.edit().putInt("popped", v).apply()
+    var letters: String
+        get() = sp.getString("letters", "") ?: ""
+        set(v) = sp.edit().putString("letters", v).apply()
+
     val left get() = hand == "left"
 
     companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }

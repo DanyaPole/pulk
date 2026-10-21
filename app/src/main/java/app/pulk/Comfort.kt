@@ -56,6 +56,7 @@ object Comfort {
         if (p.simple) on.add("простой режим")
         if (p.calm) on.add("спокойный режим в «Говорить»")
         if (p.speakWords) on.add("говорить по словам")
+        if (p.pitch > 1f) on.add("голос моложе")
         return on
     }
 }
