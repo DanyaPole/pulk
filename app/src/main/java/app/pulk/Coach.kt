@@ -21,5 +21,17 @@ object Coach {
     var onChange: (() -> Unit)? = null
     fun changed() { onChange?.invoke() }
 
-    fun reset() { active = false; next = null; help = 0; hideLabels = false; hint = null; jabs = false; changed() }
+    /**
+     * The lesson screen went to the background (the person pressed Home): the keyboard must not stay in lesson mode
+     * in other apps. Its state is put aside and comes back when the lesson is on screen again.
+     */
+    private var saved: Array<Any?>? = null
+    fun pause() { if (!active) return; saved = arrayOf(next, help, hideLabels, hint, jabs); active = false; changed() }
+    fun resume() {
+        val s = saved ?: return; saved = null
+        next = s[0] as String?; help = s[1] as Int; hideLabels = s[2] as Boolean; hint = s[3] as String?; jabs = s[4] as Boolean
+        active = true; changed()
+    }
+
+    fun reset() { saved = null; active = false; next = null; help = 0; hideLabels = false; hint = null; jabs = false; changed() }
 }

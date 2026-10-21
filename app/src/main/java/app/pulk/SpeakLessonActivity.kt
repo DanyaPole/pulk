@@ -4,7 +4,6 @@ import android.app.Activity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -22,8 +21,7 @@ import java.util.Locale
 class SpeakLessonActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
-    private var tts: TextToSpeech? = null
-    private var ready = false
+    private lateinit var voice: Voice
     private val handler = Handler(Looper.getMainLooper())
     internal var step = 0
     private var tries = 0
@@ -42,17 +40,15 @@ class SpeakLessonActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = Prefs(this); ui = Ui(this)
-        tts = TextToSpeech(applicationContext) { ready = it == TextToSpeech.SUCCESS }
+        voice = Voice(this, prefs)
         show()
     }
-    override fun onDestroy() { tts?.shutdown(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onDestroy() { Coach.reset(); voice.shutdown(); sounds.shutdown(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onStop() { Coach.pause(); super.onStop() }
+    override fun onStart() { super.onStart(); Coach.resume() }
 
-    internal var lastSaid = ""
-    private fun say(t: String) {
-        lastSaid = t
-        val e = tts ?: return; if (!ready) return
-        e.language = Locale("ru", "RU"); e.setSpeechRate(prefs.speakRate); e.speak(t, TextToSpeech.QUEUE_FLUSH, null, "lesson")
-    }
+    internal val lastSaid get() = voice.last
+    private fun say(t: String) = voice.say(t)
 
     /** The schedule: where we are, as dots of two shapes and words (not by colour alone). */
     private fun schedule() = ui.text(steps.indices.joinToString(" ") { if (it < step) "●" else if (it == step) "◉" else "○" } + "   шаг ${step + 1} из ${steps.size}", 18f, ui.muted)

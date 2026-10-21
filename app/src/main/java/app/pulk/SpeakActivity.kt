@@ -3,7 +3,6 @@ package app.pulk
 import android.app.Activity
 import android.graphics.Typeface
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -26,8 +25,7 @@ import java.util.Locale
 class SpeakActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
+    private lateinit var voice: Voice
     private lateinit var field: EditText
     private lateinit var completions: LinearLayout
     private lateinit var historyBox: LinearLayout
@@ -38,23 +36,13 @@ class SpeakActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = Prefs(this); ui = Ui(this)
-        tts = TextToSpeech(applicationContext) { ttsReady = it == TextToSpeech.SUCCESS }
+        voice = Voice(this, prefs)
         build()
     }
-    override fun onDestroy() { tts?.shutdown(); super.onDestroy() }
+    override fun onDestroy() { voice.shutdown(); super.onDestroy() }
 
-    /** Says [text] aloud, in Russian or English by its letters, at the person's chosen pace. */
-    internal fun say(text: String) {
-        val t = text.trim(); if (t.isEmpty()) return
-        lastSaid = t
-        val e = tts ?: return
-        if (!ttsReady) return
-        e.language = if (t.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }) Locale("ru", "RU") else Locale.US
-        e.setSpeechRate(if (prefs.calm) minOf(prefs.speakRate, 0.9f) else prefs.speakRate)
-        e.setPitch(if (prefs.calm) 0.95f else 1f)
-        e.speak(t, TextToSpeech.QUEUE_FLUSH, null, "pulk-say")
-    }
-    internal var lastSaid = ""
+    internal fun say(text: String) = voice.say(text)
+    internal val lastSaid get() = voice.last
 
     /** The whole text: said, remembered, the field cleared for the next one. */
     internal fun sayAll() {

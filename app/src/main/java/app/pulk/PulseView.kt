@@ -221,9 +221,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         // one pass, so a see-through key has no darker rim
         fill.color = color; fill.style = Paint.Style.FILL_AND_STROKE; fill.strokeWidth = cr * 2; fill.strokeJoin = Paint.Join.ROUND
         c.drawPath(path, fill); fill.style = Paint.Style.FILL
-        if (edge != 0) { stroke.color = edge; stroke.strokeWidth = density; c.drawPath(path, stroke) }
     }
-    private var edge = 0
     /** Sizes of the design are for 1 unit = 1.232 dp; the keyboard scales with the screen. */
     private fun ds() = density * max(kDp, 0.85f) / 1.232f
     /**
@@ -506,8 +504,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 active || pressedFn == key.fn -> col.press
                 else -> col.fn
             }
-            edge = 0   // the glass is its own edge: a line on the rounded shape doubles it
-            drawKey(c, key, color); edge = 0
+            drawKey(c, key, color)
             val h = if (color == col.fn) col.halo else 0
             val rm = (key.r0 + key.r1) / 2; val am = (key.a0 + key.a1) / 2
             val p = pt(rm, am)

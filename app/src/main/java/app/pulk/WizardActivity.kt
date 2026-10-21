@@ -126,6 +126,10 @@ class WizardActivity : Activity() {
         if ("ear" in helps) { if (prefs.sound == "off") prefs.sound = "voice"; if (prefs.compass == "off") prefs.compass = "voice" }
     }
 
+    /** Back out of the wizard: it was seen; it does not come back every time the app opens. */
+    @Deprecated("Back skips the rest of the wizard")
+    override fun onBackPressed() { finishWizard() }
+
     private fun finishWizard() {
         // a newcomer starts with the basic gestures; the others are offered after the lessons (or «Ещё» → «Новые жесты»)
         if (!prefs.calibrated && prefs.lessonsDone == 0 && !prefs.wizardDone) prefs.gestures = emptySet()

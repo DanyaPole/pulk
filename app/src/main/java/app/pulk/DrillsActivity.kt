@@ -4,7 +4,6 @@ import android.app.Activity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
@@ -17,26 +16,21 @@ import java.util.Locale
 class DrillsActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
-    private var tts: TextToSpeech? = null
-    private var ready = false
+    private lateinit var voice: Voice
     private val handler = Handler(Looper.getMainLooper())
     internal var theme = -1
     internal var at = 0
-    internal var lastSaid = ""
+    internal val lastSaid get() = voice.last
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = Prefs(this); ui = Ui(this)
-        tts = TextToSpeech(applicationContext) { ready = it == TextToSpeech.SUCCESS }
+        voice = Voice(this, prefs)
         menu()
     }
-    override fun onDestroy() { tts?.shutdown(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onDestroy() { voice.shutdown(); sounds.shutdown(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
 
-    private fun say(t: String) {
-        lastSaid = t
-        val e = tts ?: return; if (!ready) return
-        e.language = Locale("ru", "RU"); e.setSpeechRate(if (prefs.calm) minOf(prefs.speakRate, 0.9f) else prefs.speakRate); e.speak(t, TextToSpeech.QUEUE_FLUSH, null, "drill")
-    }
+    private fun say(t: String) = voice.say(t)
 
     private val sounds by lazy { Feedback(this, prefs) }
 

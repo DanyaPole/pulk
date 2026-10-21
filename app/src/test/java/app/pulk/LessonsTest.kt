@@ -142,4 +142,16 @@ class LessonsTest {
         assertTrue(prefs.speakLessonDone)
         Coach.reset()
     }
+
+    @Test fun leavingALessonForAnotherAppFreesTheKeyboard() {
+        val c = Robolectric.buildActivity(TutorialActivity::class.java).setup()
+        all(c.get().window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Начать" }.performClick()
+        assertTrue(Coach.active)
+        c.pause().stop()                      // Home: the keyboard in other apps is a normal keyboard again
+        assertFalse(Coach.active)
+        c.start().resume()                    // back to the lesson: its help is back too
+        assertTrue(Coach.active)
+        c.pause().stop().destroy()
+        assertFalse(Coach.active)
+    }
 }

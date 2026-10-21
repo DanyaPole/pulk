@@ -66,7 +66,9 @@ class TutorialActivity : Activity() {
     override fun onResume() { super.onResume(); paintIme() }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) paintIme() }
 
-    override fun onDestroy() { endLevel(keep = false); voice.shutdown(); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacksAndMessages(null); endLevel(keep = false); voice.shutdown(); super.onDestroy() }
+    override fun onStop() { Coach.pause(); super.onStop() }
+    override fun onStart() { super.onStart(); Coach.resume() }
 
     @Deprecated("Back goes to the menu from a level")
     override fun onBackPressed() { if (level >= 0) { endLevel(keep = false); menu() } else @Suppress("DEPRECATION") super.onBackPressed() }
