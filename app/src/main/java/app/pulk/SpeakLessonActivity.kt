@@ -145,6 +145,10 @@ class SpeakLessonActivity : Activity() {
                             aim()
                         }
                     }
+                    typed != word.substring(0, i) -> {   // ⌫ or the cursor moved: not a try (as in the web), what was right comes back
+                        busy = true; s?.replace(0, s.length, word.substring(0, i)); busy = false
+                        field.setSelection(i); aim()
+                    }
                 }
             }
         })

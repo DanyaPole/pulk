@@ -182,6 +182,8 @@ class LessonsTest {
         // «нет»: a different letter is not typed — it goes, and the way of the same letter is shown again
         field = all(a.window.decorView).filterIsInstance<EditText>().single()
         field.append("н"); assertEquals("е", Coach.next)
+        field.text.delete(0, 1); assertEquals("н", field.text.toString())   // ⌫ is not a try: «н» stays, nobody gets stuck
+        assertEquals("е", Coach.next)
         field.append("к"); assertEquals("н", field.text.toString()); assertEquals("е", Coach.next)
         assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString().startsWith("Это «к». Нужна «е»") })
         field.append("к"); assertEquals(3, Coach.help)                      // after two tries: hand in hand
