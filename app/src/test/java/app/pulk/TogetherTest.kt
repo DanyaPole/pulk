@@ -77,8 +77,11 @@ class TogetherTest {
     @Test fun theTalkFeedShowsBothSides() {
         val p = prefs(); p.talk = emptyList()
         val t = Robolectric.buildActivity(TalkActivity::class.java).setup().get()
+        t.child.setText("Я хо")                                     // the child is still typing…
         t.adult.setText("Ты хочешь гулять?"); t.adult.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
+        assertEquals("Я хо", t.child.text.toString()); assertEquals("", t.adult.text.toString())   // …and keeps it
         t.child.setText("Да"); t.child.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEND)
+        assertEquals("", t.child.text.toString())
         assertEquals("Да", t.lastSaid)
         val texts = all(t.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
         assertTrue(texts.contains("Ты хочешь гулять?") && texts.contains("Да"))

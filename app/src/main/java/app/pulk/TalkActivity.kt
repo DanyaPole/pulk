@@ -37,9 +37,10 @@ class TalkActivity : Activity() {
     override fun onDestroy() { voice.shutdown(); super.onDestroy() }
     internal val lastSaid get() = voice.last
 
-    private fun mine(t: String) { val s = t.trim(); if (s.isEmpty()) return; voice.say(s)
+    /** [from]: the field it was typed in, emptied once it is said; the other field keeps what is being typed. */
+    private fun mine(t: String, from: EditText? = null) { val s = t.trim(); if (s.isEmpty()) return; voice.say(s); from?.setText("")
         prefs.journal = Together.logged(prefs.journal, java.time.LocalDate.now().toString(), prefs.phrases.none { it.equals(s, ignoreCase = true) }); prefs.phrases = Phrases.remember(prefs.phrases, s); prefs.talk = Together.said(prefs.talk, true, s); build() }
-    private fun yours(t: String) { val s = t.trim(); if (s.isEmpty()) return; prefs.talk = Together.said(prefs.talk, false, s); build() }
+    private fun yours(t: String) { val s = t.trim(); if (s.isEmpty()) return; adult.setText(""); prefs.talk = Together.said(prefs.talk, false, s); build() }
 
     private fun bubble(l: Together.Line) = TextView(this).apply {
         text = l.text; contentDescription = (if (l.me) "Я: " else "Собеседник: ") + l.text; textSize = 22f; setLineSpacing(0f, 1.15f)
@@ -55,6 +56,9 @@ class TalkActivity : Activity() {
     }
 
     private fun build() {
+        // what is being typed in either field survives the feed being drawn again
+        val keepAdult = if (::adult.isInitialized) adult.text.toString() else ""
+        val keepChild = if (::child.isInitialized) child.text.toString() else ""
         val body = ui.column(16)
         body.addView(ui.button(if (sure) "Точно стереть разговор? Коснитесь ещё раз" else "Новый разговор") {
             if (sure) { prefs.talk = emptyList(); sure = false } else sure = true
@@ -70,6 +74,7 @@ class TalkActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; imeOptions = EditorInfo.IME_ACTION_SEND
             textSize = 18f; setTextColor(ui.ink); setHintTextColor(ui.muted); hint = "Взрослый: вопрос или ответ"
             setOnEditorActionListener { _, a, _ -> if (a == EditorInfo.IME_ACTION_SEND) { yours(text.toString()); true } else false }
+            setText(keepAdult)
         }
         ar.addView(adult, LinearLayout.LayoutParams(0, -2, 1f))
         ar.addView(ui.button("→") { yours(adult.text.toString()) }.apply { layoutParams = LinearLayout.LayoutParams(ui.px(64), -2) })
@@ -85,12 +90,13 @@ class TalkActivity : Activity() {
             id = Ui.ID_TALK_CHILD
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; imeOptions = EditorInfo.IME_ACTION_SEND
             textSize = 26f; setTextColor(ui.ink); setHintTextColor(ui.muted); hint = "Ответ — звездой"; minLines = 2; gravity = Gravity.TOP
-            setOnEditorActionListener { _, a, _ -> if (a == EditorInfo.IME_ACTION_SEND) { mine(text.toString()); true } else false }
+            setOnEditorActionListener { _, a, _ -> if (a == EditorInfo.IME_ACTION_SEND) { mine(text.toString(), this); true } else false }
+            setText(keepChild); setSelection(keepChild.length)
         }
         body.addView(child)
 
         val bottom = ui.bottomBar()
-        bottom.addView(ui.button("Сказать", main = true) { mine(child.text.toString()) })
+        bottom.addView(ui.button("Сказать", main = true) { mine(child.text.toString(), child) })
         bottom.addView(ui.button("← Говорить") { finish() })
         val screen = ui.screen(body, bottom)
         setContentView(screen)
