@@ -39,6 +39,9 @@ class TogetherTest {
     @Test fun theAdultOffersAChoiceAndTheChildAnswers() {
         val p = prefs(); p.choice = ""; p.talk = emptyList(); p.family = Together.familyLines(listOf(Together.Word("Барсик", "")))
         val adult = Robolectric.buildActivity(MyPhrasesActivity::class.java).setup().get()
+        val del = all(adult.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "✕  Барсик" }
+        del.performClick()                                         // one touch only asks: the word stays
+        assertEquals("Удалить «Барсик»? Коснитесь ещё раз", del.text.toString()); assertEquals(1, Together.family(p.family).size)
         adult.offer("Что будешь пить?", listOf("сок, вода"))
         assertEquals(listOf("Сок", "Вода"), Together.decode(p.choice)?.opts)
         assertEquals("Что будешь пить?", Together.talk(p.talk).last().text)

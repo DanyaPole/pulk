@@ -131,17 +131,24 @@ class MyPhrasesActivity : Activity() {
         famBox.removeAllViews()
         val fam = Together.family(prefs.family)
         if (fam.isEmpty()) famBox.addView(ui.note("Пока пусто. Слова появятся в «Говорить» во вкладке «Семья»."))
-        for (f in fam) famBox.addView(ui.button("✕  ${f.word}" + if (f.photo.isNotEmpty()) " · фото" else "") {
+        for (f in fam) famBox.addView(removable("✕  ${f.word}" + if (f.photo.isNotEmpty()) " · фото" else "", f.word) {
             prefs.family = Together.familyLines(Together.family(prefs.family).filter { it.word != f.word })
             if (f.photo.isNotEmpty()) File(f.photo).delete()
             paintFamily()
         })
     }
 
+    /** A word or phrase that can be removed: the first touch only asks, so a curious finger deletes nothing. */
+    private fun removable(label: String, what: String, remove: () -> Unit) = ui.button(label) { v ->
+        val b = v as android.widget.Button
+        if (b.tag != "sure") { b.tag = "sure"; b.text = "Удалить «$what»? Коснитесь ещё раз"; b.setTextColor(ui.urgent); return@button }
+        remove()
+    }
+
     private fun paint() {
         list.removeAllViews()
         if (prefs.myPhrases.isEmpty()) list.addView(ui.note("Пока пусто. Добавленные фразы появятся в «Говорить» первым разделом — «Мои»."))
-        for (p in prefs.myPhrases) list.addView(ui.button("✕  $p") { prefs.myPhrases = prefs.myPhrases - p; paint() })
+        for (p in prefs.myPhrases) list.addView(removable("✕  $p", p) { prefs.myPhrases = prefs.myPhrases - p; paint() })
     }
 
     /** A photo from the gallery or camera: made small and square, kept in the app's own storage (never shared). */
