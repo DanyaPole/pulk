@@ -68,11 +68,23 @@ class Ui(private val a: Activity) {
         setOnClickListener { onClick(it) }
     }
 
+    /**
+     * How many buttons of [labels] fit side by side (at most [most]) so that no word breaks in the middle: on a small
+     * phone with large text, a row of four becomes two rows of two, or a column.
+     */
+    fun perRow(labels: List<String>, size: Float, most: Int, inset: Int = 72): Int {
+        val m = a.resources.displayMetrics
+        val p = android.graphics.Paint().apply { textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, size * k, m) }
+        // the widest word; the first may carry «✓ » when chosen
+        val word = labels.maxOf { l -> l.split(' ').mapIndexed { i, w -> p.measureText(if (i == 0) "✓ $w" else w) }.max() }
+        val avail = m.widthPixels - px(inset)
+        return (most downTo 1).first { n -> word + px(16) <= avail / n - px(4) }
+    }
+
     /** A row of choices; the chosen one is filled and marked with ✓ (not by colour alone). */
     fun choice(title: String, options: List<Pair<String, String>>, get: () -> String, set: (String) -> Unit): View {
         val wrap = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         wrap.addView(text(title, 16f, ink, true))
-        val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
         val buttons = ArrayList<Triple<String, String, Button>>()
         fun paint() {
             val cur = get()
@@ -85,7 +97,11 @@ class Ui(private val a: Activity) {
                 b.contentDescription = "$title: $label"; b.isSelected = on
             }
         }
-        for ((v, label) in options) {
+        val n = perRow(options.map { it.second }, 14f, options.size)
+        var row = LinearLayout(a)
+        for ((j, o) in options.withIndex()) {
+            val (v, label) = o
+            if (j % n == 0) { row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; if (j > 0) setPadding(0, px(4), 0, 0) }; wrap.addView(row) }
             val b = Button(a).apply {
                 isAllCaps = false; textSize = 14f * k
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(px(2), 0, px(2), 0) }
@@ -94,7 +110,8 @@ class Ui(private val a: Activity) {
             }
             buttons.add(Triple(v, label, b)); row.addView(b)
         }
-        paint(); wrap.addView(row)
+        repeat((n - options.size % n) % n) { row.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f)) }   // a short last row keeps the sizes
+        paint()
         return wrap
     }
     fun onOff(title: String, get: () -> Boolean, set: (Boolean) -> Unit) =

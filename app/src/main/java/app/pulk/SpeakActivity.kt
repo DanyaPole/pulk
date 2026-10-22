@@ -110,7 +110,7 @@ class SpeakActivity : Activity() {
         }
 
         // answers first: in a conversation «да», «нет», «подожди» are needed most and fastest
-        Phrases.QUICK.chunked(3).forEach { three ->
+        Phrases.QUICK.chunked(ui.perRow(Phrases.QUICK.map { it.substringBefore(',') }, 16f, 3, inset = 52)).forEach { three ->
             val line = row()
             three.forEach { p -> line.addView(weighted(ui.button(p.substringBefore(',')) { sayMine(p, history = false) })) }
             body.addView(line)
