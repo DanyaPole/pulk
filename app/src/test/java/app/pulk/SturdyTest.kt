@@ -108,6 +108,16 @@ class SturdyTest {
         assertEquals(listOf("android.permission.VIBRATE"), Regex("uses-permission android:name=\"([^\"]+)\"").findAll(m).map { it.groupValues[1] }.toList())
     }
 
+    @Test fun noSpeechEngineIsToldAfterTheScreenHasItsVoice() {
+        val heard = mutableListOf<String>()
+        val v = Voice(app, Prefs(app), onTrouble = { heard += "trouble" })
+        val tts = org.robolectric.shadows.ShadowTextToSpeech.getLastTextToSpeechInstance()
+        org.robolectric.Shadows.shadowOf(tts).onInitListener.onInit(android.speech.tts.TextToSpeech.ERROR)   // no engine: Android answers at once
+        assertTrue(heard.isEmpty())                                                                         // not yet, inside the constructor…
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(listOf("trouble"), heard); assertEquals(Voice.NO_ENGINE, v.trouble)                   // …but right after
+    }
+
     @Test fun theVoiceNeverThrows() {
         val v = Voice(app, Prefs(app))
         v.say("Привет"); v.say(""); assertEquals("Привет", v.last)

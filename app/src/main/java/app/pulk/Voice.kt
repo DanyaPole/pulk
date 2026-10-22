@@ -10,17 +10,22 @@ import java.util.Locale
  * offered: a voice that needs the network would send the phrase out, and Пульк has no internet.
  */
 class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> Unit)? = null, private val onTrouble: (() -> Unit)? = null) {
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private var ready = false
     private var gone = false
     /** Why the phone cannot speak, in the person's words; null while starting and when all is well. */
     var trouble: String? = null; private set
     private val tts: TextToSpeech? = try {
         TextToSpeech(ctx.applicationContext) { status ->
-            if (gone) return@TextToSpeech
-            ready = status == TextToSpeech.SUCCESS
-            trouble = if (!ready) NO_ENGINE else if (!hasRussian()) NO_RUSSIAN else null
-            if (ready) onReady?.invoke()
-            if (trouble != null) onTrouble?.invoke()
+            // later, never inside the constructor: with no engine at all Android answers at once, before the screen
+            // that asked has its Voice, and the screen would fall reading it
+            main.post {
+                if (gone) return@post
+                ready = status == TextToSpeech.SUCCESS
+                trouble = if (!ready) NO_ENGINE else if (!hasRussian()) NO_RUSSIAN else null
+                if (ready) onReady?.invoke()
+                if (trouble != null) onTrouble?.invoke()
+            }
         }
     } catch (_: Exception) { trouble = NO_ENGINE; null }
     private fun hasRussian() = try { (tts?.isLanguageAvailable(Locale("ru", "RU")) ?: TextToSpeech.LANG_AVAILABLE) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { true }
