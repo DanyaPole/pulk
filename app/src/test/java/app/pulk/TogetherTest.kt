@@ -59,6 +59,11 @@ class TogetherTest {
         b("Подожди").performClick(); assertEquals("Подожди, я печатаю", sp.lastSaid)
         b("Срочно").performClick()
         assertTrue(all(sp.window.decorView).filterIsInstance<Button>().any { it.text.toString() == "Вызовите скорую" })
+        p.calm = true                                  // the calm mode has fewer buttons, but «Срочно» is still «Срочно»
+        val calm = Robolectric.buildActivity(SpeakActivity::class.java).setup().get()
+        all(calm.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Срочно" }.performClick()
+        assertTrue(all(calm.window.decorView).filterIsInstance<Button>().any { it.text.toString() == "Вызовите скорую" })
+        p.calm = false
     }
 
     @Test fun theTalkFeedShowsBothSides() {

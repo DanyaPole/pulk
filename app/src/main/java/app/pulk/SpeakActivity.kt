@@ -186,12 +186,12 @@ class SpeakActivity : Activity() {
             field.setText(p); field.setSelection(p.length); sayAll()
         })
     }
-    /** Situations: own phrases, the family's words, what fits this part of the day; in calm mode only those. */
+    /** Situations: own phrases, the family's words, what fits this part of the day; in calm mode only those and «Срочно». */
     private fun situations(): List<Pair<String, List<String>>> {
         val own = (if (prefs.myPhrases.isNotEmpty()) listOf("Мои" to prefs.myPhrases) else emptyList()) +
             (if (prefs.family.isNotEmpty()) listOf("Семья" to Together.family(prefs.family).map { it.word }) else emptyList()) +
             listOf(Phrases.now(hour()))
-        return if (prefs.calm) own else own + Phrases.SITUATIONS
+        return if (prefs.calm) own + Phrases.SITUATIONS.filter { it.first == "Срочно" } else own + Phrases.SITUATIONS
     }
     private fun paintSituation() {
         // the chosen situation: filled and ticked, not by colour alone
