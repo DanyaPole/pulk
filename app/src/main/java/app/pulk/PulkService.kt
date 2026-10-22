@@ -361,6 +361,7 @@ class PulkService : InputMethodService() {
             io.deleteBefore(1); io.commit(". "); lastSpace = 0; undo = null
             feedback.space(null, secure)
         } else {
+            undo = null   // a space is a new step: ⌫ after it takes back the space, not something done before
             val word = finishWord()
             io.commit(" "); lastSpace = now
             feedback.space(word, secure)
@@ -389,6 +390,7 @@ class PulkService : InputMethodService() {
     fun punct(c: String) {
         if (!prose) { feedback.hush(); undo = null; io.commit(c); feedback.letter(Pulse.Slot(-1, 'c', c), c, lang, secure); after(); return }
         if (io.before(40).isBlank()) return
+        undo = null
         finishWord()
         val before = io.before(40)
         val spaces = before.length - before.trimEnd().length

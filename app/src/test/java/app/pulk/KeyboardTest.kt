@@ -550,6 +550,10 @@ class KeyboardTest {
         assertEquals("Прив дом ", field.sb.toString())                // …comes back
         fnTap(Pulse.Fn.BKSP)
         assertEquals("Прив дом", field.sb.toString())                 // and then ⌫ is ⌫ again
+        Thread.sleep(400)                                              // (not two quick spaces, which would be a full stop)
+        spaceSwipe(-1.0); spaceTap()                                   // swiped away, then a space…
+        fnTap(Pulse.Fn.BKSP)
+        assertEquals("Прив ", field.sb.toString())                    // …⌫ takes back the space, the word does not jump back
     }
 
     @Test fun simpleModeKeepsOnlyTheBasics() {
