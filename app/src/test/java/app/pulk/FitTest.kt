@@ -32,6 +32,13 @@ class FitTest {
         root.layout(0, 0, d.widthPixels, d.heightPixels)
         val out = ArrayList<String>()
         checked += all(root).count { it is TextView && (it as TextView).layout != null }
+        // nothing sticks out past the right edge (rows that scroll sideways on purpose aside)
+        fun inSideScroll(v: View): Boolean { var p = v.parent; while (p is View) { if (p is android.widget.HorizontalScrollView) return true; p = p.parent }; return false }
+        val xy = IntArray(2)
+        for (v in all(root)) if (v.visibility == View.VISIBLE && v.width > 0 && !inSideScroll(v)) {
+            v.getLocationInWindow(xy)
+            if (xy[0] < -1 || xy[0] + v.width > d.widthPixels + 1) out.add("$name: ${v.javaClass.simpleName} «${(v as? TextView)?.text?.take(30) ?: ""}» вылезает за край")
+        }
         for (t in all(root).filterIsInstance<TextView>()) {
             val l = t.layout ?: continue
             if (t.visibility != View.VISIBLE || t.text.isNullOrBlank()) continue
