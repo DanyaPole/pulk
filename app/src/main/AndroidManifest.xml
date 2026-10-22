@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Only vibration. There is deliberately NO internet permission: what is typed cannot leave the phone. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 11+ hides other apps unless asked: without this the phone's own speech engine is not found and nothing is spoken.
+         It only lets Пульк see that a speech engine is installed; it is not a permission and gives no internet. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"

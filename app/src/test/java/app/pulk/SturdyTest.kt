@@ -101,6 +101,13 @@ class SturdyTest {
         assertEquals(listOf(Physical.Key(-1, 's')), k.down(KeyEvent.KEYCODE_NUMPAD_0, false))   // only the space, no stale letter
     }
 
+    @Test fun thePhonesSpeechEngineCanBeFound() {
+        // since Android 11 an app sees a speech engine only if its manifest asks for TTS_SERVICE; and still no internet
+        val m = File("src/main/AndroidManifest.xml").readText()
+        assertTrue(Regex("""<queries>[\s\S]*android\.intent\.action\.TTS_SERVICE[\s\S]*</queries>""").containsMatchIn(m))
+        assertEquals(listOf("android.permission.VIBRATE"), Regex("uses-permission android:name=\"([^\"]+)\"").findAll(m).map { it.groupValues[1] }.toList())
+    }
+
     @Test fun theVoiceNeverThrows() {
         val v = Voice(app, Prefs(app))
         v.say("Привет"); v.say(""); assertEquals("Привет", v.last)
