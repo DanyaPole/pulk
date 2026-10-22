@@ -38,6 +38,7 @@ class PulkService : InputMethodService() {
     var shiftLock = false; private set
     private var autoCap = false
     private var secure = false      // password fields: nothing is read aloud or remembered
+    private var prose = false       // ordinary text, not a password, an address or a number: two spaces may make a full stop
     private var lastSpace = 0L
 
     // ---- words ----
@@ -205,7 +206,8 @@ class PulkService : InputMethodService() {
         val address = variation == InputType.TYPE_TEXT_VARIATION_URI || variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
                 variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS || variation == InputType.TYPE_TEXT_VARIATION_FILTER
         val noSuggest = info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0
-        suggestHere = text && !secure && !address && prefs.suggest
+        prose = text && !secure && !address
+        suggestHere = prose && prefs.suggest
         correctHere = suggestHere && !noSuggest && prefs.autocorrect && !prefs.simple
         learnHere = suggestHere && prefs.learn && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         editor = info
@@ -351,7 +353,8 @@ class PulkService : InputMethodService() {
         feedback.hush()
         val now = System.currentTimeMillis()
         val before = io.before(2)
-        if (now - lastSpace < 350 && before.length == 2 && before[1] == ' ' && before[0].isLetterOrDigit()) {
+        // a password, an address or a phone number keeps both spaces: a full stop there would be a wrong character
+        if (prose && now - lastSpace < 350 && before.length == 2 && before[1] == ' ' && before[0].isLetterOrDigit()) {
             io.deleteBefore(1); io.commit(". "); lastSpace = 0; undo = null
             feedback.space(null, secure)
         } else {

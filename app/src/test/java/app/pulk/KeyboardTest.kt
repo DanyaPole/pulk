@@ -206,6 +206,15 @@ class KeyboardTest {
         assertTrue(svc.isSecure)
     }
 
+    @Test fun twoSpacesInAPasswordStayTwoSpaces() {
+        for (c in "да") letter(c.toString()); spaceTap(); spaceTap()   // ordinary text: two quick spaces end the sentence
+        assertEquals("Да. ", field.sb.toString())
+        field.sb.clear(); field.cur = 0
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD })
+        for (c in "да") letter(c.toString()); spaceTap(); spaceTap()
+        assertEquals("да  ", field.sb.toString())   // a password gets exactly what was typed
+    }
+
     @Test fun blindModeTapAnywhereIsSpace() {
         svc.prefs.blind = true; view.refresh(); measure()
         for (c in "да") letter(c.toString())
