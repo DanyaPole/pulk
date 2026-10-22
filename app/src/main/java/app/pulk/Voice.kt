@@ -23,7 +23,8 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
                 if (gone) return@post
                 ready = status == TextToSpeech.SUCCESS
                 trouble = if (!ready) NO_ENGINE else if (!hasRussian()) NO_RUSSIAN else null
-                if (ready) onReady?.invoke()
+                if (ready) { onReady?.invoke(); pending?.let { say(it) } }
+                pending = null
                 if (trouble != null) onTrouble?.invoke()
             }
         }
@@ -31,6 +32,8 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
     private fun hasRussian() = try { (tts?.isLanguageAvailable(Locale("ru", "RU")) ?: TextToSpeech.LANG_AVAILABLE) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { true }
     /** What was said last (also when the voice is not ready yet — the screens and tests read it). */
     var last = ""; private set
+    /** Said while the engine was still starting (the first touch on a screen): spoken as soon as it is ready. */
+    private var pending: String? = null
 
     /** Russian voices on this phone, by name, the best first; empty until the engine is ready. */
     fun ruVoices(): List<String> = if (!ready) emptyList() else try {
@@ -40,7 +43,7 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
     fun say(text: String) {
         val t = text.trim(); if (t.isEmpty()) return
         last = t
-        val tts = tts; if (!ready || gone || tts == null) return
+        val tts = tts; if (!ready || gone || tts == null) { if (!gone && tts != null && trouble == null) pending = t; return }
         try {   // an engine can throw on a language or voice it half-knows: then this phrase is silent, the app goes on
             val ru = t.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }
             tts.language = if (ru) Locale("ru", "RU") else Locale.US

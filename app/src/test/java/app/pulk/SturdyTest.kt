@@ -136,6 +136,16 @@ class SturdyTest {
         } finally { am.setTouchExplorationEnabled(false); am.setEnabled(false) }
     }
 
+    @Test fun theFirstTouchIsSpokenOnceTheVoiceIsReady() {
+        val v = Voice(app, Prefs(app))
+        val tts = org.robolectric.shadows.ShadowTextToSpeech.getLastTextToSpeechInstance()
+        v.say("Да")                                                       // the engine is still starting
+        org.robolectric.Shadows.shadowOf(tts).onInitListener.onInit(android.speech.tts.TextToSpeech.SUCCESS)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals("Да", org.robolectric.Shadows.shadowOf(tts).lastSpokenText)   // not lost: said when ready
+        v.shutdown()
+    }
+
     @Test fun theVoiceNeverThrows() {
         val v = Voice(app, Prefs(app))
         v.say("Привет"); v.say(""); assertEquals("Привет", v.last)
