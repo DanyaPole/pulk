@@ -59,6 +59,11 @@ class TogetherTest {
         b("Подожди").performClick(); assertEquals("Подожди, я печатаю", sp.lastSaid)
         b("Срочно").performClick()
         assertTrue(all(sp.window.decorView).filterIsInstance<Button>().any { it.text.toString() == "Вызовите скорую" })
+        val f = all(sp.window.decorView).filterIsInstance<android.widget.EditText>().first()
+        f.setText("Я хочу домой"); b("Показать собеседнику").performClick()
+        @Suppress("DEPRECATION") sp.onBackPressed()   // Back from the big phrase: typing again, the phrase still there
+        assertFalse(sp.isFinishing)
+        assertEquals("Я хочу домой", all(sp.window.decorView).filterIsInstance<android.widget.EditText>().first().text.toString())
         p.calm = true                                  // the calm mode has fewer buttons, but «Срочно» is still «Срочно»
         val calm = Robolectric.buildActivity(SpeakActivity::class.java).setup().get()
         all(calm.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Срочно" }.performClick()

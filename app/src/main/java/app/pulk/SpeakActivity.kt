@@ -44,7 +44,7 @@ class SpeakActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         build()
     }
-    override fun onResume() { super.onResume(); if (::field.isInitialized) build() }   // back from the adult's screen: a new choice, new words
+    override fun onResume() { super.onResume(); if (::field.isInitialized && !showing) build() }   // back from the adult's screen: a new choice, new words
     override fun onDestroy() { voice.shutdown(); super.onDestroy() }
 
     internal fun say(text: String) = voice.say(text)
@@ -85,7 +85,13 @@ class SpeakActivity : Activity() {
         return b
     }
 
+    /** The phrase is shown big to the person opposite: Back returns to typing, it does not close «Говорить». */
+    private var showing = false
+    @Deprecated("Back from the big phrase goes back to typing")
+    override fun onBackPressed() { if (showing) build() else @Suppress("DEPRECATION") super.onBackPressed() }
+
     private fun build() {
+        showing = false
         val keep = if (::field.isInitialized) field.text.toString() else ""   // what was being typed survives a rebuild
         val body = ui.column(16)
         val family = Together.family(prefs.family)
@@ -229,6 +235,7 @@ class SpeakActivity : Activity() {
             setPadding(ui.px(24), ui.px(24), ui.px(24), ui.px(24))
             contentDescription = "Для собеседника: $text"
         }
+        showing = true
         val frame = FrameLayout(this).apply { setBackgroundColor(ui.bg); addView(big, FrameLayout.LayoutParams(-1, -1)) }
         val bottom = ui.bottomBar()
         bottom.addView(ui.button("Перевернуть к собеседнику") { big.rotation = if (big.rotation == 0f) 180f else 0f })
