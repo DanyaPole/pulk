@@ -109,6 +109,9 @@ class PulkService : InputMethodService() {
         return super.onKeyDown(keyCode, event)
     }
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        // the switch's release is ours too: an Enter let through would move the app to its next field at every press
+        if (prefs.mode == "scan" && isInputViewShown && view != null &&
+            (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER)) return true
         if (isInputViewShown && physicalKey(keyCode, event, down = false)) return true
         return super.onKeyUp(keyCode, event)
     }

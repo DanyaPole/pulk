@@ -602,6 +602,9 @@ class KeyboardTest {
             idle(ms * 3 + 100); press()               // groups: о, е, а, пробел → a space
             assertEquals("Ов ", field.sb.toString())
             svc.onKeyDown(KeyEvent.KEYCODE_SPACE, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE))   // an outside switch works the same
+            view.hide(); val was = field.sb.toString()
+            view.scanPress()                          // folded: the press only brings the keyboard back
+            assertEquals(was, field.sb.toString()); assertTrue(view.isOpen)
         } finally { svc.prefs.mode = "pulse" }
     }
 

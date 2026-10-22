@@ -698,6 +698,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     /** The one button was pressed. */
     fun scanPress() {
         if (!scanMode()) return
+        if (!isOpen) { open(sound = true); return }   // folded: the press brings the keyboard back, it types nothing unseen
         val t = Pulse.table(svc.lang, svc.symbols)
         if (scanPetal < 0) {
             when (val g = scanGroups[scanAt]) {
