@@ -143,7 +143,25 @@ class CalibrationActivity : Activity() {
             }
         }
 
+        // with TalkBack one finger comes as hover (as on the keyboard itself): it is taken as the touch it is
+        private val a11y = ctx.getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+        private fun exploring() = a11y.isEnabled && a11y.isTouchExplorationEnabled
+        private var fromHover = false
+        override fun onHoverEvent(e: MotionEvent): Boolean {
+            if (!exploring()) return super.onHoverEvent(e)
+            val act = when (e.actionMasked) {
+                MotionEvent.ACTION_HOVER_ENTER -> MotionEvent.ACTION_DOWN
+                MotionEvent.ACTION_HOVER_MOVE -> MotionEvent.ACTION_MOVE
+                MotionEvent.ACTION_HOVER_EXIT -> MotionEvent.ACTION_UP
+                else -> return true
+            }
+            val t = MotionEvent.obtain(e.downTime, e.eventTime, act, e.x, e.y, 0)
+            fromHover = true; onTouchEvent(t); fromHover = false; t.recycle()
+            return true
+        }
+
         override fun onTouchEvent(e: MotionEvent): Boolean {
+            if (exploring() && !fromHover) return true   // TalkBack's double-tap would be a stroke of nothing
             val x = e.x; val y = e.y
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {

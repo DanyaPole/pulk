@@ -118,6 +118,24 @@ class SturdyTest {
         assertEquals(listOf("trouble"), heard); assertEquals(Voice.NO_ENGINE, v.trouble)                   // …but right after
     }
 
+    @Test fun fittingToTheHandWorksWithTalkBack() {
+        val am = org.robolectric.Shadows.shadowOf(app.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager)
+        am.setEnabled(true); am.setTouchExplorationEnabled(true)
+        try {
+            val a = Robolectric.buildActivity(CalibrationActivity::class.java).setup().get()
+            val v = a.findViewById<android.view.ViewGroup>(android.R.id.content).getChildAt(0)
+            v.measure(android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(2200, android.view.View.MeasureSpec.EXACTLY))
+            v.layout(0, 0, 1080, 2200)
+            fun said(): String { v.draw(android.graphics.Canvas(Bitmap.createBitmap(1080, 2200, Bitmap.Config.ARGB_8888))); return v.contentDescription.toString() }
+            fun hover(act: Int, x: Float, y: Float) { val e = android.view.MotionEvent.obtain(0, android.os.SystemClock.uptimeMillis(), act, x, y, 0); v.onHoverEvent(e); e.recycle() }
+            val x = 1080 * 0.7f; val y = 2200 * 0.72f
+            hover(android.view.MotionEvent.ACTION_HOVER_ENTER, x, y)                 // the thumb held on the circle…
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(2100))
+            hover(android.view.MotionEvent.ACTION_HOVER_EXIT, x, y)
+            assertTrue(said(), said().startsWith("Смахни"))                        // …is the hold, as without TalkBack
+        } finally { am.setTouchExplorationEnabled(false); am.setEnabled(false) }
+    }
+
     @Test fun theVoiceNeverThrows() {
         val v = Voice(app, Prefs(app))
         v.say("Привет"); v.say(""); assertEquals("Привет", v.last)
