@@ -13,7 +13,7 @@ android {
         applicationId = "app.pulk.keyboard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 20
+        versionCode = 21
         versionName = "0.7.2"
     }
     // the release key lives in keys/ (not in git); without it a release build is left unsigned
