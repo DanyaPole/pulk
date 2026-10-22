@@ -293,6 +293,10 @@ class KeyboardTest {
 
     @Test fun tutorialHandInHand() {
         Coach.active = true; Coach.next = "м"; Coach.help = 3; Coach.hint = "м: смахни вправо и поверни вверх"
+        letter("н")                                 // another app's field (a reply from the shade): no lesson help there
+        assertEquals("Н", field.sb.toString())
+        field.sb.clear(); field.cur = 0
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; packageName = svc.packageName })
         picture("coach")
         letter("н")                                 // a straight stroke right, near enough
         assertEquals("М", field.sb.toString())

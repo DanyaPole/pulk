@@ -214,6 +214,7 @@ class PulkService : InputMethodService() {
         correctHere = suggestHere && !noSuggest && prefs.autocorrect && !prefs.simple
         learnHere = suggestHere && prefs.learn && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         editor = info
+        ownField = info.packageName == packageName
         selStart = info.initialSelStart; selEnd = info.initialSelEnd
         io.drop(); io.expect = if (selStart == selEnd) selStart else -1
         shiftOnce = false; undo = null
@@ -221,6 +222,10 @@ class PulkService : InputMethodService() {
         view?.refresh()
     }
     private var editor: EditorInfo? = null
+    /** The field belongs to Пульк itself (a lesson, «Пузыри»): only there the lesson's help and hints apply. */
+    private var ownField = false
+    /** A lesson is on and this is its field: a reply typed from the notification shade meanwhile gets no lesson help. */
+    fun coaching() = Coach.active && ownField
     val isSecure get() = secure
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
@@ -293,7 +298,7 @@ class PulkService : InputMethodService() {
         val w = currentWord()
         val dict = wordsIfReady(lang)
         cands = when {
-            !suggestHere || symbols || Coach.active || dict == null -> emptyList()
+            !suggestHere || symbols || coaching() || dict == null -> emptyList()
             w.isNotEmpty() -> if (prefs.simple) dict.suggest(w, 1) else dict.suggest(w)
             prefs.predict && !prefs.simple -> prevWord()?.let { p -> dict.next(p).map { if (shiftActive()) it.replaceFirstChar { c -> c.uppercase() } else it } } ?: emptyList()
             else -> emptyList()

@@ -62,22 +62,22 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun mx(x: Float) = if (left) width - x else x
     private fun blind() = svc.prefs.blind
     /** «Толчки»: a whole word per touch. A lesson says itself which way it teaches. */
-    private fun jabsMode() = if (Coach.active) Coach.jabs else svc.prefs.mode == "jabs"
+    private fun jabsMode() = if (svc.coaching()) Coach.jabs else svc.prefs.mode == "jabs"
     /** The whole screen is where a stroke may start, and the star comes to the finger. Lessons keep the star in place. */
-    private fun screenZone() = svc.prefs.zone == "screen" && !Coach.active && !tapsMode()
+    private fun screenZone() = svc.prefs.zone == "screen" && !svc.coaching() && !tapsMode()
     /** Простой режим: ⇧ and RU/EN are not shown (capitals come by themselves); the space key has no gestures. */
-    private fun simple() = svc.prefs.simple && !Coach.active
+    private fun simple() = svc.prefs.simple && !svc.coaching()
     /** An extra gesture this person has switched on (lessons always have all of them). */
-    private fun gest(g: String) = Coach.active || (svc.prefs.has(g) && !simple())
+    private fun gest(g: String) = svc.coaching() || (svc.prefs.has(g) && !simple())
     private fun hiddenInSimple(fn: Pulse.Fn) = simple() && (fn == Pulse.Fn.SHIFT || fn == Pulse.Fn.LANG)
     /** «Два касания»: for a hand that can tap but not stroke. Strokes still work as in «Пульс». */
     /** «Привычная»: the familiar rows of keys — for someone used to them; the star shows how each letter would be stroked. */
-    private fun classicMode() = !Coach.active && svc.prefs.mode == "classic"
-    private fun tapsMode() = !Coach.active && svc.prefs.mode == "taps"
+    private fun classicMode() = !svc.coaching() && svc.prefs.mode == "classic"
+    private fun tapsMode() = !svc.coaching() && svc.prefs.mode == "taps"
     /** The petal opened by the first tap, its letters waiting for the second (-1: none). */
     internal var openPetal = -1
     private fun tapIsSpace() = blind() || screenZone()
-    private fun textWindow() = svc.prefs.textWindow && !Coach.active
+    private fun textWindow() = svc.prefs.textWindow && !svc.coaching()
     private var cornerH = 0f    // how tall the keyboard is in the corner (the screen zone is taller)
     private fun statusBar(): Int {
         val id = resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -253,7 +253,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun chipText(): List<String> {
         val c = svc.cands.take(3)
         if (c.isNotEmpty()) return c
-        val h = if (Coach.active) Coach.hint else null
+        val h = if (svc.coaching()) Coach.hint else null
         return if (h != null) listOf(h) else emptyList()
     }
     internal fun chipRects(): List<RectF> {
@@ -541,7 +541,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         c.save(); c.translate(dx, dy)
         val centre = home
         val live = cand
-        val goal = if (Coach.active && Coach.help >= 2) Coach.next?.let { target(it) } else null
+        val goal = if (svc.coaching() && Coach.help >= 2) Coach.next?.let { target(it) } else null
         if (svc.prefs.look == "ripples") drawWater(c, col, centre, live, goal) else {
         // eight petals with air between them; the one under the finger steps out, the tutorial's goal is tinted
         val round = android.graphics.CornerPathEffect(5 * ds())
@@ -568,7 +568,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val up = svc.shiftActive()
         if (scanMode() && scanPetal >= 0) drawOpenPetal(c, col, table, svc.shiftActive(), scanPetal, if (scanAt < 4) Pulse.KINDS[scanAt] else 'c', back = scanAt == 4)
         else if (openPetal >= 0) drawOpenPetal(c, col, table, up = svc.shiftActive())
-        else if (!Coach.hideLabels || !Coach.active) for (p in 0 until 8) for ((i, kind) in Pulse.KINDS.withIndex()) {
+        else if (!Coach.hideLabels || !svc.coaching()) for (p in 0 until 8) for ((i, kind) in Pulse.KINDS.withIndex()) {
             val v = table[p][i]
             if (v.isEmpty()) continue
             val s = Pulse.spot(p, kind)
@@ -589,7 +589,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             }
         }
         // while stroking: the letter that will be typed, big, in the middle of the star
-        if (live != null && !(Coach.active && Coach.hideLabels)) {
+        if (live != null && !(svc.coaching() && Coach.hideLabels)) {
             val shown = (if (longAlt != null) longAlt!! else live.v).let { if (up) it.uppercase() else it }
             val bx = centre[0] + dx; val by = centre[1] + dy
             fill.color = col.accent; c.drawCircle(bx, by, 26 * density, fill)
@@ -662,7 +662,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     // ---- «Сканирование»: the keyboard points at things in turn; one press of any button picks the one lit ----
-    private fun scanMode() = !Coach.active && svc.prefs.mode == "scan"
+    private fun scanMode() = !svc.coaching() && svc.prefs.mode == "scan"
     /** First the groups — petals by how often their letters come, the space key, ⌫, ⏎ — then the letters of one petal. */
     internal val scanGroups = listOf(1, 5, 2, SCAN_SPACE, 4, 0, 6, 3, 7, SCAN_BKSP, SCAN_ENTER)
     internal var scanPetal = -1          // -1: choosing a group; else: choosing a letter in this petal
@@ -1003,7 +1003,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     private fun helped(slot: Pulse.Slot): Pulse.Slot {
         // hand in hand (the tutorial's strongest help): a stroke near the wanted letter becomes that letter
-        if (Coach.active && Coach.help >= 3) {
+        if (svc.coaching() && Coach.help >= 3) {
             val want = Coach.next?.let { target(it) }?.first
             if (want != null && !want.isSpace && !slot.isSpace) {
                 val d = (slot.petal - want.petal + 8) % 8
