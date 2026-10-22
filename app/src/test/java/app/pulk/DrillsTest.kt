@@ -44,4 +44,17 @@ class DrillsTest {
         for (i in 1..3) { all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == Drills.THEMES[0].tasks[i].model }.performClick(); idle(1300) }
         assertEquals(1, prefs.drillsDone and 1)
     }
+
+    @Test fun aDoubleTapIsOneAnswer() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()); prefs.drillsDone = 0
+        val a = Robolectric.buildActivity(DrillsActivity::class.java).setup().get()
+        all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "Начать" }.performClick()
+        val drops = prefs.drops
+        val right = all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == Drills.THEMES[0].tasks[0].model }
+        right.performClick(); right.performClick(); idle(1300)
+        assertEquals(1, a.at); assertEquals(drops + 1, prefs.drops)          // one scene on, one drop
+        all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == Drills.THEMES[0].tasks[1].model }.performClick()
+        all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "К темам" }.performClick(); idle(3000)
+        assertEquals(-1, a.theme)                                             // the menu stays: the waiting scene is dropped
+    }
 }

@@ -45,6 +45,7 @@ class DrillsActivity : Activity() {
     private fun bitOf(t: Drills.Theme) = when (t.title) { "Моё" -> 20; Drills.PLAY.title -> 21; else -> Drills.THEMES.indexOfFirst { it.title == t.title } }
 
     internal fun menu() {
+        handler.removeCallbacksAndMessages(null)   // a scene still waiting to move on does not come after the menu
         theme = -1
         val body = ui.column()
         body.addView(ui.title("Тренировки"))
@@ -67,18 +68,20 @@ class DrillsActivity : Activity() {
         if (at >= t.tasks.size) { finishTheme(); return }
         val task = t.tasks[at]
         var tries = 0
+        var moving = false   // the answer is in and the next scene is on its way: more taps change nothing
         val body = ui.column(28)
         body.addView(ui.text(t.tasks.indices.joinToString(" ") { if (it < at) "●" else if (it == at) "◉" else "○" } + "   ${t.title} · ${at + 1} из ${t.tasks.size}", 17f, ui.muted))
         body.addView(ui.text(task.scene, 26f, ui.ink, true))
         val status = ui.text("", 18f, ui.accent, true)
         fun answer(a: String) {
-            if (a.isBlank()) return
+            if (a.isBlank() || moving) return
             say(a)
             if (Drills.fits(a, task) || ++tries >= 2) {
                 // about the scene — or, after a second try, the model is shown and the next scene comes anyway
                 status.setTextColor(ui.accent)
                 if (Drills.fits(a, task)) { val n = Pond.add(prefs); sounds.drop(if (prefs.dropKind == "off") "off" else "drip"); status.text = "Получилось. +1 капля — в пруду $n" }
                 else status.text = "Можно и так: «${task.model}». Дальше."
+                moving = true
                 handler.postDelayed({ at++; scene() }, if (Drills.fits(a, task)) 1100 else 2400)
             } else {
                 status.setTextColor(ui.muted); status.text = "Сказано «$a». Можно и так: «${task.model}»."
@@ -95,7 +98,7 @@ class DrillsActivity : Activity() {
         body.addView(status)
         val bottom = ui.bottomBar()
         bottom.addView(ui.button("Сказать", main = true) { answer(field.text.toString().trim()); field.setText("") })
-        bottom.addView(ui.button("К темам") { handler.removeCallbacksAndMessages(null); menu() })
+        bottom.addView(ui.button("К темам") { menu() })
         setContentView(ui.screen(body, bottom))
     }
 
