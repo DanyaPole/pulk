@@ -127,7 +127,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         animateTo(0f, 170, DecelerateInterpolator())
     }
     /** Without animation, e.g. when the keyboard window is hidden by the system. */
-    fun reset(open: Boolean) { anim?.cancel(); anim = null; isOpen = open; g = if (open) 1f else 0f; invalidate() }
+    fun reset(open: Boolean) { anim?.cancel(); anim = null; isOpen = open; g = if (open) 1f else 0f; if (!open) cancelTouches(); invalidate() }
+
+    /** Every finger is forgotten: a held ⌫ stops deleting, a long press does nothing later, an open petal closes. */
+    private fun cancelTouches() {
+        touches.values.forEach { stopTimers(it) }; touches.clear()
+        classicRepeat?.let { handler.removeCallbacks(it) }; classicRepeat = null; classicPressed = null
+        cand = null; trail = null; pressedFn = null; pressedStrip = -1; longAlt = null; openPetal = -1
+    }
 
     private fun animateTo(to: Float, ms: Long, interp: android.animation.TimeInterpolator) {
         anim?.cancel()
@@ -893,7 +900,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 move(e.getPointerId(i), e.getX(i), e.getY(i), tm)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> { val i = e.actionIndex; up(e.getPointerId(i), e.getX(i), e.getY(i), tm) }
-            MotionEvent.ACTION_CANCEL -> { touches.values.forEach { stopTimers(it) }; touches.clear(); cand = null; trail = null; pressedFn = null; pressedStrip = -1; longAlt = null; invalidate() }
+            MotionEvent.ACTION_CANCEL -> { cancelTouches(); invalidate() }
         }
         return true
     }

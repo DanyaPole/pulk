@@ -227,6 +227,17 @@ class KeyboardTest {
         }
     }
 
+    @Test fun aHeldBackspaceStopsWhenTheKeyboardHides() {
+        for (c in "мама") letter(c.toString())
+        val k = Pulse.FN_KEYS.first { it.fn == Pulse.Fn.BKSP }
+        val a = (k.a0 + k.a1) / 2 * PI / 180; val r = (k.r0 + k.r1) / 2
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(r * cos(a), r * sin(a))))   // ⌫ held…
+        val left = field.sb.toString()
+        view.reset(open = false)                                                         // …and the keyboard went away
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(2000))
+        assertEquals(left, field.sb.toString())   // nothing more is deleted
+    }
+
     @Test fun blindModeTapAnywhereIsSpace() {
         svc.prefs.blind = true; view.refresh(); measure()
         for (c in "да") letter(c.toString())
