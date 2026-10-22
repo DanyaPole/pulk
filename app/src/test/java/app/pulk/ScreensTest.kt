@@ -133,6 +133,11 @@ class ScreensTest {
         val chosen = v.filterIsInstance<Button>().filter { it.isSelected }
         assertTrue(chosen.isNotEmpty())
         assertTrue(chosen.all { it.contentDescription?.contains(": ") == true && !it.contentDescription.contains("✓") })
+        assertEquals("Размер клавиатуры", v.filterIsInstance<android.widget.SeekBar>().single().contentDescription)
+        // a button whose label has no letters (→, ✕, ↻) must have words for TalkBack
+        for (c in listOf(OptionsActivity::class.java, TalkActivity::class.java, SpeakActivity::class.java, MyPhrasesActivity::class.java, ComfortActivity::class.java))
+            for (b in all(Robolectric.buildActivity(c).setup().get().window.decorView).filterIsInstance<Button>())
+                assertTrue("${c.simpleName}: «${b.text}»", b.text.any { it.isLetter() } || b.contentDescription?.any { it.isLetter() } == true)
     }
 
     @Test fun thePondIsDescribedInWords() {

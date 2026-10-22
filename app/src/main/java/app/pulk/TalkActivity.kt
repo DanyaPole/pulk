@@ -77,7 +77,7 @@ class TalkActivity : Activity() {
             setText(keepAdult)
         }
         ar.addView(adult, LinearLayout.LayoutParams(0, -2, 1f))
-        ar.addView(ui.button("→") { yours(adult.text.toString()) }.apply { layoutParams = LinearLayout.LayoutParams(ui.px(64), -2) })
+        ar.addView(ui.button("→") { yours(adult.text.toString()) }.apply { contentDescription = "Отправить"; layoutParams = LinearLayout.LayoutParams(ui.px(64), -2) })
         body.addView(ar)
 
         val q = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

@@ -47,8 +47,12 @@ class OptionsActivity : Activity() {
         body.addView(ui.text("Размер клавиатуры", 16f, ui.ink, true))
         body.addView(SeekBar(this).apply {
             max = 35; progress = prefs.size - 80
+            // TalkBack: «Размер клавиатуры, 100 %», not a bare «ползунок, 57 %»
+            contentDescription = "Размер клавиатуры"
+            fun state() { if (android.os.Build.VERSION.SDK_INT >= 30) stateDescription = "${prefs.size} %" }
+            state()
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { prefs.size = 80 + p }
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { prefs.size = 80 + p; state() }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
