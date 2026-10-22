@@ -1128,6 +1128,9 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     fun refresh() { requestLayout(); invalidate(); svc.insetsChanged() }
 
+    /** Another field: a petal left open or a half-made scan choice belongs to the old one and is closed. */
+    fun newField() { openPetal = -1; scanPetal = -1; scanAt = 0; scanLoops = 0; bridge = null; invalidate() }
+
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         super.onLayout(changed, l, t, r, b)
         // ⌫ runs along the screen's edge, where Android's own back gesture starts: keep that edge for ⌫

@@ -522,6 +522,9 @@ class KeyboardTest {
         fun tapAt(bx: Double, by: Double) = touch(listOf(doubleArrayOf(bx, by), doubleArrayOf(bx + 2, by + 1), doubleArrayOf(bx + 1, by - 1)))   // a tap with a little jitter
         fun tapPetal(p: Int) { val s = Pulse.spot(p, 'c'); tapAt(s[0], s[1]) }
         fun tapQuarter(p: Int, k: Char) { val a = Pulse.tapAngle(p, k) * PI / 180; tapAt(Pulse.PH[0] + 55 * cos(a), Pulse.PH[1] + 55 * sin(a)) }
+        tapPetal(3)                                   // a petal open as another field is touched: it closes there
+        svc.onStartInputView(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES }, false)
+        assertEquals(-1, view.openPetal)
         tapPetal(0)                                   // «н м ь щ» open
         assertEquals(0, view.openPetal)
         picture("taps-open")

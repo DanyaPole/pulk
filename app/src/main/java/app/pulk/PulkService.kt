@@ -180,7 +180,7 @@ class PulkService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         startInput(info)
-        if (!restarting) view?.open(sound = true) // a new field: the keyboard comes out again if it was hidden
+        if (!restarting) { view?.newField(); view?.open(sound = true) } // a new field: the keyboard comes out again if it was hidden
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
