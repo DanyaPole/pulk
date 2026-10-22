@@ -9,6 +9,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.text.InputType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -199,6 +200,7 @@ class KeyboardTest {
         assertTrue(svc.symbols)
         letter("1"); letter("2"); letter("0")
         assertEquals("120", field.sb.toString())
+        assertFalse(svc.physicalKey(KeyEvent.KEYCODE_NUMPAD_8, null, down = true))   // the number pad types its own «8» here
     }
 
     @Test fun passwordFieldsAreNotReadAloud() {

@@ -129,6 +129,7 @@ class PulkService : InputMethodService() {
         }
         if (button != null) { if (down && (event?.repeatCount ?: 0) == 0) button(); return true }
         if (!Physical.isStarKey(code)) return false
+        if (numberField) return false   // a number, phone or date field: the number pad types its own digits
         if (down && (event?.repeatCount ?: 0) > 0) return true
         (if (down) keyStar.down(code, prefs.left) else keyStar.up(code)).forEach { typeKey(it) }
         return true
@@ -203,6 +204,7 @@ class PulkService : InputMethodService() {
         val variation = info.inputType and InputType.TYPE_MASK_VARIATION
         val text = cls == InputType.TYPE_CLASS_TEXT
         symbols = cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE || cls == InputType.TYPE_CLASS_DATETIME
+        numberField = symbols
         secure = (text && (variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
                 variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)) ||
                 (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
@@ -224,6 +226,7 @@ class PulkService : InputMethodService() {
     private var editor: EditorInfo? = null
     /** The field belongs to Пульк itself (a lesson, «Пузыри»): only there the lesson's help and hints apply. */
     private var ownField = false
+    private var numberField = false
     /** A lesson is on and this is its field: a reply typed from the notification shade meanwhile gets no lesson help. */
     fun coaching() = Coach.active && ownField
     val isSecure get() = secure
