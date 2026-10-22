@@ -67,8 +67,10 @@ class TutorialActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) paintIme() }
 
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); endLevel(keep = false); voice.shutdown(); super.onDestroy() }
-    override fun onStop() { Coach.pause(); super.onStop() }
-    override fun onStart() { super.onStart(); Coach.resume() }
+    // the level by ear borrows voice and «вслепую»: while the lesson is off screen (Home, a call) the keyboard
+    // in other apps is the person's own again, and gets them back if Android closes Пульк meanwhile
+    override fun onStop() { Coach.pause(); restore?.let { prefs.sound = it.first; prefs.blind = it.second }; super.onStop() }
+    override fun onStart() { super.onStart(); Coach.resume(); if (restore != null) byEar() }
 
     @Deprecated("Back goes to the menu from a level")
     override fun onBackPressed() { if (level >= 0) { endLevel(keep = false); menu() } else @Suppress("DEPRECATION") super.onBackPressed() }
@@ -116,12 +118,17 @@ class TutorialActivity : Activity() {
         Coach.active = true; Coach.help = 0; Coach.hideLabels = Lessons.isBlind(l); Coach.jabs = Lessons.isJabs(l)
         if (Lessons.isBlind(l)) {
             // the last level is typed by ear: voice and eyes-free mode, for this level only
-            restore = prefs.sound to prefs.blind
-            if (prefs.sound == "off") prefs.sound = "voice"
-            prefs.blind = true
+            byEar()
             voice.say(if (prefs.lang == "ru") "Слушай. Сейчас без экрана." else "Listen. No screen now.")
         }
         build()
+    }
+
+    /** Voice and eyes-free mode for the level by ear; what was on before is kept in [restore]. */
+    private fun byEar() {
+        restore = prefs.sound to prefs.blind
+        if (prefs.sound == "off") prefs.sound = "voice"
+        prefs.blind = true
     }
 
     private fun endLevel(keep: Boolean) {

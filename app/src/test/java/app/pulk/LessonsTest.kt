@@ -90,6 +90,20 @@ class LessonsTest {
         assertEquals("off", prefs.sound); assertFalse(prefs.blind); assertFalse(Coach.active)
     }
 
+    @Test fun leavingTheLevelByEarGivesTheKeyboardBack() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication())
+        prefs.sound = "off"; prefs.blind = false; prefs.lessonsDone = 7
+        val c = Robolectric.buildActivity(TutorialActivity::class.java).setup()
+        all(c.get().window.decorView).filterIsInstance<Button>().last { it.text.toString() == "Начать" }.performClick()
+        assertTrue(prefs.blind)
+        c.pause().stop()                                   // Home: in other apps the keyboard is as it was
+        assertEquals("off", prefs.sound); assertFalse(prefs.blind); assertFalse(Coach.active)
+        c.start().resume()                                 // back to the lesson: by ear again
+        assertEquals("voice", prefs.sound); assertTrue(prefs.blind); assertTrue(Coach.active)
+        click(c.get(), "Меню")
+        assertEquals("off", prefs.sound); assertFalse(prefs.blind)
+    }
+
     @Test fun jabsCourse() {
         assertEquals(14, Lessons.LEVELS.size); assertEquals(14, Lessons.ABOUT.size)
         assertEquals("толкни вправо, поверни вверх и вернись", Lessons.how("м", "ru", false, jabs = true))
