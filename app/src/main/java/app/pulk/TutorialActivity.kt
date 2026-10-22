@@ -80,7 +80,8 @@ class TutorialActivity : Activity() {
         root.addView(text("Печатаешь самой клавиатурой Пульк, подсказки появляются прямо на звезде. Быстро — за один раз, или спокойно — по три-пять минут три дня.", 15f, muted))
         val done = prefs.lessonsDone
         // «Три дня» first: short sessions are the gentlest way in
-        for (l in Lessons.COURSES[Lessons.THREE_DAYS] + (0..7)) {
+        // «Толчки» levels only once «Толчки» are turned on: a newcomer sees one way to learn
+        for (l in Lessons.COURSES[Lessons.THREE_DAYS] + Lessons.COURSES[0] + (if (prefs.mode == "jabs") Lessons.COURSES[1] else IntRange.EMPTY)) {
             val c = Lessons.courseOf(l)
             if (l == Lessons.COURSES[c].first) root.addView(text(when (c) { 0 -> "«Пульс» — буква за смах"; 1 -> "«Толчки» — слово за одно касание"; else -> "Три дня по чуть-чуть" }, 20f, fg, true).apply { setPadding(0, px(22), 0, 0) })
             if (l == Lessons.COURSES[c].first && c == Lessons.THREE_DAYS) root.addView(text(courseNote(), 14f, accent))

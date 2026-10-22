@@ -258,5 +258,10 @@ class Prefs(ctx: Context) {
 
     val left get() = hand == "left"
 
-    companion object { val GESTURES = setOf("space", "hold", "cursor", "bkspword") }
+    companion object {
+        val GESTURES = setOf("space", "hold", "cursor", "bkspword")
+        /** A newcomer learns one way, «Пульс»; «Толчки» live in «Для опытных». Who chose them keeps them in the list. */
+        fun modes(p: Prefs, base: List<Pair<String, String>>) = if (p.mode == "jabs") base.take(1) + ("jabs" to "Толчки") + base.drop(1) else base
+        const val JABS_NOTE = "Толчки — целое слово одним касанием, не отрывая пальца: толчок к букве и назад. Быстрее, когда «Пульс» уже освоен."
+    }
 }

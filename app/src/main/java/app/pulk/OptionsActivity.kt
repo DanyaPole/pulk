@@ -25,14 +25,14 @@ class OptionsActivity : Activity() {
     private fun main() {
         val body = ui.column()
         body.addView(ui.title("Настройки"))
-        body.addView(ui.choice("Способ набора", listOf("pulse" to "Пульс", "jabs" to "Толчки", "taps" to "Два касания"), { prefs.mode }) { prefs.mode = it })
+        body.addView(ui.choice("Способ набора", Prefs.modes(prefs, listOf("pulse" to "Пульс", "taps" to "Два касания")), { prefs.mode }) { prefs.mode = it })
         body.addView(ui.choice("Привычная клавиатура", listOf("off" to "Выкл", "classic" to "ЙЦУКЕН"), { if (prefs.mode == "classic") "classic" else "off" }) { prefs.mode = if (it == "classic") "classic" else "pulse" })
         body.addView(ui.note("Обычные ряды клавиш — для того, кто к ним привык. После каждой буквы маленькая звезда показывает, каким смахом она набирается в «Пульсе»: переход случится сам, когда захочется."))
         body.addView(ui.onOff("Показывать звезду-подсказку", { prefs.bridge }) { prefs.bridge = it })
         body.addView(ui.choice("Одна кнопка", listOf("off" to "Выкл", "scan" to "Сканирование"), { if (prefs.mode == "scan") "scan" else "off" }) { prefs.mode = if (it == "scan") "scan" else "pulse" })
         body.addView(ui.note("Для тех, кто может нажать только одну кнопку: клавиатура по очереди подсвечивает лепестки, пробел, ⌫ и ⏎, а потом буквы лепестка. Нажатие — любое касание клавиатуры или внешняя кнопка (пробел, ввод)."))
         body.addView(ui.choice("Скорость сканирования", listOf("1800" to "Медленно", "1200" to "Средне", "800" to "Быстро"), { prefs.scanMs.toString() }) { prefs.scanMs = it.toInt() })
-        body.addView(ui.note("Пульс — смах на букву. Толчки — слово одним касанием, не отрывая пальца. Два касания — без смахов: коснись лепестка, он раскроется крупно, коснись буквы."))
+        body.addView(ui.note("Пульс — смах на букву. " + (if (prefs.mode == "jabs") "Толчки — слово одним касанием, не отрывая пальца. " else "") + "Два касания — без смахов: коснись лепестка, он раскроется крупно, коснись буквы."))
         body.addView(ui.choice("Рука", listOf("left" to "Левая", "right" to "Правая"), { prefs.hand }) { prefs.hand = it })
         body.addView(ui.choice("Где начинать смах", listOf("corner" to "Звезда в углу", "screen" to "Весь экран"), { prefs.zone }) { prefs.zone = it })
         body.addView(ui.note("Весь экран: смах начинается где угодно, звезда появляется под пальцем. Пока клавиатура открыта, приложение за ней не нажимается: чтобы нажать «Отправить», спрячь клавиатуру ⌄."))
@@ -91,6 +91,10 @@ class OptionsActivity : Activity() {
         body.addView(ui.note("Сложные жесты открываются после уроков. Включены: " +
             (prefs.gestures.map { mapOf("space" to "смахи по пробелу", "hold" to "удержание (ё)", "cursor" to "курсор", "bkspword" to "стереть слово по ⌫")[it] }.joinToString(", ").ifEmpty { "пока только основные" }) + "."))
         if (prefs.gestures != Prefs.GESTURES) body.addView(ui.button("Включить все жесты") { prefs.gestures = Prefs.GESTURES; (it as Button).text = "✓ Все жесты включены" })
+
+        body.addView(ui.h("Для опытных"))
+        body.addView(ui.onOff("Толчки", { prefs.mode == "jabs" }) { prefs.mode = if (it) "jabs" else "pulse" })
+        body.addView(ui.note(Prefs.JABS_NOTE))
 
         body.addView(ui.h("Жесты — справка"))
         body.addView(ui.text(

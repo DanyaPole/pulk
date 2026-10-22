@@ -50,8 +50,8 @@ class ComfortActivity : Activity() {
         body.addView(ui.button(if (prefs.calibrated) "Под мою руку — заново, 30 секунд" else "Под мою руку — 30 секунд") { startActivity(Intent(this, CalibrationActivity::class.java)) })
         body.addView(ui.note("Пульк узнает дрожь, длину смахов и куда палец на самом деле ведёт."))
         body.addView(choice("Защита от случайных касаний", listOf("0" to "Нет", "1" to "Слабая", "2" to "Сильная"), { prefs.guard.toString() }) { prefs.guard = it.toInt() })
-        body.addView(choice("Способ набора", listOf("pulse" to "Пульс", "jabs" to "Толчки", "taps" to "Касания", "scan" to "Кнопка"), { prefs.mode }) { prefs.mode = it })
-        body.addView(ui.note("Пульс — смах на букву. Толчки — слово одним касанием. Касания — без смахов: лепесток, потом буква. Кнопка — сканирование для того, кто может только нажать одну кнопку."))
+        body.addView(choice("Способ набора", Prefs.modes(prefs, listOf("pulse" to "Пульс", "taps" to "Касания", "scan" to "Кнопка")), { prefs.mode }) { prefs.mode = it })
+        body.addView(ui.note("Пульс — смах на букву. " + (if (prefs.mode == "jabs") "Толчки — слово одним касанием. " else "") + "Касания — без смахов: лепесток, потом буква. Кнопка — сканирование для того, кто может только нажать одну кнопку."))
         body.addView(choice("Размер звезды", listOf("100" to "Обычная", "112" to "Крупнее", "120" to "Крупная"), { (if (prefs.size >= 120) 120 else if (prefs.size >= 112) 112 else 100).toString() }) { prefs.size = it.toInt() })
 
         body.addView(ui.h("Глаза и уши"))

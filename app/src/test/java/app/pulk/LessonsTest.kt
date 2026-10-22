@@ -99,7 +99,27 @@ class LessonsTest {
         assertTrue(Lessons.isBlind(7) && Lessons.isJabs(7) && !Lessons.isJabs(3))
     }
 
-    @Test fun theMenuHasBothCourses() {
+    @Test fun aNewcomerSeesOnlyPulse() {
+        assertEquals("pulse", Prefs(org.robolectric.RuntimeEnvironment.getApplication()).mode)
+        val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
+        val texts = all(a.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
+        assertTrue(texts.any { it.startsWith("«Пульс»") })
+        assertFalse(texts.any { it.startsWith("«Толчки»") })
+        assertEquals(4, (0..3).count { l -> texts.any { it.startsWith("${l + 1}. ${Lessons.LEVELS[l]}") } })
+        assertFalse((4..7).any { l -> texts.any { it.contains(Lessons.LEVELS[l]) } })
+        // settings: «Толчки» not in «Способ набора», but in «Для опытных»
+        val o = all(Robolectric.buildActivity(OptionsActivity::class.java).setup().get().window.decorView)
+        assertFalse(o.filterIsInstance<Button>().any { it.text.toString().endsWith("Толчки") })
+        val more = all(Robolectric.buildActivity(OptionsActivity::class.java, android.content.Intent().putExtra(OptionsActivity.MORE, true)).setup().get().window.decorView)
+        assertTrue(more.filterIsInstance<TextView>().any { it.text.toString() == "Для опытных" })
+        assertTrue(more.filterIsInstance<TextView>().any { it.text.toString() == Prefs.JABS_NOTE })
+    }
+
+    @Test fun savedJabsStayAsBefore() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()); prefs.mode = "jabs"
+        val o = all(Robolectric.buildActivity(OptionsActivity::class.java).setup().get().window.decorView)
+        assertTrue(o.filterIsInstance<Button>().any { it.text.toString() == "✓ Толчки" })
+        assertEquals("jabs", prefs.mode)
         val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
         val texts = all(a.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
         assertTrue(texts.any { it.startsWith("«Толчки»") })
