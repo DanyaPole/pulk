@@ -379,8 +379,12 @@ class PulkService : InputMethodService() {
     /** The gesture for the best suggestion: along the space key upwards. Without suggestions, a space. */
     fun pickBest() { if (cands.isNotEmpty()) pick(0) else space() }
 
-    /** Space gesture outwards / inwards: a full stop or a comma that replaces the space before it. */
+    /**
+     * Space gesture outwards / inwards: a full stop or a comma that replaces the space before it.
+     * In a password, an address or a number it is just the character: «ivan.petrov@mail.ru» needs no spaces.
+     */
     fun punct(c: String) {
+        if (!prose) { feedback.hush(); undo = null; io.commit(c); feedback.letter(Pulse.Slot(-1, 'c', c), c, lang, secure); after(); return }
         if (io.before(40).isBlank()) return
         finishWord()
         val before = io.before(40)

@@ -215,6 +215,18 @@ class KeyboardTest {
         assertEquals("да  ", field.sb.toString())   // a password gets exactly what was typed
     }
 
+    @Test fun aFullStopByGestureInAnAddressHasNoSpace() {
+        for (c in "да") letter(c.toString()); svc.punct("."); letter("н")
+        assertEquals("Да. Н", field.sb.toString())   // ordinary text: the end of a sentence
+        field.sb.clear(); field.cur = 0
+        for (t in listOf(InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS, InputType.TYPE_TEXT_VARIATION_PASSWORD)) {
+            svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or t })
+            for (c in "да") letter(c.toString()); svc.punct("."); letter("н"); svc.punct(",")
+            assertEquals("да.н,", field.sb.toString())   // an address or a password: just the character
+            field.sb.clear(); field.cur = 0
+        }
+    }
+
     @Test fun blindModeTapAnywhereIsSpace() {
         svc.prefs.blind = true; view.refresh(); measure()
         for (c in "да") letter(c.toString())
