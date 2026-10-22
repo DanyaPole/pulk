@@ -132,6 +132,7 @@ class TutorialActivity : Activity() {
     }
 
     private fun endLevel(keep: Boolean) {
+        cancelPending()
         Coach.reset()
         val r = restore ?: return
         restore = null
@@ -251,7 +252,12 @@ class TutorialActivity : Activity() {
         voice.say(st.word ?: if (st.want == " ") "пробел" else st.want ?: "", 1.0f)
     }
 
+    /** The next step, waiting for the «Получилось!» to be seen; «Меню», Back or a new level cancel it. */
+    private var pending: Runnable? = null
+    private fun cancelPending() { pending?.let { handler.removeCallbacks(it) }; pending = null; lock = false }
+
     private fun advance(success: Boolean) {
+        if (pending != null) return   // one step at a time: a second «Пропустить» in the pause skips nothing more
         lock = true
         if (success) {
             val n = Pond.add(prefs)
@@ -260,11 +266,13 @@ class TutorialActivity : Activity() {
         }
         offerRow?.visibility = View.GONE
         misses = 0
-        handler.postDelayed({
+        val r = Runnable {
+            pending = null
             i++
             field?.setText(""); lock = false
             if (i >= steps.size) levelDone() else { status?.text = ""; paintStep() }
-        }, if (success) 650 else 100)
+        }
+        pending = r; handler.postDelayed(r, if (success) 650 else 100)
     }
 
     private fun levelDone() {

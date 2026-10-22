@@ -104,6 +104,19 @@ class LessonsTest {
         assertEquals("off", prefs.sound); assertFalse(prefs.blind)
     }
 
+    @Test fun menuRightAfterALetterDoesNotFall() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication())
+        prefs.lang = "ru"; prefs.hand = "right"; prefs.lessonsDone = 0; prefs.sound = "off"; prefs.blind = false
+        val a = Robolectric.buildActivity(TutorialActivity::class.java).setup().get()
+        click(a, "Начать")
+        all(a.window.decorView).filterIsInstance<EditText>().single().setText("а")   // right: «Получилось!», the next step waits
+        click(a, "Меню"); idle(1000)                                                 // the menu at once: the waiting step is dropped
+        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Обучение" })
+        click(a, "Начать")
+        click(a, "Пропустить"); click(a, "Пропустить"); idle(300)                    // two quick taps: one step on
+        assertTrue(all(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains(" · 2/") })
+    }
+
     @Test fun jabsCourse() {
         assertEquals(14, Lessons.LEVELS.size); assertEquals(14, Lessons.ABOUT.size)
         assertEquals("толкни вправо, поверни вверх и вернись", Lessons.how("м", "ru", false, jabs = true))
