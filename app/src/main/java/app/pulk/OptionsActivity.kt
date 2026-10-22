@@ -25,11 +25,12 @@ class OptionsActivity : Activity() {
     private fun main() {
         val body = ui.column()
         body.addView(ui.title("Настройки"))
-        body.addView(ui.choice("Способ набора", Prefs.modes(prefs, listOf("pulse" to "Пульс", "taps" to "Два касания")), { prefs.mode }) { prefs.mode = it })
-        body.addView(ui.choice("Привычная клавиатура", listOf("off" to "Выкл", "classic" to "ЙЦУКЕН"), { if (prefs.mode == "classic") "classic" else "off" }) { prefs.mode = if (it == "classic") "classic" else "pulse" })
+        // three rows choose one mode: «Выкл» turns off only its own mode, and every row shows the mode that is on now
+        body.addView(ui.choice("Способ набора", Prefs.modes(prefs, listOf("pulse" to "Пульс", "taps" to "Два касания")), { prefs.mode }) { mode(it) })
+        body.addView(ui.choice("Привычная клавиатура", listOf("off" to "Выкл", "classic" to "ЙЦУКЕН"), { if (prefs.mode == "classic") "classic" else "off" }) { mode(if (it == "classic") "classic" else if (prefs.mode == "classic") "pulse" else prefs.mode) })
         body.addView(ui.note("Обычные ряды клавиш — для того, кто к ним привык. После каждой буквы маленькая звезда показывает, каким смахом она набирается в «Пульсе»: переход случится сам, когда захочется."))
         body.addView(ui.onOff("Показывать звезду-подсказку", { prefs.bridge }) { prefs.bridge = it })
-        body.addView(ui.choice("Одна кнопка", listOf("off" to "Выкл", "scan" to "Сканирование"), { if (prefs.mode == "scan") "scan" else "off" }) { prefs.mode = if (it == "scan") "scan" else "pulse" })
+        body.addView(ui.choice("Одна кнопка", listOf("off" to "Выкл", "scan" to "Сканирование"), { if (prefs.mode == "scan") "scan" else "off" }) { mode(if (it == "scan") "scan" else if (prefs.mode == "scan") "pulse" else prefs.mode) })
         body.addView(ui.note("Для тех, кто может нажать только одну кнопку: клавиатура по очереди подсвечивает лепестки, пробел, ⌫ и ⏎, а потом буквы лепестка. Нажатие — любое касание клавиатуры или внешняя кнопка (пробел, ввод)."))
         body.addView(ui.choice("Скорость сканирования", listOf("1800" to "Медленно", "1200" to "Средне", "800" to "Быстро"), { prefs.scanMs.toString() }) { prefs.scanMs = it.toInt() })
         body.addView(ui.note("Пульс — смах на букву. " + (if (prefs.mode == "jabs") "Толчки — слово одним касанием, не отрывая пальца. " else "") + "Два касания — без смахов: коснись лепестка, он раскроется крупно, коснись буквы."))
@@ -59,6 +60,16 @@ class OptionsActivity : Activity() {
         bottom.addView(ui.button("Готово", main = true) { finish() })
         setContentView(ui.screen(body, bottom))
     }
+
+    /** A new typing mode: the screen is drawn again where it was, so no row keeps a stale ✓. */
+    private fun mode(m: String) {
+        if (m == prefs.mode) return
+        prefs.mode = m
+        val y = scroller()?.scrollY ?: 0
+        main()
+        scroller()?.let { it.post { it.scrollTo(0, y) } }
+    }
+    private fun scroller() = ((findViewById<android.view.ViewGroup>(android.R.id.content).getChildAt(0) as? android.view.ViewGroup)?.getChildAt(0) as? android.widget.ScrollView)
 
     private fun more() {
         val body = ui.column()

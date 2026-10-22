@@ -142,6 +142,20 @@ class LessonsTest {
         assertTrue(more.filterIsInstance<TextView>().any { it.text.toString() == Prefs.JABS_NOTE })
     }
 
+    @Test fun offTurnsOffOnlyItsOwnMode() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()); prefs.mode = "taps"
+        val a = Robolectric.buildActivity(OptionsActivity::class.java).setup().get()
+        fun tap(title: String, label: String) = all(a.window.decorView).filterIsInstance<Button>().first { it.contentDescription == "$title: $label" }.performClick()
+        tap("Одна кнопка", "Выкл")                           // already off: «Два касания» stays
+        assertEquals("taps", prefs.mode)
+        tap("Привычная клавиатура", "ЙЦУКЕН")
+        assertEquals("classic", prefs.mode)
+        val ticks = all(a.window.decorView).filterIsInstance<Button>().filter { it.isSelected }.map { it.contentDescription.toString() }
+        assertTrue(ticks.contains("Привычная клавиатура: ЙЦУКЕН")); assertFalse(ticks.any { it.startsWith("Способ набора") })   // no stale ✓
+        tap("Привычная клавиатура", "Выкл")
+        assertEquals("pulse", prefs.mode)
+    }
+
     @Test fun savedJabsStayAsBefore() {
         val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()); prefs.mode = "jabs"
         val o = all(Robolectric.buildActivity(OptionsActivity::class.java).setup().get().window.decorView)
