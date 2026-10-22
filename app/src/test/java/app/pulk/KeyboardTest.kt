@@ -618,6 +618,10 @@ class KeyboardTest {
             picture("classic")
             key('<')
             assertEquals("Мама", field.sb.toString())
+            assertTrue(view.bridge != null)
+            svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD })
+            view.reset(open = true); key('м')
+            assertTrue(view.bridge == null || view.bridge!!.v != "м")   // in a password the letter is not shown big above the keys
         } finally { svc.prefs.mode = "pulse" }
     }
 }

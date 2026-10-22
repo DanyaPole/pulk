@@ -436,7 +436,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
      * The bridge to the star: after each letter, a small star above the keys shows how the same letter is stroked —
      * the petal lit and the way the finger goes. The star is learned along the way, without a lesson.
      */
-    private var bridge: Pulse.Slot? = null
+    internal var bridge: Pulse.Slot? = null; private set
     private var bridgeT = 0L
     private fun drawBridge(c: Canvas, col: Colors) {
         val s = bridge ?: return
@@ -488,7 +488,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                     'E' -> svc.enter()
                     'L' -> svc.switchLang()
                     'N' -> svc.toggleSymbols()
-                    else -> { val s = k.toString(); svc.typeLetter(s, Pulse.Slot(0, 'c', s)); if (!svc.symbols) showBridge(s.lowercase()) }
+                    else -> { val s = k.toString(); svc.typeLetter(s, Pulse.Slot(0, 'c', s)); if (!svc.symbols && !svc.isSecure) showBridge(s.lowercase()) }   // a password letter is never shown big
                 }
                 invalidate()
             }
