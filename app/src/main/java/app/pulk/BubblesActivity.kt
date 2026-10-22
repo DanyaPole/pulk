@@ -49,6 +49,8 @@ class BubblesActivity : Activity() {
     internal var letter = ""
     internal var n = 0
     private var miss = 0
+    private var roundLevel = 0
+    private var popping = false   // the bubble is bursting: the next letter is not on yet, more typing counts nothing
     private lateinit var bubble: TextView
     private lateinit var note: TextView
     private lateinit var count: TextView
@@ -60,8 +62,9 @@ class BubblesActivity : Activity() {
     override fun onStart() { super.onStart(); Coach.resume() }
 
     private fun start() {
-        n = 0; miss = 0
-        val lv = level(prefs.popped)
+        handler.removeCallbacksAndMessages(null)
+        n = 0; miss = 0; popping = false
+        val lv = level(prefs.popped); roundLevel = lv
         val body = ui.column(28)
         body.addView(ui.title("Пузыри"))
         body.addView(ui.text(listOf("Крупные буквы: прямой смах.", "Добавились буквы у центра: туда и обратно.", "Все буквы: и с поворотом.")[lv] + " Пузырь ждёт — спешить некуда.", 17f, ui.muted))
@@ -105,16 +108,23 @@ class BubblesActivity : Activity() {
     }
 
     internal fun typed(got: String) {
+        if (popping || n >= ROUND) return
         val st = stats(prefs.letters)
         val v = st.getOrPut(letter) { intArrayOf(0, 0) }
         if (got == letter) {
             v[0]++; prefs.letters = statsLine(st); prefs.popped = prefs.popped + 1
             sounds.drop(if (prefs.dropKind == "off") "off" else "drip")
-            n++; miss = 0; note.text = ""
+            n++; miss = 0; note.text = ""; popping = true
             bubble.animate().scaleX(1.5f).scaleY(1.5f).alpha(0f).setDuration(320).start()
             handler.postDelayed({
+                popping = false
                 if (n < ROUND) { letter = next(level(prefs.popped), stats(prefs.letters), letter, Math.random()); paint() }
-                else { Coach.reset(); bubble.text = "★"; bubble.alpha = 1f; bubble.scaleX = 1f; bubble.scaleY = 1f; note.setTextColor(ui.accent); note.text = "$ROUND пузырей! +1 капля — в пруду ${Pond.add(prefs)}"; count.text = "" }
+                else {
+                    // the round is over, as in the web: a drop, and «Ещё раунд» when the person wants it
+                    Coach.reset(); bubble.text = "★"; bubble.alpha = 1f; bubble.scaleX = 1f; bubble.scaleY = 1f; note.setTextColor(ui.accent); count.text = ""
+                    note.text = "$ROUND пузырей! +1 капля — в пруду ${Pond.add(prefs)}" + if (level(prefs.popped) > roundLevel) ". Дальше — новые буквы." else ""
+                    (note.parent as? android.view.ViewGroup)?.let { b -> b.addView(ui.button("Ещё раунд", main = true) { start() }, b.indexOfChild(note) + 1) }
+                }
             }, 350)
         } else {
             v[1]++; prefs.letters = statsLine(st); miss++

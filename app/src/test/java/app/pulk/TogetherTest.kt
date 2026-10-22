@@ -109,6 +109,12 @@ class TogetherTest {
         g.typed(if (g.letter == "о") "а" else "о"); assertEquals(0, g.n)          // a miss: nothing lost, the bubble waits
         repeat(BubblesActivity.ROUND) { g.typed(g.letter); org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400)) }
         assertEquals(BubblesActivity.ROUND, g.n); assertEquals(d0 + 1, p.drops); assertEquals(BubblesActivity.ROUND, p.popped)
+        g.typed(g.letter); g.typed("а")                                         // after the round: nothing more is counted
+        assertEquals(d0 + 1, p.drops); assertEquals(BubblesActivity.ROUND, p.popped)
+        all(g.window.decorView).filterIsInstance<android.widget.Button>().first { it.text.toString() == "Ещё раунд" }.performClick()
+        assertEquals(0, g.n)
+        val l = g.letter; g.typed(l); g.typed(l)                                  // twice while the bubble bursts: one bubble
+        assertEquals(1, g.n); assertEquals(BubblesActivity.ROUND + 1, p.popped)
         Coach.reset()
     }
 }
