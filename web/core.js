@@ -1,6 +1,6 @@
 // Пульк в браузере — the pure core: the star's geometry and recogniser (as Pulse.kt), «Толчки» (Pulse.Jabs),
 // words with stroke-slip correction (Words.kt) and the 1€ filter (Pulse.OneEuro). No page, no storage: tested in
-// Node by tools/test-pulk-web.js on every build of the site. app.js takes all of it from window.PulkCore.
+// Node by tools/test-web.js on every build of the site. app.js takes all of it from window.PulkCore.
 (function (root) {
   'use strict';
   const DEG = Math.PI / 180;

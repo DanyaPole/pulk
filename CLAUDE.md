@@ -4,8 +4,8 @@
 
 ## Две версии — одна правда
 - **Android** — эта папка `C:\dev\projects\pulk` (Kotlin без библиотек). Системная клавиатура для всех приложений.
-- **Веб** — `C:\dev\projects\duga\pulk\web` (core.js — ядро, app.js — страница). Для iPhone, печатает внутри страницы.
-- Общие данные (буквы звезды, фразы, тренировки, пруд) живут в Kotlin и переносятся в веб: `node tools/build-pulk-web.js` в `C:\dev\projects\duga`.
+- **Веб** — `C:\dev\projects\pulk\web` в этом же репозитории (core.js — ядро, app.js — страница). Для iPhone, печатает внутри страницы. Сайт Дуги забирает эту папку сам при каждой публикации — в Дуге веба больше нет, правь только здесь.
+- Общие данные (буквы звезды, фразы, тренировки, пруд) живут в Kotlin и переносятся в веб: `node tools/build-web.js` здесь.
 - Сайт: https://danyapole.github.io/duga/pulk/ (скачивание, таблица «Android или браузер», инструкции родителю/пользователю/педагогу из `C:\dev\projects\duga\tools\make-guides.js`).
 
 ## Как работаем
@@ -20,7 +20,8 @@
 ## Сборка и выпуск
 - Скил `pulk-release` (в `.claude/skills`) — весь порядок: тесты, версия, APK, страница, веб.
 - Тесты Android: `powershell -NoProfile -File gw.ps1 testDebugUnitTest` (в фоне; не править файлы, пока идёт). Снимки экранов — `app/build/shots`.
-- Тесты веба идут сами при сборке сайта: `node tools/build-pages.js` в `C:\dev\projects\duga`.
+- Тесты веба: `node tools/test-web.js` здесь (словари Android); сборка сайта (`node tools/build-pages.js` в `C:\dev\projects\duga`) прогоняет их ещё раз со словарями сайта и не публикует, если упал хоть один.
+- Веб в браузере грузит словари сайта Дуги (`../../dict_*.txt`), они короче словарей Android (нет однобуквенных слов) — сознательно не трогали, ждёт решения автора.
 - Коммиты: `git -c user.name=DanyaPole -c user.email=DanyaPole@users.noreply.github.com`; ключ подписи `keys/` не в git.
 
 ## Принципы продукта (не нарушать)

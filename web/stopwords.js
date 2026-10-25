@@ -4,7 +4,7 @@
 //   words — whole words only;
 //   roots — the start of a word, also after a prefix from «prefixes» (на-хуй, за-сранец, отъ-ебись);
 //   parts — anywhere inside a word (English only: Russian roots hide inside harmless words, as «ёб» in «ребёнок»).
-// tools/test-pulk-web.js checks that harmless look-alikes (ребёнок, небо, команда, страх, cocktail) stay allowed.
+// tools/test-web.js checks that harmless look-alikes (ребёнок, небо, команда, страх, cocktail) stay allowed.
 window.PULK_STOP = {
   words: [
     // ru: insults
