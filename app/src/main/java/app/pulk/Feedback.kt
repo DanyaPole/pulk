@@ -208,11 +208,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
         if (text.isBlank()) return
         trace?.invoke("say " + text)
         if (exploring()) { announcer?.invoke(text); return }
-        val lang = when {
-            text.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' } -> "ru"
-            text.any { it in 'a'..'z' || it in 'A'..'Z' } -> "en"
-            else -> prefs.lang
-        }
+        val lang = Voice.languageFor(text, prefs.lang)
         if (tts == null) {
             tts = try {
                 TextToSpeech(ctx.applicationContext) { status ->
@@ -228,7 +224,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     private fun speakNow(text: String, rate: Float, lang: String) {
         val t = tts ?: return
         try {   // an engine that throws must not take the keyboard down with it
-            if (!Voice.useLocalVoice(t, lang)) return
+            if (!Voice.useLocalVoice(t, lang, if (lang == "ru") prefs.voice else "")) return
             t.setSpeechRate(rate)
             t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pulk")
         } catch (_: Exception) {}

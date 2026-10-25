@@ -531,23 +531,40 @@
 
   // ---- the voice ----
   let lastSaid = '', utter = null;
+  let pendingSpeech = null, hintRussian = true, paintVoiceSettings = null;
   function rate() { return store.get('rate', 1); }
   // Only explicitly local voices: a default or online voice may send the phrase to a service.
   function voices(ru) {
     if (!window.speechSynthesis) return [];
-    const vs = speechSynthesis.getVoices().filter(function (x) { return x.lang && x.lang.toLowerCase().indexOf(ru ? 'ru' : 'en') === 0; });
+    const vs = speechSynthesis.getVoices().filter(function (x) { return typeof x.lang === 'string' && (ru ? /^ru([_-]|$)/i : /^en([_-]|$)/i).test(x.lang); });
     return vs.filter(onPhone);
   }
   function onPhone(v) { return v.localService === true; }
+  function hideVoiceHint() { $('voiceHint').hidden = true; pendingSpeech = null; }
+  if (window.speechSynthesis) {
+    speechSynthesis.addEventListener('voiceschanged', function () {
+      if (paintVoiceSettings) paintVoiceSettings();
+      if (voices(hintRussian).length) {
+        const p = pendingSpeech; hideVoiceHint();
+        if (p) say(p.text, p.word);
+      }
+    });
+    speechSynthesis.getVoices();   // start loading before the first touch, including outside the settings
+  }
   function say(t, word) {
     t = (t || '').trim(); if (!t) return;
-    if (!word) lastSaid = t;
+    if (!word || !lastSaid) lastSaid = t;
+    pendingSpeech = null;
     if (!window.speechSynthesis) { $('voiceHint').hidden = false; return; }
-    const ss = speechSynthesis, ru = /[а-яё]/i.test(t) || !/[a-z]/i.test(t);
+    const ss = speechSynthesis, ru = /[а-яё]/i.test(t) || (!/[a-z]/i.test(t) && lang === 'ru');
+    hintRussian = ru;
     const vs = voices(ru), chosen = store.get('voice', '');
     const voice = vs.filter(function (x) { return x.name === chosen; })[0] || vs[0];
-    if (!voice) { $('voiceHint').hidden = false; return; }
-    $('voiceHint').hidden = true;
+    if (!voice) {
+      if (!ss.getVoices().length) pendingSpeech = { text: t, word: word };   // the first phrase waits for voiceschanged
+      $('voiceHint').hidden = false; return;
+    }
+    hideVoiceHint();
     const u = new SpeechSynthesisUtterance(t);
     u.lang = ru ? 'ru-RU' : 'en-US'; u.rate = store.get('calm', false) ? Math.min(rate(), 0.9) : rate(); u.pitch = store.get('pitch', 1);
     u.voice = voice;
@@ -588,7 +605,8 @@
   let afterBig = null;
   function closeBig() { bigOpen = false; $('big').style.display = 'none'; const f = afterBig; afterBig = null; if (f) f(); }
   $('flip').onclick = function () { $('big').classList.toggle('flip'); };
-  $('showSilent').onclick = function () { showBig(text.trim() || lastSaid); };
+  $('showSilent').onclick = function () { hideVoiceHint(); showBig(text.trim() || lastSaid); };
+  $('closeVoiceHint').onclick = hideVoiceHint;
   $('back').onclick = function () { if (bigOpen) window.history.back(); else closeBig(); };
 
   // ---- the pond ----
@@ -635,6 +653,7 @@
     if (ignorePops) { if (!--ignorePops) for (; waitingPushes; waitingPushes--) push(); return; }
     if (bigOpen) { closeBig(); return; }
     if (visited.length < 2) return;
+    hideVoiceHint();
     visited.pop(); const e = visited[visited.length - 1];
     tab = e.tab; if (tab !== 'speak') letSleep();
     document.querySelectorAll('#tabs button').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.tab === tab); });
@@ -642,6 +661,7 @@
     restoring = true; try { e.show(); } finally { restoring = false; }
   });
   function begin(mode) {   // every screen starts clean: no guide, no game, no leftover action or Enter
+    paintVoiceSettings = null;
     talking = false; game = null; probe = null; document.body.classList.remove('talking');
     if (sysKbd && mode !== 'speak') { sysKbd = false; document.body.classList.remove('syskbd'); }   // lessons and games need the star
     const s = $('screen'); s.innerHTML = ''; chipMode = mode || 'none'; chipAction = null; onEnter = null; guided = null; showGuide(null); return s;
@@ -816,7 +836,7 @@
     const vr = row(), st = row(), pt = row(); s.appendChild(vr); s.appendChild(st); s.appendChild(pt);
     function paintVoices() {
       vr.innerHTML = ''; const vs = voices(true), cur = store.get('voice', '') || (vs[0] && vs[0].name);
-      if (!vs.length) vr.appendChild(h('p', 'Локальный русский голос не найден. На iPhone: Настройки → Универсальный доступ → Устная речь → Голоса → Русский. Пока фразу можно показать собеседнику.', 'muted'));
+      if (!vs.length) vr.appendChild(h('p', 'Свой русский голос устройства не найден. На iPhone: Настройки → Универсальный доступ → Устная речь → Голоса → Русский. Пока фразу можно показать собеседнику.', 'muted'));
       if (vs.length > 1) vs.forEach(function (v) { vr.appendChild(btn((v.name === cur ? '✓ ' : '') + v.name.replace(/\s*\(.*\)$/, ''), v.name === cur ? 'main' : '', function () { store.set('voice', v.name); paintVoices(); say('Привет! Это мой голос.', true); })); });
     }
     function choices(box, key, def, list, phrase) {
@@ -827,7 +847,7 @@
     choices(st, 'rate', 1, [['Медленно', 0.8], ['Обычно', 1], ['Быстро', 1.3]], 'Так я говорю.');
     // a higher pitch sounds younger: phones have no children's voices, this is the closest a page can get
     choices(pt, 'pitch', 1, [['Голос обычный', 1], ['Моложе', 1.3]], 'Привет! Это мой голос.');
-    if (window.speechSynthesis) speechSynthesis.onvoiceschanged = function () { if (vr.isConnected) paintVoices(); };
+    paintVoiceSettings = function () { if (vr.isConnected) paintVoices(); };
   }
   function handButtons() {
     const r = row('pair');
@@ -1580,7 +1600,7 @@
   function pressTab(name) { document.querySelectorAll('#tabs button').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.tab === name); }); }
   document.querySelectorAll('#tabs button').forEach(function (b) {
     b.onclick = function () {
-      tab = b.dataset.tab; $('screen').scrollTop = 0; if (tab !== 'speak') letSleep();
+      hideVoiceHint(); tab = b.dataset.tab; $('screen').scrollTop = 0; if (tab !== 'speak') letSleep();
       document.querySelectorAll('#tabs button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
       SCREENS[tab]();
     };

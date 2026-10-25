@@ -144,16 +144,19 @@ test('suggestions handle a one-letter word through core Words', () => {
 
 const appSource = read(path.join(root, 'web/app.js'));
 
-function speechFrom(available, chosen = '', busy = false, supported = true) {
-  const spoken = [], timers = [], hint = { hidden: true };
-  const ss = { getVoices: () => available, speaking: busy, cancel() {}, speak: u => spoken.push(u) };
+function speechFrom(available, chosen = '', busy = false, supported = true, lang = 'ru') {
+  const spoken = [], timers = [], hint = { hidden: true }, listeners = {};
+  let reads = 0;
+  const ss = { getVoices: () => { reads++; return available; }, speaking: busy, cancel() {}, speak: u => spoken.push(u),
+    addEventListener: (name, fn) => { listeners[name] = fn; } };
   const start = appSource.indexOf("  let lastSaid = ''"), end = appSource.indexOf('  // «Говорить по словам»', start);
   ok(start >= 0 && end > start, 'speech source is present');
-  const api = new Function('window', 'speechSynthesis', 'SpeechSynthesisUtterance', 'store', '$', 'setTimeout',
-    appSource.slice(start, end) + '\nreturn {say, voices, last: () => lastSaid};')(
+  const api = new Function('window', 'speechSynthesis', 'SpeechSynthesisUtterance', 'store', '$', 'setTimeout', 'lang',
+    appSource.slice(start, end) + '\nreturn {say, voices, last: () => lastSaid, hideVoiceHint: typeof hideVoiceHint === "function" ? hideVoiceHint : () => {}, refreshWith: fn => { if (typeof paintVoiceSettings !== "undefined") paintVoiceSettings = fn; }};')(
     { speechSynthesis: supported ? ss : null }, ss, function (text) { this.text = text; },
-    { get: (k, def) => k === 'voice' ? chosen : def }, () => hint, fn => timers.push(fn));
-  return { ...api, spoken, hint, flush: () => timers.splice(0).forEach(fn => fn()) };
+    { get: (k, def) => k === 'voice' ? chosen : def }, () => hint, fn => timers.push(fn), lang);
+  return { ...api, spoken, hint, reads: () => reads, changed: vs => { available = vs; ok(listeners.voiceschanged, 'global voiceschanged listener'); listeners.voiceschanged(); },
+    flush: () => timers.splice(0).forEach(fn => fn()) };
 }
 
 test('speech rejects network and unknown voices, even when saved', () => {
@@ -182,6 +185,71 @@ test('speech matches the language and the delayed path also uses a local voice',
   s.say('Hello'); eq(s.spoken.length, 0); s.flush();
   eq(s.spoken[0].voice, en); eq(s.hint.hidden, true);
   s.say('Ёж'); s.flush(); eq(s.spoken[1].voice, ru);
+});
+test('voice loading starts on page load and the first phrase is spoken once voices arrive', () => {
+  const s = speechFrom([]), ru = { name: 'ru', lang: 'ru_RU', localService: true };
+  ok(s.reads() > 0, 'getVoices called before the first phrase');
+  s.say('Да'); eq(s.spoken, []); eq(s.hint.hidden, false);
+  s.changed([ru]); eq(s.spoken.map(u => u.text), ['Да']); eq(s.hint.hidden, true);
+  s.changed([ru]); eq(s.spoken.length, 1, 'no repeat on later events');
+});
+test('only the latest phrase is waiting for voices, and dismissing cancels it', () => {
+  const ru = { name: 'ru', lang: 'ru', localService: true }, s = speechFrom([]);
+  s.say('Да'); s.say('Нет'); s.changed([ru]); eq(s.spoken.map(u => u.text), ['Нет']);
+  const closed = speechFrom([]); closed.say('Подожди'); closed.hideVoiceHint(); closed.changed([ru]);
+  eq(closed.spoken, []); eq(closed.hint.hidden, true);
+});
+test('rebuilding the speaking screen keeps the first pending phrase', () => {
+  const s = speechFrom([]), ru = { name: 'ru', lang: 'ru', localService: true };
+  const start = appSource.indexOf('  function begin(mode)'), end = appSource.indexOf('  // «Говорить».', start);
+  ok(start >= 0 && end > start, 'screen rebuild source is present');
+  const begin = new Function('$', 'document', 'showGuide', 'hideVoiceHint',
+    'let paintVoiceSettings, talking, game, probe, sysKbd = false, chipMode, chipAction, onEnter, guided;\n' + appSource.slice(start, end) + 'return begin;')(
+    () => ({ innerHTML: '' }), { body: { classList: { remove() {} } } }, () => {}, s.hideVoiceHint);
+  s.say('Хочу пить'); begin('speak'); s.changed([ru]);
+  eq(s.spoken.map(u => u.text), ['Хочу пить']);
+});
+test('global voice updates refresh settings and hide the hint only for the needed language', () => {
+  const s = speechFrom([]), ru = { name: 'ru', lang: 'ru', localService: true }, en = { name: 'en', lang: 'en-GB', localService: true };
+  let refreshed = 0; s.refreshWith(() => refreshed++);
+  s.say('Hello'); s.changed([ru]); eq(s.hint.hidden, false); eq(s.spoken, []);
+  s.changed([ru, en]); eq(s.hint.hidden, true); eq(s.spoken[0].voice, en); eq(refreshed, 2);
+  ok(!appSource.includes('speechSynthesis.onvoiceschanged ='), 'settings must not replace the global listener');
+});
+test('word speech keeps a nonempty phrase for showing', () => {
+  const s = speechFrom([]); s.say('Привет', true); eq(s.last(), 'Привет');
+  s.say('Другое', true); eq(s.last(), 'Привет'); s.say('Вся фраза'); eq(s.last(), 'Вся фраза');
+});
+test('voice language matching accepts regions and rejects missing or unrelated tags', () => {
+  const ru = { name: 'ru', lang: 'RU_ru', localService: true }, en = { name: 'en', lang: 'en_GB', localService: true };
+  const s = speechFrom([{ localService: true }, { lang: 12, localService: true }, { lang: 'rubbish', localService: true }, ru, en]);
+  eq(s.voices(true), [ru]); eq(s.voices(false), [en]);
+  s.say('5?'); eq(s.spoken[0].voice, ru);
+  const english = speechFrom([en], '', false, true, 'en'); english.say('123'); eq(english.spoken[0].voice, en);
+});
+test('showing or closing the voice hint hides it, and changing tabs also clears it', () => {
+  const nodes = { showSilent: {}, closeVoiceHint: {}, screen: { scrollTop: 4 } }, s = speechFrom([]);
+  let shown;
+  const start = appSource.indexOf("  $('showSilent').onclick"), end = appSource.indexOf("  $('back').onclick", start);
+  new Function('$', 'showBig', 'text', 'lastSaid', 'hideVoiceHint', appSource.slice(start, end))(
+    id => nodes[id], t => { shown = t; }, '', 'Хочу пить', s.hideVoiceHint);
+  s.say('Хочу пить'); nodes.showSilent.onclick(); eq(shown, 'Хочу пить'); eq(s.hint.hidden, true);
+  s.say('Да'); ok(nodes.closeVoiceHint.onclick, 'close action'); nodes.closeVoiceHint.onclick(); eq(s.hint.hidden, true);
+  const tabButton = { dataset: { tab: 'pond' }, setAttribute() {} };
+  const tabsStart = appSource.indexOf("  document.querySelectorAll('#tabs button').forEach(function (b) {"), tabsEnd = appSource.indexOf("  window.addEventListener('resize'", tabsStart);
+  ok(tabsStart >= 0 && tabsEnd > tabsStart, 'tab handlers present');
+  new Function('document', '$', 'hideVoiceHint', 'SCREENS', 'letSleep', 'let tab;\n' + appSource.slice(tabsStart, tabsEnd))(
+    { querySelectorAll: () => [tabButton] }, id => nodes[id], s.hideVoiceHint, { pond() {} }, () => {});
+  s.say('Нет'); tabButton.onclick(); eq(s.hint.hidden, true);
+  s.changed([{ name: 'ru', lang: 'ru', localService: true }]); eq(s.spoken, [], 'no deferred speech after leaving the tab');
+});
+test('the voice hint announces text only and keeps both actions accessible', () => {
+  const html = read(path.join(root, 'web/index.html'));
+  const hint = html.slice(html.indexOf('<div id="voiceHint"'), html.indexOf('<div id="chips"'));
+  ok(/<p[^>]*role="status"[^>]*>[^<]+<\/p>/.test(hint), 'status contains text only');
+  ok(!/^<div[^>]*role="status"/.test(hint), 'buttons outside live status');
+  ok(/id="closeVoiceHint"[^>]*aria-label="[^"]+"/.test(hint), 'close has a spoken label');
+  ok(!/локальн/i.test(hint), 'plain language');
 });
 test('left-hand layout puts «Сказать» at the left edge', () => {
   const html = read(path.join(root, 'web/index.html'));
