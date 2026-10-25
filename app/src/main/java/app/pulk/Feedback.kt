@@ -11,7 +11,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
-import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -29,7 +28,6 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-    private var ttsLang = ""
 
     /** For tests: every vibration, sound and spoken word, as text. */
     var trace: ((String) -> Unit)? = null
@@ -210,7 +208,11 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
         if (text.isBlank()) return
         trace?.invoke("say " + text)
         if (exploring()) { announcer?.invoke(text); return }
-        val lang = if (text.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }) "ru" else ttsLang.ifEmpty { prefs.lang }
+        val lang = when {
+            text.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' } -> "ru"
+            text.any { it in 'a'..'z' || it in 'A'..'Z' } -> "en"
+            else -> prefs.lang
+        }
         if (tts == null) {
             tts = try {
                 TextToSpeech(ctx.applicationContext) { status ->
@@ -226,7 +228,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     private fun speakNow(text: String, rate: Float, lang: String) {
         val t = tts ?: return
         try {   // an engine that throws must not take the keyboard down with it
-            if (ttsLang != lang) { t.language = if (lang == "ru") Locale("ru", "RU") else Locale.US; ttsLang = lang }
+            if (!Voice.useLocalVoice(t, lang)) return
             t.setSpeechRate(rate)
             t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pulk")
         } catch (_: Exception) {}

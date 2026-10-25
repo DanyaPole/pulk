@@ -137,6 +137,7 @@ class SturdyTest {
     }
 
     @Test fun theFirstTouchIsSpokenOnceTheVoiceIsReady() {
+        org.robolectric.shadows.ShadowTextToSpeech.addVoice(android.speech.tts.Voice("local-ru", java.util.Locale("ru"), 300, 300, false, emptySet()))
         val v = Voice(app, Prefs(app))
         val tts = org.robolectric.shadows.ShadowTextToSpeech.getLastTextToSpeechInstance()
         v.say("Да")                                                       // the engine is still starting

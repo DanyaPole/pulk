@@ -2,7 +2,6 @@ package app.pulk
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
-import java.util.Locale
 
 /**
  * The phone's voice for «Говорить», its lesson and drills: one place for the language (by the letters of the
@@ -29,7 +28,7 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
             }
         }
     } catch (_: Exception) { trouble = NO_ENGINE; null }
-    private fun hasRussian() = try { (tts?.isLanguageAvailable(Locale("ru", "RU")) ?: TextToSpeech.LANG_AVAILABLE) >= TextToSpeech.LANG_AVAILABLE } catch (_: Exception) { true }
+    private fun hasRussian() = ruVoices().isNotEmpty()
     /** What was said last (also when the voice is not ready yet — the screens and tests read it). */
     var last = ""; private set
     /** Said while the engine was still starting (the first touch on a screen): spoken as soon as it is ready. */
@@ -45,9 +44,13 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
         last = t
         val tts = tts; if (!ready || gone || tts == null) { if (!gone && tts != null && trouble == null) pending = t; return }
         try {   // an engine can throw on a language or voice it half-knows: then this phrase is silent, the app goes on
-            val ru = t.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' }
-            tts.language = if (ru) Locale("ru", "RU") else Locale.US
-            if (ru && prefs.voice.isNotEmpty()) try { tts.voices?.firstOrNull { it.name == prefs.voice }?.let { tts.voice = it } } catch (_: Exception) {}
+            val ru = t.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+            if (!useLocalVoice(tts, if (ru) "ru" else "en", if (ru) prefs.voice else "")) {
+                val reason = if (ru) NO_RUSSIAN else "На телефоне нет английского голоса"
+                if (trouble != reason) { trouble = reason; onTrouble?.invoke() }
+                return
+            }
+            if (trouble != null) { trouble = null; onTrouble?.invoke() }
             tts.setSpeechRate(if (prefs.calm) minOf(prefs.speakRate, 0.9f) else prefs.speakRate)
             tts.setPitch(if (prefs.calm) 0.95f * prefs.pitch else prefs.pitch)
             tts.speak(t, TextToSpeech.QUEUE_FLUSH, null, "pulk-voice")
@@ -57,9 +60,15 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
     fun shutdown() { gone = true; try { tts?.shutdown() } catch (_: Exception) {} }
 
     companion object {
+        /** Never let setLanguage or the engine's default choose a network voice. Recheck on every phrase. */
+        internal fun useLocalVoice(tts: TextToSpeech, lang: String, preferred: String = ""): Boolean {
+            val local = (tts.voices ?: emptySet()).filter { it.locale.language == lang && !it.isNetworkConnectionRequired }
+            val voice = local.firstOrNull { it.name == preferred } ?: local.maxByOrNull { it.quality } ?: return false
+            return tts.setVoice(voice) == TextToSpeech.SUCCESS
+        }
         const val NO_ENGINE = "На телефоне не найден синтез речи"
         const val NO_RUSSIAN = "На телефоне нет русского голоса"
         /** Where to get one: the phone's own settings, no internet for Пульк. */
-        const val HOW = "Настройки → Специальные возможности → Синтез речи: выберите русский язык и скачайте голос. Пока фразу можно «Показать собеседнику»."
+        const val HOW = "Настройки → Специальные возможности → Синтез речи: выберите нужный язык и скачайте голос. Пока фразу можно «Показать собеседнику»."
     }
 }

@@ -95,7 +95,7 @@ class SpeakActivity : Activity() {
         val keep = if (::field.isInitialized) field.text.toString() else ""   // what was being typed survives a rebuild
         val body = ui.column(16)
         val family = Together.family(prefs.family)
-        voice.trouble?.let { body.addView(ui.card(ui.text(it, 16f, ui.urgent, true), ui.note(Voice.HOW))) }
+        voice.trouble?.let { body.addView(ui.card(ui.text(it, 16f, ui.ink, true), ui.note(Voice.HOW))) }
 
         // a choice the adult offered: big, first, said with one touch; a family photo shows on its option
         Together.decode(prefs.choice)?.let { c ->

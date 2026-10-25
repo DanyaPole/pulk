@@ -143,6 +143,46 @@ test('suggestions handle a one-letter word through core Words', () => {
 });
 
 const appSource = read(path.join(root, 'web/app.js'));
+
+function speechFrom(available, chosen = '', busy = false, supported = true) {
+  const spoken = [], timers = [], hint = { hidden: true };
+  const ss = { getVoices: () => available, speaking: busy, cancel() {}, speak: u => spoken.push(u) };
+  const start = appSource.indexOf("  let lastSaid = ''"), end = appSource.indexOf('  // «Говорить по словам»', start);
+  ok(start >= 0 && end > start, 'speech source is present');
+  const api = new Function('window', 'speechSynthesis', 'SpeechSynthesisUtterance', 'store', '$', 'setTimeout',
+    appSource.slice(start, end) + '\nreturn {say, voices, last: () => lastSaid};')(
+    { speechSynthesis: supported ? ss : null }, ss, function (text) { this.text = text; },
+    { get: (k, def) => k === 'voice' ? chosen : def }, () => hint, fn => timers.push(fn));
+  return { ...api, spoken, hint, flush: () => timers.splice(0).forEach(fn => fn()) };
+}
+
+test('speech rejects network and unknown voices, even when saved', () => {
+  const local = { name: 'local', lang: 'ru-RU', localService: true };
+  for (const localService of [false, undefined, null, 'true']) {
+    const network = { name: 'saved', lang: 'ru-RU', localService };
+    const s = speechFrom([network, local], network.name);
+    s.say('Привет'); eq(s.spoken.length, 1); eq(s.spoken[0].voice, local);
+    eq(s.voices(true), [local]);
+  }
+});
+
+test('without a local voice speech stays silent and keeps the phrase for showing', () => {
+  for (const available of [[], [{ name: 'online', lang: 'ru-RU', localService: false }], [{ name: 'english', lang: 'en-US', localService: true }]]) {
+    const s = speechFrom(available, 'online');
+    s.say('  Хочу пить  '); s.flush();
+    eq(s.spoken, []); eq(s.last(), 'Хочу пить'); eq(s.hint.hidden, false);
+  }
+  const unsupported = speechFrom([], '', false, false);
+  unsupported.say('Да'); eq(unsupported.last(), 'Да'); eq(unsupported.spoken, []);
+});
+
+test('speech matches the language and the delayed path also uses a local voice', () => {
+  const ru = { name: 'ru', lang: 'ru-RU', localService: true }, en = { name: 'en', lang: 'en-US', localService: true };
+  const s = speechFrom([ru, en], ru.name, true);
+  s.say('Hello'); eq(s.spoken.length, 0); s.flush();
+  eq(s.spoken[0].voice, en); eq(s.hint.hidden, true);
+  s.say('Ёж'); s.flush(); eq(s.spoken[1].voice, ru);
+});
 test('left-hand layout puts «Сказать» at the left edge', () => {
   const html = read(path.join(root, 'web/index.html'));
   ok(/body\.left-hand #chips button\.main[^}]*order:\s*-1[^}]*left:\s*0/.test(html), 'left-hand main action rule');

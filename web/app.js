@@ -532,21 +532,25 @@
   // ---- the voice ----
   let lastSaid = '', utter = null;
   function rate() { return store.get('rate', 1); }
-  // voices of the phone itself first: an «online» voice (Google, Microsoft in some browsers) sends the phrase to its
-  // service, and «nothing leaves the phone» would not be true — such a voice is never picked by default and is marked
+  // Only explicitly local voices: a default or online voice may send the phrase to a service.
   function voices(ru) {
     if (!window.speechSynthesis) return [];
     const vs = speechSynthesis.getVoices().filter(function (x) { return x.lang && x.lang.toLowerCase().indexOf(ru ? 'ru' : 'en') === 0; });
-    return vs.filter(onPhone).concat(vs.filter(function (x) { return !onPhone(x); }));
+    return vs.filter(onPhone);
   }
-  function onPhone(v) { return v.localService !== false; }
+  function onPhone(v) { return v.localService === true; }
   function say(t, word) {
-    t = (t || '').trim(); if (!t || !window.speechSynthesis) return;
+    t = (t || '').trim(); if (!t) return;
     if (!word) lastSaid = t;
+    if (!window.speechSynthesis) { $('voiceHint').hidden = false; return; }
     const ss = speechSynthesis, ru = /[а-яё]/i.test(t) || !/[a-z]/i.test(t);
-    const u = new SpeechSynthesisUtterance(t), vs = voices(ru), chosen = store.get('voice', '');
+    const vs = voices(ru), chosen = store.get('voice', '');
+    const voice = vs.filter(function (x) { return x.name === chosen; })[0] || vs[0];
+    if (!voice) { $('voiceHint').hidden = false; return; }
+    $('voiceHint').hidden = true;
+    const u = new SpeechSynthesisUtterance(t);
     u.lang = ru ? 'ru-RU' : 'en-US'; u.rate = store.get('calm', false) ? Math.min(rate(), 0.9) : rate(); u.pitch = store.get('pitch', 1);
-    u.voice = vs.filter(function (x) { return x.name === chosen; })[0] || vs[0] || null;
+    u.voice = voice;
     utter = u;   // Safari may drop an utterance nobody holds on to
     // Safari can swallow a phrase spoken right after cancel(): cancel only what is still going, and give it a moment
     // a browser that throws on speaking leaves the phrase silent, never the page broken
@@ -584,6 +588,7 @@
   let afterBig = null;
   function closeBig() { bigOpen = false; $('big').style.display = 'none'; const f = afterBig; afterBig = null; if (f) f(); }
   $('flip').onclick = function () { $('big').classList.toggle('flip'); };
+  $('showSilent').onclick = function () { showBig(text.trim() || lastSaid); };
   $('back').onclick = function () { if (bigOpen) window.history.back(); else closeBig(); };
 
   // ---- the pond ----
@@ -811,10 +816,8 @@
     const vr = row(), st = row(), pt = row(); s.appendChild(vr); s.appendChild(st); s.appendChild(pt);
     function paintVoices() {
       vr.innerHTML = ''; const vs = voices(true), cur = store.get('voice', '') || (vs[0] && vs[0].name);
-      if (!vs.length) vr.appendChild(h('p', 'Русский голос не найден. На iPhone: Настройки → Универсальный доступ → Устная речь → Голоса → Русский.', 'muted'));
-      if (vs.length > 1) vs.forEach(function (v) { vr.appendChild(btn((v.name === cur ? '✓ ' : '') + v.name.replace(/\s*\(.*\)$/, '') + (onPhone(v) ? '' : ' · через интернет'), v.name === cur ? 'main' : '', function () { store.set('voice', v.name); paintVoices(); say('Привет! Это мой голос.', true); })); });
-      const curV = vs.filter(function (v) { return v.name === cur; })[0];
-      if (curV && !onPhone(curV)) vr.appendChild(h('p', 'Этот голос работает через интернет: каждая фраза уходит его сервису. Чтобы всё оставалось на устройстве, установите русский голос в настройках устройства и выберите его здесь.', 'warn'));
+      if (!vs.length) vr.appendChild(h('p', 'Локальный русский голос не найден. На iPhone: Настройки → Универсальный доступ → Устная речь → Голоса → Русский. Пока фразу можно показать собеседнику.', 'muted'));
+      if (vs.length > 1) vs.forEach(function (v) { vr.appendChild(btn((v.name === cur ? '✓ ' : '') + v.name.replace(/\s*\(.*\)$/, ''), v.name === cur ? 'main' : '', function () { store.set('voice', v.name); paintVoices(); say('Привет! Это мой голос.', true); })); });
     }
     function choices(box, key, def, list, phrase) {
       box.innerHTML = '';
@@ -1538,7 +1541,7 @@
     ['Что дальше', [
       'Урок → «Тренировки» по ситуациям (просьбы, самочувствие, окружение) → «Говорить» в жизни. Каждая получившаяся фраза в уроке и тренировках — капля в пруду.',
       'Раз в пару недель сохраняйте копию: «Настройки и помощь» → «Сохранить копию». Из копии всё восстанавливается и на другом телефоне.',
-      'Всё набранное остаётся на этом телефоне: Пульк ничего никуда не отправляет. Голос — встроенный в телефон; если в списке голосов есть пометка «через интернет», такой голос отправляет фразы своему сервису, и Пульк о нём предупредит.']],
+      'Всё набранное остаётся на этом телефоне: Пульк ничего никуда не отправляет. Озвучивание работает только локальным голосом устройства. Если его нет, фразу можно показать собеседнику.']],
   ];
   function parentsScreen(back) {
     const s = begin(); s.scrollTop = 0;
