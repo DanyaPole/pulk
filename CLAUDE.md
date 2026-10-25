@@ -20,8 +20,8 @@
 ## Сборка и выпуск
 - Скил `pulk-release` (в `.claude/skills`) — весь порядок: тесты, версия, APK, страница, веб.
 - Тесты Android: `powershell -NoProfile -File gw.ps1 testDebugUnitTest` (в фоне; не править файлы, пока идёт). Снимки экранов — `app/build/shots`.
-- Тесты веба: `node tools/test-web.js` здесь (словари Android); сборка сайта (`node tools/build-pages.js` в `C:\dev\projects\duga`) прогоняет их ещё раз со словарями сайта и не публикует, если упал хоть один.
-- Веб в браузере грузит словари сайта Дуги (`../../dict_*.txt`), они короче словарей Android (нет однобуквенных слов) — сознательно не трогали, ждёт решения автора.
+- Тесты веба: `node tools/test-web.js` здесь; сборка сайта (`node tools/build-pages.js` в `C:\dev\projects\duga`) прогоняет их ещё раз и не публикует, если упал хоть один.
+- Словари одни на обе версии: `app/src/main/assets/dict_*.txt` и `next_ru.txt`; `node tools/build-web.js` копирует их в `web/`, тест следит, чтобы копии не разошлись (решение автора 25.10.2026).
 - Коммиты: `git -c user.name=DanyaPole -c user.email=DanyaPole@users.noreply.github.com`; ключ подписи `keys/` не в git.
 
 ## Принципы продукта (не нарушать)

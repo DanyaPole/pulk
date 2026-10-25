@@ -1,11 +1,11 @@
 // Tests for Пульк в браузере (web/). The pure core (web/core.js) is checked against the same expectations as
 // the Android app's tests (PulseTest, WordsTest); the data shared with the app (web/data.js) is checked for
 // completeness; the page script is checked to parse. No libraries: node tools/test-web.js
-// The site (DanyaPole/duga, tools/build-pages.js) runs this before publishing, with PULK_DICT_DIR = the site's
-// root: the browser version loads its dictionaries from there. Locally it uses the app's dictionaries.
+// The site (DanyaPole/duga, tools/build-pages.js) runs this before publishing. The browser version ships the
+// app's own dictionaries (web/dict_*.txt, copied by tools/build-web.js); PULK_DICT_DIR can point elsewhere.
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const root = path.join(__dirname, '..');
-const dictDir = process.env.PULK_DICT_DIR || path.join(root, 'app/src/main/assets');
+const dictDir = process.env.PULK_DICT_DIR || path.join(root, 'web');
 // git on Windows may check files out with CRLF: the tests look for text, so line ends are made the same
 const read = f => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
 const box = { window: {}, Math, Object, Array, JSON, isNaN };
@@ -204,6 +204,11 @@ test('very long input is handled', () => {
   eq(W.suggest(long, 4, {}), []);
   eq(W.correction(long, {}), null);
   eq(P.shape('привет', long), 'привет');
+});
+
+test('the browser has the same dictionaries and next-word pairs as the Android app', () => {
+  for (const f of ['dict_ru.txt', 'dict_en.txt', 'next_ru.txt'])
+    ok(read(path.join(root, 'web', f)) === read(path.join(root, 'app/src/main/assets', f)), f + ' is the app\'s (run node tools/build-web.js)');
 });
 
 test('the page script parses', () => {

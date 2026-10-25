@@ -163,7 +163,7 @@
   function loadDict(l) {
     if (dicts[l]) return;
     dicts[l] = 'loading';
-    fetch('../../dict_' + l + '.txt').then(function (r) { return r.ok ? r.text() : ''; })
+    fetch('dict_' + l + '.txt').then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (t) { dicts[l] = new Words(t.split(/\r?\n/), l === 'ru' ? D.RU : D.EN, bad); paintChips(); })
       .catch(function () { dicts[l] = null; });
   }

@@ -139,7 +139,7 @@
 <script>
   // without internet too: the site's service worker keeps Пульк's files after the first visit (a shop, a metro, a hospital)
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) addEventListener('load', function () {
-    const files = ['./', 'index.html', 'data.js', 'core.js', 'app.js', 'next_ru.txt', '../../dict_ru.txt', '../icon.png', '../icon.svg', '../icon-180.png', '../icon-192.png', '../icon-512.png', 'manifest.webmanifest', '../pulk-sound.js'];
+    const files = ['./', 'index.html', 'data.js', 'core.js', 'app.js', 'next_ru.txt', 'dict_ru.txt', '../icon.png', '../icon.svg', '../icon-180.png', '../icon-192.png', '../icon-512.png', 'manifest.webmanifest', '../pulk-sound.js'];
     function warm() { files.forEach(function (u) { fetch(u).catch(function () {}); }); }
     navigator.serviceWorker.register('../../sw.js', { scope: '../../' }).then(function () {
       // once in control, every load goes through it and is kept; only the very first visit needs filling in
