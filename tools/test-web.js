@@ -211,6 +211,11 @@ test('the browser has the same dictionaries and next-word pairs as the Android a
     ok(read(path.join(root, 'web', f)) === read(path.join(root, 'app/src/main/assets', f)), f + ' is the app\'s (run node tools/build-web.js)');
 });
 
+test('both dictionaries are kept for use without internet', () => {
+  const html = read(path.join(root, 'web/index.html'));
+  for (const f of ['dict_ru.txt', 'dict_en.txt', 'next_ru.txt']) ok(html.indexOf("'" + f + "'") >= 0, f + ' is in the offline list of web/index.html');
+});
+
 test('the page script parses', () => {
   for (const f of ['web/app.js']) new Function(read(path.join(root, f)));
 });
