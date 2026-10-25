@@ -661,6 +661,7 @@
     restoring = true; try { e.show(); } finally { restoring = false; }
   });
   function begin(mode) {   // every screen starts clean: no guide, no game, no leftover action or Enter
+  if (mode !== 'speak') hideVoiceHint();   // подсказка про голос не висит поверх чужих экранов
     paintVoiceSettings = null;
     talking = false; game = null; probe = null; document.body.classList.remove('talking');
     if (sysKbd && mode !== 'speak') { sysKbd = false; document.body.classList.remove('syskbd'); }   // lessons and games need the star

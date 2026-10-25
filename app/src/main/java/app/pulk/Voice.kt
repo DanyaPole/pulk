@@ -82,7 +82,7 @@ class Voice(ctx: Context, private val prefs: Prefs, private val onReady: (() -> 
         }
         private fun localVoices(tts: TextToSpeech, lang: String): List<TtsVoice> =
             (tts.voices ?: emptySet()).filter {
-                language(it.locale.language) == language(lang) && !it.isNetworkConnectionRequired &&
+                language(it.locale?.language.orEmpty()) == language(lang) && !it.isNetworkConnectionRequired &&
                     TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in (it.features ?: emptySet())
             }.sortedByDescending { it.quality }
 
