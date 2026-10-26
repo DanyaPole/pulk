@@ -59,6 +59,63 @@ class PulseTest {
         assertTrue(Pulse.resolve(t, doubleArrayOf(-250.0, 20.0)).isSpace) // outside the star
     }
 
+    /** A thumb can settle in another direction before leaving the start circle. */
+    private fun wobblyStart(p: Int, side: Int, end: List<Pair<Double, Double>>): DoubleArray {
+        val a = p * 45.0
+        val wobble = (a + side * 40) * PI / 180
+        return doubleArrayOf(0.0, 0.0, 11.8 * cos(wobble), 11.8 * sin(wobble)) +
+            stroke(doubleArrayOf(0.0, 0.0), listOf(a to 12.0) + end).drop(2).toDoubleArray()
+    }
+
+    @Test fun startWobbleDoesNotChooseThePetalOrTurn() {
+        val t = Pulse.table("ru", false)
+        for (p in 0 until 8) for (side in listOf(-1, 1)) {
+            val a = p * 45.0
+            for (len in listOf(32.0, 45.0, 60.0)) {
+                val pts = wobblyStart(p, side, listOf(a to (len - 12)))
+                assertEquals("straight $p/$side/$len", Pulse.at(t, p, 'c'), Pulse.resolve(t, pts))
+                assertEquals("jab $p/$side/$len", Pulse.at(t, p, 'c'), Pulse.jab(t, pts))
+            }
+            for (sign in listOf(-1, 1)) {
+                val pts = wobblyStart(p, side, listOf(a to 28.0, (a + sign * 70) to 24.0))
+                val want = Pulse.at(t, p, if (sign > 0) 'l' else 'r')
+                assertEquals("turn $p/$side/$sign", want, Pulse.resolve(t, pts))
+                assertEquals("turning jab $p/$side/$sign", want, Pulse.jab(t, pts))
+            }
+        }
+    }
+
+    @Test fun startCirclePreservesShortAndSparseStrokes() {
+        val t = Pulse.table("ru", false)
+        for (p in 0 until 8) {
+            val a = p * 45 * PI / 180
+            fun ray(r: Double) = doubleArrayOf(r * cos(a), r * sin(a))
+            assertTrue(Pulse.resolve(t, doubleArrayOf(0.0, 0.0) + ray(Pulse.P_MIN - .001)).isSpace)
+            assertEquals(Pulse.at(t, p, 'c'), Pulse.resolve(t, doubleArrayOf(0.0, 0.0) + ray(Pulse.P_MIN)))
+            for (len in listOf(14.0, 16.0, 22.0, 29.0, 30.01)) {
+                val kind = if (len < Pulse.JAB_SHORT) 'b' else 'c'
+                assertEquals("short jab $p/$len", Pulse.at(t, p, kind), Pulse.jab(t, doubleArrayOf(0.0, 0.0) + ray(len)))
+            }
+            val back = doubleArrayOf(0.0, 0.0) + ray(24.01) + doubleArrayOf(0.0, 0.0)
+            assertEquals("short return $p", Pulse.at(t, p, 'b'), Pulse.resolve(t, back))
+            val j = Pulse.Jabs(0.0, 0.0)
+            val pts = wobblyStart(p, 1, listOf(p * 45.0 to 20.0)) + doubleArrayOf(0.0, 0.0)
+            val got = pts.toList().chunked(2).mapNotNull { j.add(it[0], it[1]) }.map { Pulse.jab(t, it) }
+            assertEquals("whole jab $p", listOf(Pulse.at(t, p, 'c')), got)
+        }
+    }
+
+    @Test fun startCircleUsesCalibratedAndSmoothedCoordinates() {
+        val t = Pulse.table("ru", false)
+        for (tol in listOf(.6, .75, 1.0, 1.6)) for (smooth in listOf(0.0, .6)) for (p in 0 until 8) {
+            val steady = Pulse.Steady(-120.0, 400.0, tol, smooth)
+            val pts = wobblyStart(p, -1, listOf(p * 45.0 to 48.0)).toList().chunked(2)
+                .flatMapIndexed { i, q -> steady.at(-120 + q[0] * tol, 400 + q[1] * tol, i * 16L).toList() }.toDoubleArray()
+            assertEquals("calibration $tol/$smooth/$p", Pulse.at(t, p, 'c'), Pulse.resolve(t, pts))
+            assertEquals("calibrated jab $tol/$smooth/$p", Pulse.at(t, p, 'c'), Pulse.jab(t, pts))
+        }
+    }
+
     @Test fun blindTapAnywhereIsSpace() {
         val t = Pulse.table("ru", false)
         val s = Pulse.spot(1, 'c')

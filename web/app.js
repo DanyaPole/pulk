@@ -58,27 +58,29 @@
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('height', H);
     svg.innerHTML = ''; petals = []; lifts = []; labels = []; keyEls = {}; lit = -2; labelsKey = '';
     const fs = Math.max(K, 0.85);
+    const startR = P.START_R * store.get('tol', 1), inner = Math.max(18, startR);
     KEYS.forEach(function (k) {
       const poly = el('polygon', { points: arcPts(k.r0 + 3, k.r1 - 3, k.a0 + 0.8, k.a1 - 0.8), fill: C.glass, stroke: C.line, 'stroke-width': 1, 'stroke-linejoin': 'round' });
       const m = (k.r0 + k.r1) / 2, am = (k.a0 + k.a1) / 2 * DEG, p = scr(m * Math.cos(am), m * Math.sin(am));
       keyEls[k.fn] = { poly: poly, text: el('text', { x: p[0], y: p[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: C.ink, 'font-size': 16 * fs, 'font-weight': 600 }) };
     });
     for (let p = 0; p < 8; p++) {
-      const g = 1.6 / R / DEG, gi = 1.6 / 18 / DEG, pts = [];
+      const g = 1.6 / R / DEG, gi = 1.6 / inner / DEG, pts = [];
       for (let i = 0; i <= 8; i++) { const a = (p * 45 - 22.5 + g + (45 - 2 * g) * i / 8) * DEG; pts.push(scr(PH[0] + (R - 1) * Math.cos(a), PH[1] + (R - 1) * Math.sin(a))); }
-      for (let j = 8; j >= 0; j--) { const b = (p * 45 - 22.5 + gi + (45 - 2 * gi) * j / 8) * DEG; pts.push(scr(PH[0] + 18 * Math.cos(b), PH[1] + 18 * Math.sin(b))); }
+      for (let j = 8; j >= 0; j--) { const b = (p * 45 - 22.5 + gi + (45 - 2 * gi) * j / 8) * DEG; pts.push(scr(PH[0] + inner * Math.cos(b), PH[1] + inner * Math.sin(b))); }
       petals.push(el('polygon', { class: 'petal', points: pts.map(xy).join(' '), fill: C.petal, stroke: C.line, 'stroke-width': 1, 'stroke-linejoin': 'round' }));
       // the pressed petal lifts a little outwards, towards its letters (like the app)
       const o = scr(PH[0], PH[1]), q = scr(PH[0] + 6 * Math.cos(p * 45 * DEG), PH[1] + 6 * Math.sin(p * 45 * DEG));
       lifts.push('translate(' + (q[0] - o[0]).toFixed(1) + 'px,' + (q[1] - o[1]).toFixed(1) + 'px)');
     }
+    const c = scr(PH[0], PH[1]);
+    el('circle', { class: 'start-circle', cx: c[0], cy: c[1], r: startR * K, fill: C.petal, stroke: C.accent, 'stroke-width': 1 });
     for (let pp = 0; pp < 8; pp++) for (let kk = 0; kk < 4; kk++) {
       const q = scr.apply(null, spot(pp, KINDS[kk]));
       labels.push({ p: pp, i: kk, el: el('text', { x: q[0], y: q[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: kk === 0 ? C.ink : C.muted,
         'font-size': (kk === 0 ? 24 : kk === 3 ? 12 : 15) * fs, 'font-weight': kk === 0 ? 700 : 400 }) });
     }
-    const c = scr(PH[0], PH[1]);
-    drop0 = el('circle', { class: 'drop', cx: c[0], cy: c[1], r: 13 * K, fill: C.accent }); dropAt = [0, 0];
+    drop0 = el('circle', { class: 'drop', cx: c[0], cy: c[1], r: startR * K * 0.4, fill: C.accent }); dropAt = [0, 0];
     trail = el('polyline', { points: '', fill: 'none', stroke: C.accent, 'stroke-width': 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.6 });
     guide.path = el('polyline', { points: '', fill: 'none', stroke: C.accent, 'stroke-width': 3, 'stroke-dasharray': '6 7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.7, visibility: 'hidden' });
     guide.dot = el('circle', { cx: 0, cy: 0, r: 12 * fs, fill: C.accent, stroke: C['on-accent'], 'stroke-width': 3, visibility: 'hidden' });
@@ -819,7 +821,7 @@
     const r = row(); s.appendChild(r);
     (function paint() {
       r.innerHTML = '';
-      list.forEach(function (x) { const on = store.get(key, def) === x[1]; r.appendChild(btn((on ? '✓ ' : '') + x[0], on ? 'main' : '', function () { store.set(key, x[1]); paint(); })); });
+      list.forEach(function (x) { const on = store.get(key, def) === x[1]; r.appendChild(btn((on ? '✓ ' : '') + x[0], on ? 'main' : '', function () { store.set(key, x[1]); if (key === 'tol') layout(true); paint(); })); });
     })();
   }
   const JABS_NOTE = 'Толчки — целое слово одним касанием, не отрывая пальца: толчок к букве и назад; поднял палец — пробел. Быстрее, когда «Пульс» уже освоен.';
@@ -995,6 +997,7 @@
       const avg = lens.reduce(function (a, x) { return a + x; }, 0) / lens.length;
       store.set('smooth', jit > 3 ? 2 : jit > 1.5 ? 1 : store.get('smooth', 0));
       store.set('tol', avg < 45 ? 0.75 : avg > 95 ? 1.4 : 1);
+      layout(true);
       say1.textContent = 'Готово. Дрожь: ' + (jit > 3 ? 'заметная — сглаживание сильное' : jit > 1.5 ? 'небольшая — сглаживание лёгкое' : 'почти нет') + '. Смах: ' + (avg < 45 ? 'короткий — хватит маленького движения' : avg > 95 ? 'длинный — мелкие подёргивания не считаются' : 'обычный') + '.';
       s.appendChild(btn('Дальше', 'main wide', back));
     }

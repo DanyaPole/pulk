@@ -61,8 +61,41 @@ test('a stroke with a turn is the small letter on that side', () => {
     eq(P.resolve(D.RU, turn(p * 45, -1)).v, D.RU[p][2] || D.RU[p][0], 'right of ' + p);
   }
 });
+test('start wobble cannot choose a petal or a turn in strokes and jabs', () => {
+  for (let p = 0; p < 8; p++) for (const side of [-1, 1]) {
+    const a = p * 45 * P.DEG, b = a + side * 40 * P.DEG;
+    const prefix = [0, 0, 11.8 * Math.cos(b), 11.8 * Math.sin(b)];
+    const ray = r => [r * Math.cos(a), r * Math.sin(a)];
+    for (const len of [32, 45, 60]) {
+      const pts = prefix.concat(...[12, 16, 24, len].map(ray));
+      eq(P.resolve(D.RU, pts), P.slot(D.RU, p, 'c'), 'straight ' + p + '/' + side + '/' + len);
+      eq(P.jab(D.RU, pts), P.slot(D.RU, p, 'c'), 'jab ' + p + '/' + side + '/' + len);
+    }
+    for (const sign of [-1, 1]) {
+      const c = a + sign * 70 * P.DEG, end = ray(40);
+      const pts = prefix.concat(...[12, 20, 30, 40].map(ray));
+      for (const r of [6, 12, 18, 24]) pts.push(end[0] + r * Math.cos(c), end[1] + r * Math.sin(c));
+      const want = P.slot(D.RU, p, sign > 0 ? 'l' : 'r');
+      eq(P.resolve(D.RU, pts), want, 'turn ' + p + '/' + side + '/' + sign);
+      eq(P.jab(D.RU, pts), want, 'turning jab ' + p + '/' + side + '/' + sign);
+    }
+  }
+});
 test('out and back is the letter at the centre', () => {
   for (let p = 0; p < 8; p++) eq(P.resolve(D.RU, outBack(p * 45)).v, D.RU[p][3] || D.RU[p][0], 'petal ' + p);
+});
+test('the start circle preserves short and sparse strokes and complete jabs', () => {
+  for (let p = 0; p < 8; p++) {
+    const a = p * 45 * P.DEG, ray = r => [r * Math.cos(a), r * Math.sin(a)];
+    eq(P.resolve(D.RU, [0, 0, ...ray(P.P_MIN - 0.001)]).petal, -1, 'short tap ' + p);
+    eq(P.resolve(D.RU, [0, 0, ...ray(P.P_MIN)]), P.slot(D.RU, p, 'c'), 'minimum stroke ' + p);
+    for (const len of [14, 16, 22, 29, 30.01]) eq(P.jab(D.RU, [0, 0, ...ray(len)]), P.slot(D.RU, p, len < P.JAB_SHORT ? 'b' : 'c'), 'short jab ' + p + '/' + len);
+    eq(P.resolve(D.RU, [0, 0, ...ray(24.01), 0, 0]), P.slot(D.RU, p, 'b'), 'short return ' + p);
+    const j = new P.Jabs(0, 0), got = [], wobble = a + 40 * P.DEG;
+    const pts = [[11.8 * Math.cos(wobble), 11.8 * Math.sin(wobble)], ...[12, 16, 24, 32, 24, 16, 8, 0].map(ray)];
+    for (const [x, y] of pts) { const done = j.add(x, y); if (done) got.push(P.jab(D.RU, done)); }
+    eq(got, [P.slot(D.RU, p, 'c')], 'complete jab ' + p);
+  }
 });
 test('a touch in the middle is a space, a touch on a letter is that letter', () => {
   eq(P.resolve(D.RU, at([[0, 0]])).petal, -1);

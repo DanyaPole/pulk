@@ -8,6 +8,7 @@
 
   // ---- the star (as Pulse.kt) ----
   const R = 96, PAD = 158, OUTER = 300, P_MIN = 16, P_TURN = 14, HOLD_MS = 420;
+  const START_R = 12; // ignore settling inside this circle; Steady has already applied tol
   const PH = [262 * Math.cos(135 * DEG), 262 * Math.sin(135 * DEG)];
   const KINDS = ['c', 'l', 'r', 'b'];
   const SPOT = { c: [52, 0], l: [86, 14], r: [86, -14], b: [24, 0] };
@@ -29,12 +30,21 @@
     let far = 0, fi = 0;
     for (let i = 1; i < n; i++) { const d = Math.hypot(px(i), py(i)); if (d > far) { far = d; fi = i; } }
     if (far < P_MIN) return tap(t, ox, oy);
-    const ex = px(n - 1), ey = py(n - 1), endD = Math.hypot(ex, ey);
-    if (far >= 24 && endD < far * 0.5) return slot(t, petalOf(px(fi), py(fi)), 'b');
-    let l = endD || 1, nx = -ey / l, ny = ex / l, dev = 0, ci = 0;
-    for (let j = 1; j < n - 1; j++) { const dj = Math.abs(px(j) * nx + py(j) * ny); if (dj > dev) { dev = dj; ci = j; } }
+    let start = 1;
+    while (Math.hypot(px(start), py(start)) < START_R) start++;
+    // Project the first outside sample onto the circle; sparse strokes still work.
+    const sd = Math.hypot(px(start), py(start)), sx = px(start) * START_R / sd, sy = py(start) * START_R / sd;
+    const ex = px(n - 1) - sx, ey = py(n - 1) - sy, endD = Math.hypot(px(n - 1), py(n - 1));
+    // Tap/return distances stay relative to the touch to preserve short out-and-back strokes.
+    if (far >= 24 && endD < far * 0.5) return slot(t, petalOf(px(fi) - sx, py(fi) - sy), 'b');
+    let l = Math.hypot(ex, ey) || 1, nx = -ey / l, ny = ex / l, dev = 0, ci = 0;
+    for (let j = start; j < n - 1; j++) {
+      if (Math.hypot(px(j), py(j)) < START_R) continue;
+      const dj = Math.abs((px(j) - sx) * nx + (py(j) - sy) * ny);
+      if (dj > dev) { dev = dj; ci = j; }
+    }
     if (dev >= Math.max(7, 0.14 * l)) {
-      let cx = px(ci), cy = py(ci), dt = Math.atan2(ey - cy, ex - cx) - Math.atan2(cy, cx);
+      let cx = px(ci) - sx, cy = py(ci) - sy, dt = Math.atan2(ey - cy, ex - cx) - Math.atan2(cy, cx);
       dt = Math.atan2(Math.sin(dt), Math.cos(dt));
       if (Math.abs(dt) >= 130 * DEG) return slot(t, petalOf(cx, cy), 'b');
       if (Math.abs(dt) >= 30 * DEG && Math.hypot(ex - cx, ey - cy) >= P_TURN) return slot(t, petalOf(cx, cy), dt > 0 ? 'l' : 'r');
@@ -203,5 +213,5 @@
     return [x * f, y * f];
   }
 
-  root.PulkCore = { DEG: DEG, own: own, R: R, PAD: PAD, OUTER: OUTER, P_MIN: P_MIN, P_TURN: P_TURN, HOLD_MS: HOLD_MS, PH: PH, KINDS: KINDS, SPOT: SPOT, ALT: ALT, SPACE: SPACE, spot: spot, petalOf: petalOf, slot: slot, tap: tap, resolve: resolve, KEYS: KEYS, hit: hit, fold: fold, shape: shape, Stop: Stop, Words: Words, JAB_OUT: JAB_OUT, JAB_HOME: JAB_HOME, JAB_SHORT: JAB_SHORT, Jabs: Jabs, jab: jab, JAB_WORDS: JAB_WORDS, jabWords: jabWords, alpha: alpha, OneEuro: OneEuro, LEAN: LEAN, LEAN_MAX: LEAN_MAX, lean: lean };
+  root.PulkCore = { DEG: DEG, own: own, R: R, PAD: PAD, OUTER: OUTER, P_MIN: P_MIN, START_R: START_R, P_TURN: P_TURN, HOLD_MS: HOLD_MS, PH: PH, KINDS: KINDS, SPOT: SPOT, ALT: ALT, SPACE: SPACE, spot: spot, petalOf: petalOf, slot: slot, tap: tap, resolve: resolve, KEYS: KEYS, hit: hit, fold: fold, shape: shape, Stop: Stop, Words: Words, JAB_OUT: JAB_OUT, JAB_HOME: JAB_HOME, JAB_SHORT: JAB_SHORT, Jabs: Jabs, jab: jab, JAB_WORDS: JAB_WORDS, jabWords: jabWords, alpha: alpha, OneEuro: OneEuro, LEAN: LEAN, LEAN_MAX: LEAN_MAX, lean: lean };
 })(typeof window !== 'undefined' ? window : globalThis);

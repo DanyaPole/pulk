@@ -195,7 +195,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private var shapesFor = 0
     /** The keyboard's size or hand changed: everything drawn from geometry is built again. */
     private fun forgetShapes() {
-        val stamp = java.util.Objects.hash(measuredWidth, measuredHeight, k, left)
+        val stamp = java.util.Objects.hash(measuredWidth, measuredHeight, k, left, svc.prefs.tol)
         if (stamp == shapesFor) return
         shapesFor = stamp; shapeReg = null; keyPaths.clear(); wedgePaths.fill(null)
     }
@@ -560,7 +560,11 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             c.restore()
         }
         }
-        fill.color = col.accent; c.drawCircle(centre[0], centre[1], 16 * ds(), fill)   // the drop
+        // Same circle as the recogniser, expanded back from Steady's calibrated coordinates.
+        val startR = (startRadius() * k).toFloat()
+        fill.color = col.key; c.drawCircle(centre[0], centre[1], startR, fill)
+        stroke.color = col.accent; stroke.strokeWidth = density; c.drawCircle(centre[0], centre[1], startR, stroke)
+        fill.color = col.accent; c.drawCircle(centre[0], centre[1], startR * .4f, fill)   // the drop
         if (scanMode()) drawScan(c, col)
         drawRipple(c, col)
         if (goal != null) drawPath(c, goal.first, col)
@@ -807,9 +811,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         return scr(Pulse.PH[0] + rBase * cos(a), Pulse.PH[1] + rBase * sin(a))
     }
     private fun wedge(p: Int): Path = wedgePaths[p] ?: makeWedge(p).also { wedgePaths[p] = it }
+    private fun startRadius() = Pulse.START_R * svc.prefs.tol
     private fun makeWedge(p: Int): Path {
         val path = Path(); val a0 = p * 45.0 - 22.5; val a1 = p * 45.0 + 22.5
-        val inner = 22 / 1.232                       // petal-inner, in base units
+        val inner = maxOf(22 / 1.232, startRadius()) // keep the air gap; no wedges inside the start circle
         val gapOut = Math.toDegrees(2.0 / 1.232 / Pulse.R); val gapIn = Math.toDegrees(2.0 / 1.232 / inner)   // half of the 4 dp gap
         for (i in 0..8) { val q = starPt(Pulse.R - 1, a0 + gapOut + (a1 - a0 - 2 * gapOut) * i / 8); if (i == 0) path.moveTo(q[0], q[1]) else path.lineTo(q[0], q[1]) }
         for (i in 8 downTo 0) { val q = starPt(inner, a0 + gapIn + (a1 - a0 - 2 * gapIn) * i / 8); path.lineTo(q[0], q[1]) }

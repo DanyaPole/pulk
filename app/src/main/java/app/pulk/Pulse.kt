@@ -20,6 +20,7 @@ object Pulse {
     const val PAD = 158.0           // the star zone starts beyond the service rings
     const val OUTER = 300.0         // and ends just past the star
     const val P_MIN = 16.0          // shorter than this = a tap
+    const val START_R = 12.0        // ignore settling inside this circle; Steady has already applied tol
     const val P_TURN = 14.0         // the turn after the first stroke must be at least this long
     const val GAP_MIN = 14.0        // space-bar gesture length
 
@@ -153,16 +154,26 @@ object Pulse {
         var far = 0.0; var fi = 0
         for (i in 1 until n) { val d = hypot(px(i), py(i)); if (d > far) { far = d; fi = i } }
         if (far < P_MIN) return tap(t, ox, oy, blind)
-        val ex = px(n - 1); val ey = py(n - 1)
-        val endD = hypot(ex, ey)
-        if (far >= 24 && endD < far * 0.5) return slot(t, petalOf(px(fi), py(fi)), 'b')
-        // the corner: the point farthest from the straight line origin → end
-        val l = if (endD == 0.0) 1.0 else endD
+        var start = 1
+        while (hypot(px(start), py(start)) < START_R) start++
+        // Project the first outside sample onto the circle; sparse two-point strokes still work.
+        val sd = hypot(px(start), py(start))
+        val sx = px(start) * START_R / sd; val sy = py(start) * START_R / sd
+        val ex = px(n - 1) - sx; val ey = py(n - 1) - sy
+        // Tap/return distances stay relative to the touch to preserve short out-and-back strokes.
+        val endD = hypot(px(n - 1), py(n - 1))
+        if (far >= 24 && endD < far * 0.5) return slot(t, petalOf(px(fi) - sx, py(fi) - sy), 'b')
+        // the corner: the point farthest from the straight line circle exit → end
+        val l = hypot(ex, ey).let { if (it == 0.0) 1.0 else it }
         val nx = -ey / l; val ny = ex / l
         var dev = 0.0; var ci = 0
-        for (i in 1 until n - 1) { val d = abs(px(i) * nx + py(i) * ny); if (d > dev) { dev = d; ci = i } }
+        for (i in start until n - 1) {
+            if (hypot(px(i), py(i)) < START_R) continue
+            val d = abs((px(i) - sx) * nx + (py(i) - sy) * ny)
+            if (d > dev) { dev = d; ci = i }
+        }
         if (dev >= max(7.0, 0.14 * l)) {
-            val cx = px(ci); val cy = py(ci)
+            val cx = px(ci) - sx; val cy = py(ci) - sy
             var dt = atan2(ey - cy, ex - cx) - atan2(cy, cx)
             dt = atan2(sin(dt), cos(dt))
             if (abs(dt) >= 130 * PI / 180) return slot(t, petalOf(cx, cy), 'b')
