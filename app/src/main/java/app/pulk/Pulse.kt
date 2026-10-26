@@ -251,6 +251,41 @@ object Pulse {
         return s
     }
 
+    /** «Лепестки»: the farthest point decides the direction; length and turns select no letter. */
+    fun jabPetal(pts: DoubleArray): Int {
+        var far = 0.0; var fi = 2
+        for (i in 2 until pts.size step 2) {
+            val d = hypot(pts[i] - pts[0], pts[i + 1] - pts[1])
+            if (d > far) { far = d; fi = i }
+        }
+        return petalOf(pts[fi] - pts[0], pts[fi + 1] - pts[1])
+    }
+
+    /** Frequency-ordered exact words, indexed once on first use. No prefix completion on release. */
+    class PetalIndex(private val dict: List<String>, t: Array<Array<String>>) {
+        private val letters = HashMap<Char, Int>().also { m ->
+            for (p in t.indices) for (s in t[p]) s.singleOrNull()?.let { m[it] = p }
+            m['е']?.let { m['ё'] = it }; m['ь']?.let { m['ъ'] = it }
+        }
+        fun key(word: String): String? {
+            if (word.isEmpty()) return null
+            val out = StringBuilder()
+            for (c in word.lowercase()) out.append(letters[c] ?: return null)
+            return out.toString()
+        }
+        private val index by lazy {
+            val m = HashMap<String, MutableList<String>>()
+            for (w in dict) key(w)?.let { m.getOrPut(it) { ArrayList() }.add(w) }
+            m
+        }
+        fun candidates(key: String, user: Map<String, Int> = emptyMap()): List<String> {
+            if (key.isEmpty() || key.any { it !in '0'..'7' }) return emptyList()
+            val mine = user.entries.filter { it.value > 0 && it.key.length == key.length && key(it.key) == key }
+                .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }).map { it.key }
+            return (mine + (index[key] ?: emptyList())).distinct()
+        }
+    }
+
     // ---- «Два касания»: for a hand that can tap but not stroke ----
     /**
      * The second tap, once a petal is open: its four letters fill the star as four big quarters, each where its

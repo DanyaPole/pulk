@@ -15,6 +15,7 @@ object Coach {
     @Volatile var hideLabels = false
     /** The lesson teaches «Толчки» (a word per touch) rather than a stroke per letter. */
     @Volatile var jabs = false
+    @Volatile var petals = false
     /** Word bubbles: show a slow complete jab after two misses. */
     @Volatile var example = false
     /** Word bubbles provide feedback only after checking the letter. */
@@ -30,14 +31,15 @@ object Coach {
      * in other apps. Its state is put aside and comes back when the lesson is on screen again.
      */
     private var saved: Array<Any?>? = null
-    fun pause() { if (!active) return; saved = arrayOf(next, help, hideLabels, hint, jabs, example, bubbles); active = false; changed() }
+    fun pause() { if (!active) return; saved = arrayOf(next, help, hideLabels, hint, jabs, example, bubbles, petals); active = false; changed() }
     fun resume() {
         val s = saved ?: return; saved = null
         next = s[0] as String?; help = s[1] as Int; hideLabels = s[2] as Boolean; hint = s[3] as String?; jabs = s[4] as Boolean
         example = s[5] as Boolean
         bubbles = s[6] as Boolean
+        petals = s[7] as Boolean
         active = true; changed()
     }
 
-    fun reset() { saved = null; active = false; next = null; help = 0; hideLabels = false; hint = null; jabs = false; example = false; bubbles = false; changed() }
+    fun reset() { saved = null; active = false; next = null; help = 0; hideLabels = false; hint = null; jabs = false; petals = false; example = false; bubbles = false; changed() }
 }

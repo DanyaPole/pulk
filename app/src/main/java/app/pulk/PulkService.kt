@@ -57,6 +57,73 @@ class PulkService : InputMethodService() {
     private val refused = HashSet<String>()
     private var unsaved = 0
 
+    internal var petalKey = ""; private set
+    internal var petalOptions: List<String> = emptyList(); private set
+    internal var petalChoice = 0; private set
+    private var petalTail: String? = null
+    private var petalCapital = false
+    private var petalAllCaps = false
+    internal var petalTyping = false; private set
+    internal val petalPending get() = petalTail != null || (petalKey.isNotEmpty() && !petalTyping)
+    internal var exactWord = false; private set
+    fun petalsMode() = prefs.mode == "petals" && !secure && !symbols && !numberField && !coaching() && !exactWord
+    internal fun petalLabels(): List<String> = when {
+        petalTyping -> listOf(petalOptions.firstOrNull() ?: "Пока нет слова")
+        petalTail != null -> listOf(petalOptions[petalChoice], "Другой", "По буквам")
+        petalKey.isNotEmpty() -> listOf("По буквам")
+        exactWord -> listOf("По буквам · пробел — готово")
+        else -> emptyList()
+    }
+    internal fun clearPetals() {
+        petalKey = ""; petalOptions = emptyList(); petalChoice = 0; petalTail = null; petalTyping = false
+    }
+    internal fun petalClickable(i: Int) = !petalTyping && !exactWord &&
+        if (petalTail != null) i == 1 || i == 2 else petalKey.isNotEmpty() && i == 0
+    internal fun beginPetals() {
+        clearPetals(); petalCapital = shiftActive(); petalAllCaps = shiftLock; petalTyping = true
+    }
+    internal fun addPetal(p: Int) {
+        if (!petalsMode() || !petalTyping || p !in 0..7) return
+        petalKey += p
+        petalOptions = wordsIfReady(lang)?.petalCandidates(petalKey)?.map {
+            if (petalAllCaps) it.uppercase() else if (petalCapital) it.replaceFirstChar { c -> c.uppercase() } else it
+        } ?: emptyList()
+        feedback.touch()
+        val w = petalOptions.firstOrNull()
+        if (w != null && (prefs.sound == "voice" || feedback.exploring())) feedback.say(w)
+        view?.invalidate()
+    }
+    internal fun finishPetals() {
+        if (!petalTyping) return
+        petalTyping = false
+        val w = petalOptions.firstOrNull()
+        if (w == null) { clearPetals(); feedback.mode(); view?.invalidate(); return }
+        io.commit("$w "); petalTail = "$w "; undo = null
+        if (!shiftLock) shiftOnce = false
+        feedback.space(w, false); after()
+    }
+    internal fun nextPetal() {
+        if (petalOptions.isEmpty()) { clearPetals(); return }
+        val tail = petalTail ?: return
+        if (!petalsMode() || io.before(tail.length) != tail) { clearPetals(); return }
+        petalChoice = (petalChoice + 1) % petalOptions.size
+        val w = petalOptions[petalChoice]
+        io.deleteBefore(tail.length); io.commit("$w "); petalTail = "$w "
+        feedback.touch()
+        if (prefs.sound == "voice" || feedback.exploring()) feedback.say(w)
+        after()
+    }
+    internal fun exactPetal() {
+        val tail = petalTail
+        if (tail != null && io.before(tail.length) == tail) io.deleteBefore(tail.length)
+        clearPetals(); exactWord = true; feedback.mode(); after()
+    }
+    internal fun petalAction(i: Int) {
+        if (!petalClickable(i)) return
+        if (petalTail == null) { if (!petalTyping) exactPetal() }
+        else if (i == 1) nextPetal() else if (i == 2) exactPetal()
+    }
+
     private val realSink = object : TextSink {
         override fun commit(s: String) { currentInputConnection?.commitText(s, 1) }
         override fun deleteBefore(n: Int) { currentInputConnection?.deleteSurroundingText(n, 0) }
@@ -82,6 +149,7 @@ class PulkService : InputMethodService() {
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this); feedback = Feedback(this, prefs); lang = prefs.lang
+        feedback.silent = { secure && prefs.mode == "petals" }
         val a11y = getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
         feedback.exploring = { a11y.isEnabled && a11y.isTouchExplorationEnabled }
         feedback.announcer = { t -> view?.announceForAccessibility(t) }
@@ -196,6 +264,7 @@ class PulkService : InputMethodService() {
 
     /** Reads what kind of field this is. Separate from the Android callback so it can be tested. */
     fun startInput(info: EditorInfo) {
+        clearPetals(); exactWord = false; feedback.hush()
         lang = prefs.lang
         mergeFamily()
         prefs.applyBias()
@@ -208,6 +277,7 @@ class PulkService : InputMethodService() {
         secure = (text && (variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
                 variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)) ||
                 (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
+        if (secure && prefs.mode == "petals") feedback.silence()
         val address = variation == InputType.TYPE_TEXT_VARIATION_URI || variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
                 variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS || variation == InputType.TYPE_TEXT_VARIATION_FILTER
         val noSuggest = info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0
@@ -228,14 +298,14 @@ class PulkService : InputMethodService() {
     private var ownField = false
     private var numberField = false
     /** A lesson is on and this is its field: a reply typed from the notification shade meanwhile gets no lesson help. */
-    fun coaching() = Coach.active && ownField
+    fun coaching() = Coach.active && ownField && !secure
     val isSecure get() = secure
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
         super.onUpdateSelection(a, b, c, d, e, f)
         selStart = c; selEnd = d
         // our own typing moves the cursor exactly where we expect it: then what we know of the text is still right
-        if (c != d || c != io.expect) io.drop()
+        if (c != d || c != io.expect) { io.drop(); clearPetals(); exactWord = false }
         io.expect = if (c == d) c else -1
         updateAutoCap(); refreshCands(); refreshText(); view?.invalidate()
     }
@@ -268,6 +338,9 @@ class PulkService : InputMethodService() {
     /** The family's words («Для взрослого» → «Словарь семьи») are this person's own: known, and first in suggestions. */
     private fun familyInto(w: Words) {
         for (f in Together.family(prefs.family)) { val k = Words.fold(f.word.lowercase()); if (k.length >= 2) w.user[k] = maxOf(w.user[k] ?: 0, 5) }
+        for (phrase in prefs.myPhrases) for (m in Regex("[\\p{L}'-]+").findAll(phrase.lowercase())) {
+            val k = Words.fold(m.value); w.user[k] = maxOf(w.user[k] ?: 0, 5)
+        }
     }
     internal fun mergeFamily() { for ((_, w) in synchronized(this) { dicts.toMap() }) familyInto(w) }
     private fun userFile(l: String) = File(filesDir, "words_$l.txt")
@@ -337,7 +410,7 @@ class PulkService : InputMethodService() {
         val w = currentWord()
         if (w.isEmpty()) return null
         val dict = wordsIfReady(lang)
-        if (correctHere && dict != null && Words.fold(w.lowercase()) !in refused) {
+        if (!exactWord && correctHere && dict != null && Words.fold(w.lowercase()) !in refused) {
             val fix = dict.correction(w)
             if (fix != null && fix != w) {
                 io.deleteBefore(w.length); io.commit(fix)
@@ -351,6 +424,7 @@ class PulkService : InputMethodService() {
 
     // ---- what the view asks for ----
     fun typeLetter(v: String, slot: Pulse.Slot) {
+        clearPetals()
         val s = if (shiftActive() && !symbols) v.uppercase() else v
         feedback.hush()
         undo = null
@@ -361,6 +435,8 @@ class PulkService : InputMethodService() {
     }
 
     fun space() {
+        if (prefs.mode == "jabs" && !secure && currentWord().isNotEmpty()) prefs.jabsWords++
+        clearPetals()
         feedback.hush()
         val now = System.currentTimeMillis()
         val before = io.before(2)
@@ -374,11 +450,12 @@ class PulkService : InputMethodService() {
             io.commit(" "); lastSpace = now
             if (!(coaching() && Coach.bubbles && !secure)) feedback.space(word, secure)
         }
-        after()
+        exactWord = false; after()
     }
 
     /** Picks a suggestion: it replaces the word being typed, and a space follows. */
     fun pick(i: Int) {
+        clearPetals()
         val w = cands.getOrNull(i) ?: return
         val typed = currentWord()
         io.deleteBefore(typed.length); io.commit("$w ")
@@ -396,6 +473,7 @@ class PulkService : InputMethodService() {
      * In a password, an address or a number it is just the character: «ivan.petrov@mail.ru» needs no spaces.
      */
     fun punct(c: String) {
+        clearPetals(); exactWord = false
         if (!prose) { feedback.hush(); undo = null; io.commit(c); feedback.letter(Pulse.Slot(-1, 'c', c), c, lang, secure); after(); return }
         if (io.before(40).isBlank()) return
         undo = null
@@ -409,6 +487,7 @@ class PulkService : InputMethodService() {
     }
 
     fun deleteWord() {
+        clearPetals(); exactWord = false
         val before = io.before(60)
         val m = Regex("\\S+\\s*$").find(before)?.value?.length ?: return // the word and the spaces after it
         undo = Undo(before.takeLast(m), "")
@@ -417,6 +496,8 @@ class PulkService : InputMethodService() {
     }
 
     fun backspace() {
+        if (petalTail != null) { exactPetal(); return }
+        clearPetals()
         feedback.hush()
         val u = undo
         undo = null
@@ -436,6 +517,7 @@ class PulkService : InputMethodService() {
     }
 
     fun enter() {
+        clearPetals(); exactWord = false
         val info = editor ?: currentInputEditorInfo
         val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
         val noAction = (info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
@@ -452,8 +534,8 @@ class PulkService : InputMethodService() {
         feedback.mode(); view?.invalidate()
     }
 
-    fun switchLang() { lang = if (lang == "ru") "en" else "ru"; prefs.lang = lang; symbols = false; feedback.mode(); after() }
-    fun toggleSymbols() { symbols = !symbols; feedback.mode(); after() }
+    fun switchLang() { clearPetals(); exactWord = false; lang = if (lang == "ru") "en" else "ru"; prefs.lang = lang; symbols = false; feedback.mode(); after() }
+    fun toggleSymbols() { clearPetals(); exactWord = false; symbols = !symbols; feedback.mode(); after() }
 
     /** Long press on ⌄: the app's settings, right from the keyboard. */
     fun openSettings() { startActivity(android.content.Intent(this, SettingsActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); requestHideSelf(0) }
@@ -467,6 +549,7 @@ class PulkService : InputMethodService() {
     /** The view asks: the cursor goes [delta] characters along; suggestions start over at the new place. */
     fun moveCursor(delta: Int) {
         if (delta == 0) return
+        clearPetals(); exactWord = false
         undo = null
         io.moveCursor(delta)
         feedback.touch(); after()

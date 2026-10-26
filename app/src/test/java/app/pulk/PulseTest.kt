@@ -144,8 +144,8 @@ class PulseTest {
         val normal = rate(8.0, 30.0, 45.0, 95.0, 1.2)
         val sloppy = rate(13.0, 50.0, 35.0, 100.0, 2.0)
         println("normal=$normal sloppy=$sloppy")
-        assertTrue("normal strokes $normal", normal >= 0.95)   // web prototype: 98-100%
-        assertTrue("sloppy strokes $sloppy", sloppy >= 0.80)   // web prototype: 84-90%
+        assertTrue("normal strokes $normal", normal >= 0.978)
+        assertTrue("sloppy strokes $sloppy", sloppy >= 0.856)
     }
 
     @Test fun serviceKeysAreFoundByPosition() {

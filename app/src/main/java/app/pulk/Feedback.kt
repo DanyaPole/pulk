@@ -31,9 +31,11 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     /** For tests: every vibration, sound and spoken word, as text. */
     var trace: ((String) -> Unit)? = null
+    var silent: () -> Boolean = { false }
 
     // ---- vibration ----
     private fun buzz(vararg pattern: Long) {
+        if (silent()) return
         if (!prefs.haptics) return
         trace?.invoke("buzz " + pattern.joinToString(","))
         val v = vib ?: return
@@ -77,6 +79,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     }
     /** The finger lifted: what it was about to say is no longer news. */
     fun hush() { pendingName?.let { handler.removeCallbacks(it) }; pendingName = null }
+    fun silence() { hush(); try { tts?.stop() } catch (_: Exception) {} }
 
     fun letter(slot: Pulse.Slot, text: String, lang: String, secure: Boolean) {
         if (secure) {
@@ -173,6 +176,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     /** Plays notes (frequency, start, length in seconds) as one short sound. */
     private fun tone(notes: List<Triple<Double, Double, Double>>, vol: Double) {
+        if (silent()) return
         trace?.invoke("tone " + notes.joinToString(";") { "${it.first}/${it.second}/${it.third}" } + " @" + vol)
         val rate = 22050
         val total = notes.maxOf { it.second + it.third } + 0.03
@@ -190,6 +194,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     }
 
     private fun play(buf: ShortArray, rate: Int, total: Double) {
+        if (silent()) return
         try {
             val track = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -205,6 +210,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     // ---- voice ----
     fun say(text: String, rate: Float = 1.2f) {
+        if (silent()) return
         if (text.isBlank()) return
         trace?.invoke("say " + text)
         if (exploring()) { announcer?.invoke(text); return }
@@ -222,6 +228,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
     }
 
     private fun speakNow(text: String, rate: Float, lang: String) {
+        if (silent()) return
         val t = tts ?: return
         try {   // an engine that throws must not take the keyboard down with it
             if (!Voice.useLocalVoice(t, lang, if (lang == "ru") prefs.voice else "")) return

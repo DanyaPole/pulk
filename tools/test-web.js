@@ -21,6 +21,34 @@ function test(name, fn) {
 function eq(a, b, what) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((what ? what + ': ' : '') + 'got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b)); }
 function ok(c, what) { if (!c) throw new Error(what || 'not true'); }
 
+test('petal index: frequency, personal words, normalisation and English punctuation', () => {
+  const ix = new P.PetalIndex(['дом', 'том', 'дам'], D.RU), k = ix.key('дом');
+  eq(ix.candidates(k), ['дом', 'том']); eq(ix.candidates(k, { том: 5 }), ['том', 'дом']); eq(ix.candidates(k), ['дом', 'том']);
+  eq(ix.candidates(k, { дом: 1, том: 5 }), ['том', 'дом']);
+  eq(ix.candidates(k, { дом: 10, том: 5 }), ['дом', 'том'], 'counts update without rebuilding directions');
+  eq(ix.candidates(k, { дом: 0, том: 5 }), ['том', 'дом']);
+  const custom = new P.PetalIndex([], D.RU);
+  eq(custom.candidates(k, { том: 5 }), ['том']); eq(custom.candidates(k, {}), [], 'forget removes personal candidates');
+  eq(ix.key('ЁЪ'), ix.key('еь')); eq(ix.key('hello'), null); eq(ix.candidates('08'), []); eq(ix.candidates(''), []);
+  const en = new P.PetalIndex([], D.EN); ok(en.key("don't")); ok(en.key('well-known')); eq(en.key('ё'), null);
+  const safe = new P.Words(['сука'], D.RU, bad); eq(safe.petalCandidates(ix.key('сука'), { сука: 10 }), []);
+  for (let p = 0; p < 8; p++) for (const r of [15, 22, 60]) eq(P.jabPetal([0, 0, Math.cos(p * Math.PI / 4) * r, Math.sin(p * Math.PI / 4) * r, 0, 0]), p);
+});
+
+test('petal dictionary Zipf coverage and lookup cost in both languages', () => {
+  for (const lang of ['ru', 'en']) {
+    const dict = read(path.join(dictDir, 'dict_' + lang + '.txt')).trim().split('\n'), t = D[lang.toUpperCase()], ix = new P.PetalIndex(dict, t);
+    const cold = performance.now(); ix.candidates('0'); const buildMs = performance.now() - cold;
+    let total = 0, first = 0, top3 = 0;
+    dict.forEach((w, i) => { const weight = 1 / (i + 1); total += weight; const key = ix.key(w); if (!key) return; const got = ix.candidates(key); if (got[0] === w) first += weight; if (got.slice(0, 3).includes(w)) top3 += weight; });
+    const safe = new P.Words(dict, t, bad), user = Object.fromEntries(dict.slice(0, 3000).map(w => [w, 2])), keys = dict.slice(0, 1000).map(w => ix.key(w));
+    keys.forEach(k => safe.petalCandidates(k, user));
+    const times = keys.map(k => { const start = performance.now(); safe.petalCandidates(k, user); return performance.now() - start; }).sort((a, b) => a - b), p95 = times[Math.floor(times.length * .95)];
+    console.log(`  petals ${lang} first=${(first / total).toFixed(6)} top3=${(top3 / total).toFixed(6)} buildMs=${buildMs.toFixed(2)} lookupP95Ms=${p95.toFixed(3)} (Node desktop, 3000 user words)`);
+    ok(first / total >= .88, lang + ' first'); ok(top3 / total >= .99, lang + ' top3'); ok(p95 < 5, lang + ' lookup ' + p95);
+  }
+});
+
 // strokes in base units from the star's centre, as the Android tests draw them
 const at = (pts) => { const out = []; pts.forEach(p => out.push(P.PH[0] + p[0], P.PH[1] + p[1])); return out; };
 const line = (deg, len) => { const a = deg * P.DEG, o = []; for (let i = 0; i <= 6; i++) o.push([Math.cos(a) * len * i / 6, Math.sin(a) * len * i / 6]); return at(o); };
@@ -177,6 +205,98 @@ test('suggestions handle a one-letter word through core Words', () => {
 
 const appSource = read(path.join(root, 'web/app.js'));
 
+// Run the page's real pointer handlers, typing and petal state with small DOM/voice substitutes.
+function petalPage(settings = {}) {
+  const values = { mode: 'petals', ...settings }, spoken = [], handlers = {}, chips = [];
+  const store = { get(k, d) { return Object.hasOwn(values, k) ? values[k] : d; }, set(k, v) { values[k] = v; } };
+  const elem = () => ({ setAttribute() {}, textContent: '' });
+  const svg = { addEventListener(k, f) { handlers[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+  const document = { addEventListener() {}, visibilityState: 'visible', createElement: elem };
+  function block(start, end) { const a = appSource.indexOf(start), b = appSource.indexOf(end, a); ok(a >= 0 && b > a, start); return appSource.slice(a, b); }
+  const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0;
+    const FIX_GLOW_MS = 1500, P_MIN = P.P_MIN, HOLD_MS = P.HOLD_MS, ALT = P.ALT, Jabs = P.Jabs, jab = P.jab, resolve = P.resolve;
+    const bubble = elem(), bubbleText = elem(), trail = elem();
+    const dict = new P.Words(store.get('dictionary', ['том', 'дом', 'мама', 'мыла', 'в', 'я', 'и']), D.RU, bad);
+    function table() { return D.RU; } function words() { return store.get('unavailable', false) ? null : dict; } function userWords() { return store.get('user', {}); }
+    function caps() { return shiftOnce || !text || /[.!?…]\\s$/.test(text); } function currentWord() { const m = /[\\p{L}']+$/u.exec(text); return m ? m[0] : ''; }
+    function tick() {} function render() {} function paintChips() { chips.push(petalOptions.slice()); }
+    function say(t) { spoken.push(t); } function sayWord() { if (store.get('words', false)) say(text.trim().split(' ').at(-1)); }
+    function guardMin() { return store.get('guard', 0); } function guardGap() { return 0; }
+    function keepAwake() {} function light() {} function leanTo() {} function layout() {} function gameStroke() {} function guidedStroke() {}
+    function Steady() { this.at = (x, y) => [x, y]; } function toBase(x, y) { return [x, y]; } function scr(x, y) { return [x, y]; } function xy(q) { return q.join(','); }
+    function hit(x, y) { return y < -100 ? { fn: 'space' } : null; }
+    function strokeFor(ch) { for (let p = 0; p < 8; p++) if (D.RU[p].includes(ch)) return { p }; return null; }
+    ${block('  function typeLetter(v)', '  // a guided word:')}
+    ${block('  // ---- «Толчки»: the cutting', '  // ---- a steadier hand')}
+    ${block('  // ---- touch on the keyboard', '  // ---- a joystick,')}
+    return { handlers, state: () => ({text, key: petalKey, options: petalOptions, exactWord, petalTyping, pending: petalPending()}),
+      next: nextPetal, exact: exactPetal, type: typeLetter, space, backspace, setGame: g => {game = g;},
+      setSymbols: v => {symbols = v;}, setMode: v => {store.set('mode', v);}, clear: clearPetals,
+      emptyOptions: () => {petalOptions = [];} };
+  `;
+  const api = new Function('P', 'D', 'bad', 'store', 'spoken', 'svg', 'document', 'elem', 'chips', 'handlers', code)(P, D, bad, store, spoken, svg, document, elem, chips, handlers);
+  const event = (x, y) => ({ pointerId: 1, clientX: x, clientY: y, timeStamp: Date.now(), preventDefault() {} });
+  api.down = (x = 0, y = 0) => handlers.pointerdown(event(x, y));
+  api.move = (x, y) => handlers.pointermove(event(x, y));
+  api.up = (cancel = false) => handlers[cancel ? 'pointercancel' : 'pointerup'](event(0, 0));
+  api.push = p => { for (const r of [6, 12, 18, 24, 18, 12, 6, 0]) api.move(Math.cos(p * Math.PI / 4) * r, Math.sin(p * Math.PI / 4) * r); };
+  api.word = w => { const key = new P.PetalIndex([], D.RU).key(w); api.down(); for (const p of key) api.push(+p); };
+  api.tap = () => { api.down(); api.up(); };
+  return { ...api, spoken, values, chips };
+}
+
+test('petal page: preview, release, circular choices, buttons and precise word without autocorrection', () => {
+  const a = petalPage(); a.word('дом'); eq(a.state().text, ''); eq(a.state().options, ['Том', 'Дом']); eq(a.spoken, []);
+  a.up(); eq(a.state().text, 'Том ');
+  a.tap(); eq(a.state().text, 'Дом '); a.tap(); eq(a.state().text, 'Том ');
+  a.next(); eq(a.state().text, 'Дом ');
+  a.down(); a.move(0, 35); a.up(); eq(a.state().text, ''); ok(a.state().exactWord);
+  a.type('н'); a.type('а'); a.type('м'); a.type('а'); a.space();
+  eq(a.state().text, 'Нама '); ok(!a.state().exactWord, 'space restores petals without correcting the exact word');
+  a.word('мама'); a.up(); eq(a.state().text, 'Нама мама ');
+});
+test('petal page: cancellation, no candidate, explicit fallback, symbols and voice preference', () => {
+  const a = petalPage(); a.word('мама'); a.up(true); eq(a.state().text, ''); eq(a.state().key, '');
+  a.down(); for (let i = 0; i < 16; i++) a.push(0); a.up();
+  ok(!a.state().pending); eq(a.state().key, ''); ok(!a.state().exactWord); eq(a.state().text, '');
+  a.tap(); ok(!a.state().exactWord);
+  a.exact(); ok(a.state().exactWord); a.space(); a.setSymbols(true); a.word('мама'); ok(!a.state().petalTyping); a.up(true);
+  const voiced = petalPage({ words: true }); voiced.word('дом'); ok(voiced.spoken.includes('Том')); voiced.up(); voiced.next(); eq(voiced.spoken.at(-1), 'Дом');
+});
+
+test('petal page: first outward stroke commits a one-letter word from the real dictionary', () => {
+  for (const w of ['в', 'я', 'и']) {
+    ok(dict.includes(w), w + ' in dictionary');
+    const a = petalPage({ dictionary: dict }), p = +new P.PetalIndex([], D.RU).key(w);
+    a.down(); for (const r of [6, 12, 18, 24]) a.move(Math.cos(p * Math.PI / 4) * r, Math.sin(p * Math.PI / 4) * r);
+    a.up();
+    ok(a.state().options.map(v => v.toLowerCase()).includes(w), w + ' is offered');
+    for (let i = 0; i < a.state().options.length && a.state().text.toLowerCase() !== w + ' '; i++) a.next();
+    eq(a.state().text.toLowerCase(), w + ' ');
+  }
+});
+
+test('petal page: unavailable dictionary and empty choices clear pending state', () => {
+  const unloaded = petalPage({ unavailable: true }); unloaded.word('дом'); unloaded.up();
+  eq(unloaded.state().text, ''); eq(unloaded.state().key, ''); ok(!unloaded.state().pending);
+  const a = petalPage(); a.word('дом'); a.up(); const before = a.state().text;
+  a.emptyOptions(); a.next(); eq(a.state().text, before); ok(!a.state().pending); eq(a.state().key, '');
+});
+test('petal word bubbles accept any letter in the target petal, keep progress and remember help refusal', () => {
+  const b = bubbleScreen({ mode: 'petals', bubblesHelp: false }), g = b.game(), a = petalPage(); a.setGame(g);
+  const target = g.word;
+  for (const c of target) { a.down(); a.push(+new P.PetalIndex([], D.RU).key(c)); a.up(); }
+  eq(g.n, 1); eq(g.progress.done, target.length); eq(b.values.bubblesHelp, false);
+});
+
+test('Android stop filter is generated from the same web stop list', () => {
+  const kotlin = read(path.join(root, 'app/src/main/java/app/pulk/StopWords.kt'));
+  for (const key of ['words', 'roots', 'prefixes', 'parts']) {
+    const line = kotlin.split('\n').find(l => l.includes('val ' + key + ' ='));
+    eq([...line.matchAll(/"([^"]*)"/g)].map(m => m[1]), box.window.PULK_STOP[key].map(w => P.fold(w.toLowerCase())), key);
+  }
+});
+
 test('word bubbles use the same short words as Android and favour difficult letters', () => {
   const kt = read(path.join(root, 'app/src/main/java/app/pulk/BubbleWords.kt'));
   const list = [...kt.match(/val WORDS = listOf\(([\s\S]*?)\)/)[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
@@ -321,7 +441,7 @@ test('rebuilding the speaking screen keeps the first pending phrase', () => {
   const start = appSource.indexOf('  function begin(mode)'), end = appSource.indexOf('  // «Говорить».', start);
   ok(start >= 0 && end > start, 'screen rebuild source is present');
   const begin = new Function('$', 'document', 'showGuide', 'hideVoiceHint',
-    'let paintVoiceSettings, talking, game, probe, sysKbd = false, chipMode, chipAction, onEnter, guided;\n' + appSource.slice(start, end) + 'return begin;')(
+    'let paintVoiceSettings, talking, game, probe, sysKbd = false, chipMode, chipAction, onEnter, guided, exactWord; function clearPetals() {}\n' + appSource.slice(start, end) + 'return begin;')(
     () => ({ innerHTML: '' }), { body: { classList: { remove() {} } } }, () => {}, s.hideVoiceHint);
   s.say('Хочу пить'); begin('speak'); s.changed([ru]);
   eq(s.spoken.map(u => u.text), ['Хочу пить']);

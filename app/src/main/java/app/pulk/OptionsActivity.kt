@@ -27,6 +27,7 @@ class OptionsActivity : Activity() {
         body.addView(ui.title("Настройки"))
         // three rows choose one mode: «Выкл» turns off only its own mode, and every row shows the mode that is on now
         body.addView(ui.choice("Способ набора", Prefs.modes(prefs, listOf("pulse" to "Пульс", "taps" to "Два касания")), { prefs.mode }) { mode(it) })
+        if (prefs.jabsWords >= 10 || prefs.mode == "petals") body.addView(ui.note(Prefs.PETALS_NOTE))
         body.addView(ui.choice("Привычная клавиатура", listOf("off" to "Выкл", "classic" to "ЙЦУКЕН"), { if (prefs.mode == "classic") "classic" else "off" }) { mode(if (it == "classic") "classic" else if (prefs.mode == "classic") "pulse" else prefs.mode) })
         body.addView(ui.note("Обычные ряды клавиш — для того, кто к ним привык. После каждой буквы маленькая звезда показывает, каким смахом она набирается в «Пульсе»: переход случится сам, когда захочется."))
         body.addView(ui.onOff("Показывать звезду-подсказку", { prefs.bridge }) { prefs.bridge = it })
@@ -108,8 +109,12 @@ class OptionsActivity : Activity() {
         if (prefs.gestures != Prefs.GESTURES) body.addView(ui.button("Включить все жесты") { prefs.gestures = Prefs.GESTURES; (it as Button).text = "✓ Все жесты включены" })
 
         body.addView(ui.h("Для опытных"))
-        body.addView(ui.onOff("Толчки", { prefs.mode == "jabs" }) { prefs.mode = if (it) "jabs" else "pulse" })
+        body.addView(ui.onOff("Толчки", { prefs.mode == "jabs" }) { prefs.mode = if (it) "jabs" else "pulse"; more() })
         body.addView(ui.note(Prefs.JABS_NOTE))
+        if (prefs.jabsWords >= 10 || prefs.mode == "petals") {
+            body.addView(ui.onOff("Лепестки", { prefs.mode == "petals" }) { prefs.mode = if (it) "petals" else "jabs"; more() })
+            body.addView(ui.note(Prefs.PETALS_NOTE))
+        }
 
         body.addView(ui.h("Жесты — справка"))
         body.addView(ui.text(

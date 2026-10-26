@@ -123,6 +123,7 @@
   function guidePts(p, kind) {
     const a = p * 45 * DEG, dx = Math.cos(a), dy = Math.sin(a), out = [[0, 0]];
     if (game && game.words) {
+      if (game.petals) kind = 'b';
       const r = kind === 'b' ? 22 : 50; out.push([dx * r, dy * r]);
       if (kind === 'l' || kind === 'r') { const b = a + (kind === 'l' ? 1 : -1) * Math.PI / 2; out.push([dx * r + Math.cos(b) * 30, dy * r + Math.sin(b) * 30]); }
       out.push([0, 0]);
@@ -183,7 +184,14 @@
   }).catch(function () {});
   function words() { const w = dicts[lang]; return w && w !== 'loading' && !symbols ? w : null; }
   // what this person says: their words are known to suggestions (and never "corrected"), their word pairs come first
-  function userWords() { return store.get('user', {}); }
+  function userWords() {
+    const u = Object.assign(Object.create(null), store.get('user', {}));
+    const phrases = store.get('mine', []).concat(store.get('groups', []).flatMap(g => g.list || []));
+    const words = phrases.join(' ').toLowerCase().match(/[\p{L}'-]+/gu) || [];
+    store.get('family', []).forEach(f => words.push(f.w.toLowerCase()));
+    words.forEach(w => { const k = fold(w); u[k] = Math.max(own(u, k), 5); });
+    return u;
+  }
   function learnText(t) {
     const ws = fold(t.toLowerCase()).split(/[^\p{L}'-]+/u).filter(Boolean); if (!ws.length) return;
     let u = userWords(), pr = store.get('pairs', {}), prev = '^', fresh = 0;
@@ -259,12 +267,12 @@
   }
   let chipsFrame = 0;
   function chipsSoon() { if (!chipsFrame) chipsFrame = requestAnimationFrame(function () { chipsFrame = 0; paintChips(); }); }
-  function typeLetter(v) { tick(); lastFix = null; text += caps() && !symbols ? v.toUpperCase() : v; shiftOnce = false; render(); }
+  function typeLetter(v) { clearPetals(); tick(); lastFix = null; text += caps() && !symbols ? v.toUpperCase() : v; shiftOnce = false; render(); }
   // a finished word that is not a word, but is one stroke-slip away from a word, is corrected; ⌫ right after undoes it
   // which letters are hard for this hand: the game brings them more often
   function missed(ch) { ch = ch.toLowerCase(); const st = store.get('letters', {}), v = own(st, ch) || [0, 0]; v[1]++; st[ch] = v; store.set('letters', st); }
   function fixLastWord() {
-    const w = currentWord(), W = words(); if (guided || w.length < 2) return null;
+    const w = currentWord(), W = words(); if (guided || exactWord || w.length < 2) return null;
     const f = fold(w.toLowerCase()), kind = own(soft, f);
     let c;
     if (kind && own(userWords(), f) < 2) c = shape(kind, w);   // a rude word: its kinder twin (stopwords.js «soft»)
@@ -277,16 +285,21 @@
     const before = text; text = text.slice(0, text.length - w.length) + c; return { before: before, word: w, len: c.length };
   }
   function space() {
+    if (store.get('mode', 'pulse') === 'jabs' && currentWord()) store.set('jabsWords', store.get('jabsWords', 0) + 1);
+    clearPetals();
     const fix = fixLastWord();
+    exactWord = false;
     text += ' '; lastFix = fix && { undo: fix.before + ' ', at: text, word: fix.word, len: fix.len, t: performance.now() };
     render(); sayWord();
     if (fix) setTimeout(render, FIX_GLOW_MS + 20);
   }
   function backspace() {
+    if (petalTail !== null) { exactPetal(); return; }
+    clearPetals();
     if (lastFix && text === lastFix.at) { text = lastFix.undo; const u = userWords(), f = fold(lastFix.word.toLowerCase()); u[f] = Math.max(2, own(u, f) + 1); store.set('user', u); lastFix = null; render(); return; }
     lastFix = null; text = text.slice(0, -1); render();
   }
-  function takeWord(s) { lastFix = null; const w = currentWord(); text = text.slice(0, text.length - w.length) + s + ' '; render(); sayWord(); }
+  function takeWord(s) { clearPetals(); exactWord = false; lastFix = null; const w = currentWord(); text = text.slice(0, text.length - w.length) + s + ' '; render(); sayWord(); }
   // a guided word: only the letter the guide shows is typed; a different one is not an error — the dot shows again,
   // and after three tries Пульк types it itself, so nobody gets stuck on the first steps
   let guided = null;
@@ -306,9 +319,47 @@
   }
 
   // ---- «Толчки»: the cutting into jabs is in core.js ----
-  function jabsOn() { return (game ? !!game.words : store.get('mode', 'pulse') === 'jabs') && !guided && !probe; }   // the hand check needs the whole stroke
+  function jabsOn() { return (game ? !!game.words : store.get('mode', 'pulse') === 'jabs' || petalsOn()) && !guided && !probe; }   // the hand check needs the whole stroke
   // a jab's letter goes to the text, or to the word bubble while that game is on
   function jabbed(v) { if (game && game.words) game.add(v); else typeLetter(v); }
+
+  // «Лепестки»: a tap after release cycles the committed word. An outward stroke without a return
+  // discards it and opens precise «Пульс» for one word. Neither gesture needs a deadline or a direction.
+  let petalKey = '', petalOptions = [], petalChoice = 0, petalTail = null, petalCapital = false, petalTyping = false, exactWord = false;
+  function petalsOn() { return store.get('mode', 'pulse') === 'petals' && !exactWord && !symbols && !game && !guided && !probe; }
+  function petalPending() { return petalTail !== null || (!!petalKey && !petalTyping); }
+  function clearPetals() { petalKey = ''; petalOptions = []; petalChoice = 0; petalTail = null; petalTyping = false; }
+  function beginPetals() { clearPetals(); petalCapital = caps(); petalTyping = true; }
+  function addPetal(p) {
+    if (!petalsOn() || !petalTyping || p < 0 || p > 7) return;
+    petalKey += p;
+    const W = words(); petalOptions = W ? W.petalCandidates(petalKey, userWords()).map(w => petalCapital ? w[0].toUpperCase() + w.slice(1) : w) : [];
+    tick(); if (petalOptions.length && store.get('words', false)) say(petalOptions[0], true);
+    paintChips();
+  }
+  function finishPetals() {
+    if (!petalTyping) return;
+    petalTyping = false;
+    if (!petalOptions.length) { clearPetals(); paintChips(); return; }
+    petalTail = petalOptions[0] + ' '; text += petalTail; shiftOnce = false; lastFix = null; render(); sayWord();
+  }
+  function nextPetal() {
+    if (!petalOptions.length) { clearPetals(); paintChips(); return; }
+    if (petalTail === null) return;
+    if (!petalsOn() || !text.endsWith(petalTail)) { clearPetals(); return; }
+    const n = petalTail.length; petalChoice = (petalChoice + 1) % petalOptions.length;
+    petalTail = petalOptions[petalChoice] + ' '; text = text.slice(0, -n) + petalTail;
+    tick(); render(); if (store.get('words', false)) say(petalOptions[petalChoice], true);
+  }
+  function exactPetal() {
+    if (petalTail !== null && text.endsWith(petalTail)) text = text.slice(0, -petalTail.length);
+    clearPetals(); exactWord = true; tick(); render();
+  }
+  function petalJab(pts) {
+    const p = P.jabPetal(pts);
+    if (game && game.petals) { const want = game.progress.next, f = want && strokeFor(want); game.add(f && f.p === p ? want : table()[p][0]); }
+    else { if (!touch.petalCount++) beginPetals(); addPetal(p); }
+  }
 
   // ---- a steadier hand (as Pulse.Steady): tremor smoothed with the 1€ filter (Casiez, Roussel, Vogel, CHI 2012) —
   // strong smoothing while the finger moves slowly or rests, almost none in a quick stroke; and strokes measured
@@ -343,6 +394,7 @@
     touch = { id: e.pointerId, key: hit(b[0], b[1]), pts: [b[0], b[1]], trail: [xy(scr(b[0], b[1]))], still: now, start: now, ax: b[0], ay: b[1], shown: '' };
     if (!touch.key && !probe) touch.steady = new Steady(b[0], b[1]);
     if (!touch.key && jabsOn()) { touch.jabs = new Jabs(b[0], b[1]); if (game) game.start(); }
+    touch.petals = petalsOn(); touch.petalCount = 0;
     if (touch.key && touch.key.fn === 'bksp' && !guided) {
       // with the guard on, ⌫ waits for the finger to be sure (on release); held, it repeats either way
       if (!guardMin()) backspace();
@@ -356,12 +408,12 @@
     if (touch.steady) b = touch.steady.at(b[0], b[1], e.timeStamp || Date.now());
     if (touch.jabs) {
       const done = touch.jabs.add(b[0], b[1]);
-      if (done) { jabbed(jab(table(), done).v); light(-1); leanTo(null); trail.setAttribute('points', ''); bubble.setAttribute('visibility', 'hidden'); bubbleText.setAttribute('visibility', 'hidden'); touch.shown = ''; return; }
+      if (done) { if (touch.petals || game && game.petals) petalJab(done); else jabbed(jab(table(), done).v); light(-1); leanTo(null); trail.setAttribute('points', ''); bubble.setAttribute('visibility', 'hidden'); bubbleText.setAttribute('visibility', 'hidden'); touch.shown = ''; return; }
       const cur = touch.jabs.cur; if (!cur.length) return;
       const js = jab(table(), cur), pts = [];
       for (let i = 0; i < cur.length; i += 2) pts.push(xy(scr(cur[i], cur[i + 1])));
       light(js.petal); trail.setAttribute('points', pts.join(' ')); leanTo(scr(cur[cur.length - 2], cur[cur.length - 1]));
-      const jshown = caps() && !symbols ? js.v.toUpperCase() : js.v;
+      const jshown = touch.petals ? (petalOptions[0] || 'Лепесток') : caps() && !symbols ? js.v.toUpperCase() : js.v;
       if (jshown !== touch.shown) { touch.shown = jshown; bubbleText.textContent = jshown; bubble.setAttribute('visibility', 'visible'); bubbleText.setAttribute('visibility', 'visible'); }
       return;
     }
@@ -382,18 +434,26 @@
     const tooShort = !probe && Date.now() - t.start < guardMin(); lastEnd = Date.now();   // the hand check measures every touch
     clearTimeout(t.rep); light(-1); leanTo(null); trail.setAttribute('points', ''); bubble.setAttribute('visibility', 'hidden'); bubbleText.setAttribute('visibility', 'hidden');
     if (relayout) { relayout = false; layout(true); }
-    if (cancelled || tooShort) return;
+    if (cancelled || tooShort) { if (t.petals && t.petalCount) { clearPetals(); paintChips(); } return; }
     if (t.key && t.key.fn === 'bksp') { if (guardMin() && !t.repeated && !guided) backspace(); return; }
     if (probe && !t.key) { probe(t); return; }
     if (guided) { guidedStroke(t); return; }
     if (game && !t.key) { gameStroke(t); return; }
+    if (t.petals) {
+      const out = t.jabs.finish();
+      if (t.petalCount) finishPetals();
+      else if (petalPending()) { if (!out && petalOptions.length) nextPetal(); else exactPetal(); }
+      else if (out) { beginPetals(); addPetal(P.jabPetal(out)); finishPetals(); }
+      else if (!out) space();
+      return;
+    }
     if (t.jabs) { const last = t.jabs.finish(); if (last) typeLetter(jab(table(), last).v); space(); return; }
     if (t.key) {
       switch (t.key.fn) {
         case 'space': space(); break; case 'enter': if (onEnter) onEnter(); break;
         case 'shift': shiftOnce = !shiftOnce; lastFix = null; paintLabels(); break;
-        case 'lang': lang = lang === 'ru' ? 'en' : 'ru'; symbols = false; lastFix = null; loadDict(lang); render(); break;
-        case 'sym': symbols = !symbols; lastFix = null; render(); break;
+        case 'lang': clearPetals(); exactWord = false; lang = lang === 'ru' ? 'en' : 'ru'; symbols = false; lastFix = null; loadDict(lang); render(); break;
+        case 'sym': clearPetals(); exactWord = false; symbols = !symbols; lastFix = null; render(); break;
         case 'say': say(text.trim() || lastSaid); break;
       }
       return;
@@ -515,7 +575,14 @@
     return b;
   }
   function paintChips() {
-    const box = $('chips'); box.innerHTML = ''; if (!$('text')) return;
+    const box = $('chips'); box.innerHTML = ''; if (!$('text') && !game) return;
+    if (petalTyping || petalPending()) {
+      const label = petalOptions[petalChoice] || 'Пока нет слова';
+      const status = document.createElement('span'); status.textContent = label; status.setAttribute('role', 'status'); box.appendChild(status);
+      if (!petalTyping) { if (petalTail !== null) box.appendChild(chip('Другой', '', nextPetal)); box.appendChild(chip('По буквам', '', exactPetal)); }
+      return;
+    }
+    if (exactWord) { const status = document.createElement('span'); status.textContent = 'По буквам · пробел — готово'; box.appendChild(status); return; }
     if (chipAction && (!chipAction.ifText || text.trim())) box.appendChild(chip(chipAction.label, 'main', chipAction.fn));
     if (guided) return;
     const shown = Object.create(null);
@@ -671,6 +738,7 @@
     restoring = true; try { e.show(); } finally { restoring = false; }
   });
   function begin(mode) {   // every screen starts clean: no guide, no game, no leftover action or Enter
+    clearPetals(); exactWord = false;
   if (mode !== 'speak') hideVoiceHint();   // подсказка про голос не висит поверх чужих экранов
     paintVoiceSettings = null;
     talking = false; game = null; probe = null; document.body.classList.remove('talking');
@@ -834,9 +902,16 @@
   }
   const JABS_NOTE = 'Толчки — целое слово одним касанием, не отрывая пальца: толчок к букве и назад; поднял палец — пробел. Быстрее, когда «Пульс» уже освоен.';
   function jabsToggle(s) {
-    const b = btn('', 'wide', function () { store.set('mode', store.get('mode', 'pulse') === 'jabs' ? 'pulse' : 'jabs'); paint(); });
+    let paintPetals = function () {};
+    const b = btn('', 'wide', function () { store.set('mode', store.get('mode', 'pulse') === 'jabs' ? 'pulse' : 'jabs'); clearPetals(); exactWord = false; paint(); paintPetals(); });
     function paint() { const on = store.get('mode', 'pulse') === 'jabs'; b.textContent = (on ? '✓ ' : '') + 'Толчки — для опытных'; b.className = on ? 'main wide' : 'wide'; }
     paint(); s.appendChild(b); s.appendChild(h('p', JABS_NOTE, 'muted'));
+    if (store.get('jabsWords', 0) >= 10 || store.get('mode', 'pulse') === 'petals') {
+      const p = btn('Лепестки', 'wide', function () { store.set('mode', store.get('mode', 'pulse') === 'petals' ? 'jabs' : 'petals'); clearPetals(); exactWord = false; paint(); paintPetals(); });
+      paintPetals = function () { const on = store.get('mode', 'pulse') === 'petals'; p.textContent = (on ? '✓ ' : '') + 'Лепестки'; p.setAttribute('aria-pressed', on); };
+      paintPetals(); s.appendChild(p);
+      s.appendChild(h('p', 'Толкай к лепестку и назад — букву выберет словарь. Поднял палец — слово с пробелом. Касание звезды — другой вариант; смах без возврата — по буквам на одно слово. Есть кнопки над звездой. Голос — по твоей настройке.', 'muted'));
+    }
   }
   function toggle(label, key, def, after) {
     const b = btn('', 'wide', function () { store.set(key, !store.get(key, def)); paint(); if (after) after(); });
@@ -1380,7 +1455,7 @@
   }
   const ROUND = 10;
   function gameScreen() {
-    if (store.get('mode', 'pulse') === 'jabs') return wordGameScreen();
+    if (['jabs', 'petals'].includes(store.get('mode', 'pulse'))) return wordGameScreen();
     const s = begin(); lang = 'ru'; symbols = false; shiftOnce = false; text = '';
     screenAt('game', gameScreen);
     const lv = gameLevel();
@@ -1421,6 +1496,7 @@
     paint(); render();
   }
   function gameStroke(t) {
+    if (game.petals) return;   // only completed out-and-back jabs; a lift never adds another petal
     if (game.words) { const last = t.jabs && t.jabs.finish(); if (last) game.add(jab(table(), last).v); else if (t.slot && t.slot.petal >= 0) game.add(t.slot.v); return; }
     const s = t.slot || resolve(table(), t.pts); if (s.petal >= 0 && s.v === game.letter) game.hit(); else game.wrong(s.petal >= 0 ? s.v : ''); }
 
@@ -1431,10 +1507,10 @@
     const s = begin(); lang = 'ru'; symbols = false; shiftOnce = false; text = '';
     screenAt('wgame', wordGameScreen);
     const lv = gameLevel();
-    game = { words: true, word: nextWord(''), n: 0, level: lv, busy: false };
+    game = { words: true, petals: store.get('mode', 'pulse') === 'petals', word: nextWord(''), n: 0, level: lv, busy: false };
     game.progress = new P.BubbleProgress(game.word);
     s.appendChild(h('h1', 'Пузыри-слова'));
-    s.appendChild(h('p', ['Крупные буквы.', 'Плюс короткие толчки.', 'Все буквы.'][lv] + ' К букве и назад. Можно поднимать палец. Пузырь ждёт.', 'note'));
+    s.appendChild(h('p', game.petals ? 'Толкай к лепестку нужной буквы и назад. Можно поднимать палец. Пузырь ждёт.' : ['Крупные буквы.', 'Плюс короткие толчки.', 'Все буквы.'][lv] + ' К букве и назад. Можно поднимать палец. Пузырь ждёт.', 'note'));
     const d = h('div', '', 'dots'); s.appendChild(d);
     const ok = h('div', '', 'ok'); s.appendChild(ok);   // above the bubble: the hint must be seen above the star
     ok.setAttribute('role', 'status');
@@ -1475,6 +1551,7 @@
       if (p.done > before) tick();
       letters(); showGuide(game.hint());
       if (p.complete) {
+        if (!game.petals) store.set('jabsWords', store.get('jabsWords', 0) + 1);
         store.set('popped', poppedAll() + 1);
         bub.className = 'bubble-l word pop'; ok.style.color = ''; ok.textContent = ''; game.n++; game.busy = true; count(game.n);
         const g = game;

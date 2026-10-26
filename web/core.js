@@ -96,6 +96,36 @@
   }
   function never() { return false; }
 
+  function jabPetal(pts) {
+    let far = 0, fi = 2;
+    for (let i = 2; i < pts.length; i += 2) { const d = Math.hypot(pts[i] - pts[0], pts[i + 1] - pts[1]); if (d > far) { far = d; fi = i; } }
+    return petalOf(pts[fi] - pts[0], pts[fi + 1] - pts[1]);
+  }
+  function PetalIndex(dict, t) {
+    const letters = Object.create(null); let index = null;
+    let personalSignature = null, personal = Object.create(null);
+    t.forEach((a, p) => a.forEach(c => { if (c.length === 1) letters[c] = p; }));
+    if (Object.prototype.hasOwnProperty.call(letters, 'е')) letters['ё'] = letters['е'];
+    if (Object.prototype.hasOwnProperty.call(letters, 'ь')) letters['ъ'] = letters['ь'];
+    this.key = function (word) {
+      if (!word) return null;
+      let k = ''; for (const c of word.toLowerCase()) { if (!Object.prototype.hasOwnProperty.call(letters, c)) return null; k += letters[c]; } return k;
+    };
+    this.candidates = function (key, user) {
+      if (!/^[0-7]+$/.test(key)) return [];
+      if (!index) { index = Object.create(null); dict.forEach(w => { const k = this.key(w); if (k) (index[k] || (index[k] = [])).push(w); }); }
+      // Counts may change on every word; directions change only when a word is added or removed.
+      const names = Object.keys(user || {}), signature = JSON.stringify(names);
+      if (signature !== personalSignature) {
+        personal = Object.create(null);
+        names.forEach(w => { const k = this.key(w); if (k) (personal[k] || (personal[k] = [])).push(w); });
+        personalSignature = signature;
+      }
+      const mine = (personal[key] || []).filter(w => own(user, w) > 0).sort((a, b) => user[b] - user[a] || (a < b ? -1 : a > b ? 1 : 0));
+      return Array.from(new Set(mine.concat(index[key] || [])));
+    };
+  }
+
   function Words(list, t, bad) {
     bad = bad || never;
     const words = [], folded = [], byFirst = Object.create(null), rank = Object.create(null), pos = Object.create(null);
@@ -105,6 +135,11 @@
       (byFirst[f[0]] || (byFirst[f[0]] = [])).push(i); if (!(f in rank)) rank[f] = i;
     });
     for (let p = 0; p < 8; p++) for (let k = 0; k < 4; k++) { const c = t[p][k]; if (c && c.length === 1) pos[c] = p * 4 + k; }
+    let petals = null;
+    this.petalCandidates = function (key, user) {
+      if (!petals) petals = new PetalIndex(words, t);
+      return petals.candidates(key, user).filter(w => !bad(w));
+    };
     if ('е' in pos) pos['ё'] = pos['е']; if ('ь' in pos) pos['ъ'] = pos['ь'];
     const NEAR = Object.create(null);
     Object.keys(pos).forEach(function (a) {
@@ -235,4 +270,6 @@
   }
 
   root.PulkCore = { DEG: DEG, own: own, R: R, PAD: PAD, OUTER: OUTER, P_MIN: P_MIN, START_R: START_R, P_TURN: P_TURN, HOLD_MS: HOLD_MS, PH: PH, KINDS: KINDS, SPOT: SPOT, ALT: ALT, SPACE: SPACE, spot: spot, petalOf: petalOf, slot: slot, tap: tap, resolve: resolve, KEYS: KEYS, hit: hit, fold: fold, shape: shape, Stop: Stop, Words: Words, JAB_OUT: JAB_OUT, JAB_HOME: JAB_HOME, JAB_SHORT: JAB_SHORT, Jabs: Jabs, jab: jab, JAB_WORDS: JAB_WORDS, jabWords: jabWords, nextJabWord: nextJabWord, BubbleProgress: BubbleProgress, alpha: alpha, OneEuro: OneEuro, LEAN: LEAN, LEAN_MAX: LEAN_MAX, lean: lean };
+  root.PulkCore.PetalIndex = PetalIndex;
+  root.PulkCore.jabPetal = jabPetal;
 })(typeof window !== 'undefined' ? window : globalThis);

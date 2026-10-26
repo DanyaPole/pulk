@@ -63,6 +63,11 @@ class Prefs(ctx: Context) {
     var mode: String
         get() = sp.getString("mode", "pulse") ?: "pulse"
         set(v) = sp.edit().putString("mode", v).apply()
+
+    /** Ten completed words in «Толчки» before offering the next way. Never switches modes. */
+    var jabsWords: Int
+        get() = sp.getInt("jabs_words", 0)
+        set(v) = sp.edit().putInt("jabs_words", v).apply()
     /** corner: the star in the thumb's corner · screen: a stroke may start anywhere, the star comes to the finger. */
     var zone: String
         get() = sp.getString("zone", "corner") ?: "corner"
@@ -264,7 +269,13 @@ class Prefs(ctx: Context) {
     companion object {
         val GESTURES = setOf("space", "hold", "cursor", "bkspword")
         /** A newcomer learns one way, «Пульс»; «Толчки» live in «Для опытных». Who chose them keeps them in the list. */
-        fun modes(p: Prefs, base: List<Pair<String, String>>) = if (p.mode == "jabs") base.take(1) + ("jabs" to "Толчки") + base.drop(1) else base
+        fun modes(p: Prefs, base: List<Pair<String, String>>): List<Pair<String, String>> {
+            val extra = mutableListOf<Pair<String, String>>()
+            if (p.mode in listOf("jabs", "petals") || p.jabsWords >= 10) extra.add("jabs" to "Толчки")
+            if (p.jabsWords >= 10 || p.mode == "petals") extra.add("petals" to "Лепестки")
+            return base.take(1) + extra + base.drop(1)
+        }
         const val JABS_NOTE = "Толчки — целое слово одним касанием, не отрывая пальца: толчок к букве и назад. Быстрее, когда «Пульс» уже освоен."
+        const val PETALS_NOTE = "Лепестки — толкай к нужному лепестку и назад, точную букву выбирать не надо. Поднял палец — слово с пробелом. Касание звезды — другой вариант; смах без возврата — по буквам для этого слова. Есть и кнопки над звездой. В пароле — Пульс без звука."
     }
 }

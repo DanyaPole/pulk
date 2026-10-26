@@ -383,6 +383,112 @@ class KeyboardTest {
         assertEquals("Мама касса. ", field.sb.toString())
     }
 
+    private fun petalPoints(word: String): List<DoubleArray> {
+        val key = Pulse.PetalIndex(emptyList(), Pulse.table(svc.lang, false)).key(word)!!
+        val x = Pulse.PH[0]; val y = Pulse.PH[1]
+        return arrayListOf(doubleArrayOf(x, y)).apply {
+            for (p in key) for (r in listOf(6.0, 12.0, 18.0, 24.0, 18.0, 12.0, 6.0, 0.0)) {
+                val a = (p - '0') * PI / 4; add(doubleArrayOf(x + cos(a) * r, y + sin(a) * r))
+            }
+        }
+    }
+
+    @Test fun petalsPreviewCommitCycleAndExactWordBothHands() {
+        svc.prefs.mode = "petals"
+        for (left in listOf(false, true)) {
+            svc.prefs.hand = if (left) "left" else "right"; view.refresh(); measure()
+            val pts = petalPoints("дом")
+            view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(pts[0][0], pts[0][1], left)))
+            for (p in pts.drop(1)) view.dispatchTouchEvent(ev(MotionEvent.ACTION_MOVE, px(p[0], p[1], left)))
+            assertTrue(svc.petalOptions.isNotEmpty()); val best = svc.petalOptions[0]
+            val before = field.sb.toString()
+            idle(3000); assertEquals(before, field.sb.toString())
+            picture(if (left) "petals-left-preview" else "petals-right-preview")
+            view.dispatchTouchEvent(ev(MotionEvent.ACTION_UP, px(pts.last()[0], pts.last()[1], left)))
+            assertEquals(before + best + " ", field.sb.toString())
+            val options = svc.petalOptions
+            assertTrue(options.size >= 2)
+            spaceTap(left) // the whole star is «Другой», without a deadline
+            assertEquals(before + options[1] + " ", field.sb.toString())
+            repeat(options.size - 1) { spaceTap(left) }
+            assertEquals(before + best + " ", field.sb.toString())
+            picture(if (left) "petals-left-choice" else "petals-right-choice")
+            stroke(listOf(90.0 to 35.0), start = Pulse.PH, left = left) // one outward stroke = precise word
+            assertTrue(svc.exactWord); assertEquals(before, field.sb.toString())
+            letter("щ", left); fnTap(Pulse.Fn.SPACE, left)
+            assertFalse(svc.exactWord); assertEquals(before + (if (before.isEmpty()) "Щ " else "щ "), field.sb.toString())
+        }
+    }
+
+    @Test fun petalsCancelUnknownAndPasswordAreSafe() {
+        svc.prefs.mode = "petals"
+        val pts = petalPoints("мама")
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN, px(pts[0][0], pts[0][1])))
+        for (p in pts.drop(1)) view.dispatchTouchEvent(ev(MotionEvent.ACTION_MOVE, px(p[0], p[1])))
+        view.dispatchTouchEvent(ev(MotionEvent.ACTION_CANCEL, px(pts.last()[0], pts.last()[1])))
+        assertEquals("", field.sb.toString()); assertTrue(svc.petalLabels().isEmpty())
+        svc.beginPetals(); repeat(30) { svc.addPetal(0) }; svc.finishPetals()
+        assertEquals("", field.sb.toString()); assertFalse(svc.exactWord)
+        assertTrue(svc.petalLabels().isEmpty()); assertFalse(svc.petalPending); assertEquals("", svc.petalKey)
+        touch(listOf(doubleArrayOf(Pulse.PH[0], Pulse.PH[1])))
+        assertFalse(svc.exactWord)
+        field.sb.clear(); field.cur = 0
+        svc.prefs.sound = "voice"; svc.prefs.haptics = true
+        val heard = arrayListOf<String>(); svc.feedback.trace = { heard.add(it) }
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD })
+        assertFalse(svc.petalsMode()); assertFalse(svc.exactWord)
+        letter("м"); fnTap(Pulse.Fn.SPACE); idle(500)
+        assertEquals("м ", field.sb.toString()); assertTrue(heard.toString(), heard.isEmpty()); assertTrue(svc.cands.isEmpty())
+    }
+
+    @Test fun firstOutwardPetalTypesSingleLetterWords() {
+        svc.prefs.mode = "petals"
+        for (w in listOf("в", "я", "и")) {
+            svc.clearPetals()
+            val p = Pulse.PetalIndex(emptyList(), Pulse.table("ru", false)).key(w)!![0] - '0'
+            val a = p * PI / 4
+            touch(listOf(0.0, 6.0, 12.0, 18.0, 24.0).map { r -> doubleArrayOf(Pulse.PH[0] + cos(a) * r, Pulse.PH[1] + sin(a) * r) })
+            assertTrue("$w is offered", svc.petalOptions.any { it.lowercase() == w })
+            repeat(svc.petalOptions.size) { if (!field.sb.toString().lowercase().endsWith("$w ")) svc.nextPetal() }
+            assertTrue(field.sb.toString(), field.sb.toString().lowercase().endsWith("$w "))
+        }
+    }
+
+    @Test fun petalsWithUnavailableDictionaryAndEmptyChoicesAreSafe() {
+        svc.prefs.mode = "petals"
+        val dictField = PulkService::class.java.getDeclaredField("dicts").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST") val dicts = dictField.get(svc) as MutableMap<String, Words>
+        synchronized(svc) { dicts.clear() }
+        svc.beginPetals(); svc.addPetal(0)
+        assertTrue(svc.petalOptions.isEmpty()); svc.finishPetals(); assertFalse(svc.petalPending)
+        svc.words("ru"); touch(petalPoints("дом"))
+        val before = field.sb.toString()
+        PulkService::class.java.getDeclaredField("petalOptions").apply { isAccessible = true }.set(svc, emptyList<String>())
+        svc.nextPetal(); assertEquals(before, field.sb.toString()); assertFalse(svc.petalPending)
+    }
+
+    @Test fun petalBubbleAcceptsDirectionWithoutExactLetterKind() {
+        svc.prefs.mode = "petals"
+        Coach.active = true; Coach.bubbles = true; Coach.jabs = true; Coach.petals = true; Coach.next = "м"
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = svc.packageName })
+        touch(petalPoints("м")) // short straight towards «н/м/ь/щ» still teaches «м»
+        assertEquals("м ", field.sb.toString()); assertTrue(svc.petalKey.isEmpty()); Coach.reset()
+    }
+
+    @Test fun petalButtonsTalkBackAndOwnPhrasesUseTheSameChoices() {
+        svc.prefs.mode = "petals"; svc.prefs.myPhrases = listOf("Мой дом"); svc.mergeFamily()
+        svc.shiftTap(true) // all caps, including when cycling
+        touch(petalPoints("дом")); assertEquals("ДОМ ", field.sb.toString())
+        assertFalse(svc.petalClickable(0)); assertTrue(svc.petalClickable(1)); assertTrue(svc.petalClickable(2))
+        val opts = svc.petalOptions
+        assertTrue(view.performAccessibilityAction(0x00f00001, null)); assertEquals(opts[1] + " ", field.sb.toString())
+        svc.petalAction(2); assertEquals("", field.sb.toString()); assertTrue(svc.exactWord)
+        svc.space(); touch(petalPoints("дом")); svc.moveCursor(-1)
+        val before = field.sb.toString(); svc.nextPetal(); assertEquals(before, field.sb.toString())
+        assertFalse(svc.petalPending)
+        svc.prefs.myPhrases = emptyList()
+    }
+
     @Test fun jabsHoldingStillNeverErases() {
         // thinking with the finger resting at home must not touch what is typed
         svc.prefs.mode = "jabs"

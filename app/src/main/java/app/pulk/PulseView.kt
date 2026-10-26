@@ -60,11 +60,11 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private var stripH = 0f     // the band for suggestions above the star
     private val left get() = svc.prefs.left
     private fun mx(x: Float) = if (left) width - x else x
-    private fun blind() = svc.prefs.blind
+    private fun blind() = svc.prefs.blind && !(svc.isSecure && svc.prefs.mode == "petals")
     /** «Толчки»: a whole word per touch. A lesson says itself which way it teaches. */
-    private fun jabsMode() = if (svc.coaching()) Coach.jabs else svc.prefs.mode == "jabs"
+    private fun jabsMode() = !(svc.isSecure && svc.prefs.mode == "petals") && (if (svc.coaching()) Coach.jabs else svc.prefs.mode == "jabs")
     /** The whole screen is where a stroke may start, and the star comes to the finger. Lessons keep the star in place. */
-    private fun screenZone() = svc.prefs.zone == "screen" && !svc.coaching() && !tapsMode()
+    private fun screenZone() = svc.prefs.zone == "screen" && !svc.coaching() && !tapsMode() && !(svc.isSecure && svc.prefs.mode == "petals")
     /** Простой режим: ⇧ and RU/EN are not shown (capitals come by themselves); the space key has no gestures. */
     private fun simple() = svc.prefs.simple && !svc.coaching()
     /** An extra gesture this person has switched on (lessons always have all of them). */
@@ -131,6 +131,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     /** Every finger is forgotten: a held ⌫ stops deleting, a long press does nothing later, an open petal closes. */
     private fun cancelTouches() {
+        if (svc.petalTyping) svc.clearPetals()
         touches.values.forEach { stopTimers(it) }; touches.clear()
         classicRepeat?.let { handler.removeCallbacks(it) }; classicRepeat = null; classicPressed = null
         cand = null; trail = null; pressedFn = null; pressedStrip = -1; longAlt = null; openPetal = -1
@@ -251,6 +252,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     // ---- suggestions: chips floating above the keyboard, the best nearest to the thumb ----
     private fun chipText(): List<String> {
+        val petals = svc.petalLabels(); if (petals.isNotEmpty()) return petals
         val c = svc.cands.take(3)
         if (c.isNotEmpty()) return c
         val h = if (svc.coaching()) Coach.hint else null
@@ -754,10 +756,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun drawChips(c: Canvas, col: Colors) {
         val items = chipText(); if (items.isEmpty()) return
         val rects = chipRects()
-        val isHint = svc.cands.isEmpty()
+        val isHint = svc.cands.isEmpty() || svc.petalLabels().isNotEmpty()
         for ((i, r) in rects.withIndex()) {
             fill.style = Paint.Style.FILL; fill.color = if (pressedStrip == i) col.press else if (i == 0 && !isHint) col.accent else col.fn
-            c.drawRoundRect(r, r.height() / 2, r.height() / 2, fill)
+            if (svc.petalLabels().isEmpty() || svc.petalClickable(i)) c.drawRoundRect(r, r.height() / 2, r.height() / 2, fill)
             txt.color = if (i == 0 && !isHint) col.accentFg else col.fg; txt.isFakeBoldText = i == 0 && !isHint; txt.textSize = 17f * density
             val maxW = r.width() - 20 * density; val w = txt.measureText(items[i]); if (w > maxW) txt.textSize *= maxW / w
             c.drawText(items[i], r.centerX(), r.centerY() - (txt.ascent() + txt.descent()) / 2, txt)
@@ -770,10 +772,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val ctr = scr(Pulse.PH[0], Pulse.PH[1])
         if (s.isSpace) { c.drawCircle(ctr[0], ctr[1], 16 * k, stroke); return }
         val way = if (Coach.jabs) {
-            val a = s.petal * PI / 4; val r = if (s.kind == 'b') 22.0 else 50.0
+            val a = s.petal * PI / 4; val r = if (Coach.petals || s.kind == 'b') 22.0 else 50.0
             val x = cos(a) * r; val y = sin(a) * r
             arrayListOf(ctr, scr(Pulse.PH[0] + x, Pulse.PH[1] + y)).apply {
-                if (s.kind == 'l' || s.kind == 'r') {
+                if (!Coach.petals && (s.kind == 'l' || s.kind == 'r')) {
                     val b = a + (if (s.kind == 'l') 1 else -1) * PI / 2
                     add(scr(Pulse.PH[0] + x + cos(b) * 30, Pulse.PH[1] + y + sin(b) * 30))
                 }
@@ -863,6 +865,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var hold: Runnable? = null
         var repeat: Runnable? = null
         var jabs: Pulse.Jabs? = null   // «Толчки»: this touch is a word
+        var petals = false
+        var petalCount = 0
         var cursorX = Float.NaN        // holding space: the cursor follows the finger from here (screen x)
         var steady: Pulse.Steady? = null  // the stroke, smoothed and measured to this hand
         var repeated = false              // ⌫ held: it already repeated
@@ -892,6 +896,21 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             MotionEvent.ACTION_HOVER_EXIT -> up(0, e.x, e.y, e.eventTime)
         }
         return true
+    }
+
+    override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        if (svc.petalsMode() && svc.petalPending) {
+            info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00001, "Другой вариант слова"))
+            info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00002, "Набрать по буквам"))
+        }
+    }
+    override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
+        if (svc.petalsMode() && svc.petalPending) {
+            if (action == 0x00f00001) { svc.nextPetal(); invalidate(); return true }
+            if (action == 0x00f00002) { svc.exactPetal(); invalidate(); return true }
+        }
+        return super.performAccessibilityAction(action, arguments)
     }
 
     // the sound compass: say what the finger is on, each time it changes
@@ -948,7 +967,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         if (s == null) svc.feedback.mode() else svc.typeLetter(s.v, s)
     }
 
-    private fun jabSlot(pts: DoubleArray) = helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
+    private fun jabSlot(pts: DoubleArray): Pulse.Slot {
+        if (svc.coaching() && Coach.petals) {
+            val p = Pulse.jabPetal(pts)
+            val want = Coach.next?.let { target(it) }?.first
+            return if (want?.petal == p) want else Pulse.at(Pulse.table(svc.lang, false), p, 'c')
+        }
+        return helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
+    }
 
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
@@ -977,7 +1003,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             }
         }
         val b = doubleArrayOf(bx(x), by(y))
-        val chip = if (svc.cands.isNotEmpty()) chipAt(x, y) else -1
+        val chip = if (svc.cands.isNotEmpty() || svc.petalLabels().isNotEmpty()) chipAt(x, y) else -1
         val inStrip = chip >= 0
         val fn = if (inStrip) null else Pulse.hit(b[0], b[1])?.takeUnless { hiddenInSimple(it.fn) }
         val t = Touch(fn, chip, handle = false)
@@ -986,8 +1012,10 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         touches[id] = t
         svc.feedback.touch()
         when {
-            inStrip -> pressedStrip = chip
-            fn == null -> if (jabsMode()) t.jabs = Pulse.Jabs(b[0], b[1]) else { updateCand(t); armHold(t) }
+            inStrip -> pressedStrip = if (svc.petalLabels().isEmpty() || svc.petalClickable(chip)) chip else -1
+            fn == null -> if (svc.petalsMode() || jabsMode()) {
+                t.petals = svc.petalsMode(); t.jabs = Pulse.Jabs(b[0], b[1])
+            } else { updateCand(t); armHold(t) }
             else -> {
                 pressedFn = fn.fn
                 if (fn.fn == Pulse.Fn.BKSP) {
@@ -1057,7 +1085,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         t.field?.let { f -> if (f[0].isNaN()) slideCursor(x, y) else { fieldDrag = floatArrayOf(x - f[0], y - f[1]); invalidate() }; return }
         val b = doubleArrayOf(bx(x), by(y))
         t.steady?.let { s -> val q = s.at(b[0], b[1], tm); b[0] = q[0]; b[1] = q[1] }
-        if (t.strip >= 0) { val s = chipAt(x, y); if (s != pressedStrip) { pressedStrip = s; invalidate() }; return }
+        if (t.strip >= 0) { val s = chipAt(x, y).let { if (svc.petalLabels().isEmpty() || svc.petalClickable(it)) it else -1 }; if (s != pressedStrip) { pressedStrip = s; invalidate() }; return }
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm)
         lastX = x
         if (t.fn != null) {
@@ -1072,11 +1100,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         if (j != null) {
             val done = j.add(b[0], b[1])
             if (done != null) {
+                if (t.petals) {
+                    if (t.petalCount++ == 0) svc.beginPetals()
+                    svc.addPetal(Pulse.jabPetal(done)); cand = null; trail = null; invalidate(); return
+                }
                 val s = jabSlot(done)
                 svc.typeLetter(s.v, s)
                 cand = null; trail = null
             } else if (j.isOut) {
-                j.current()?.let { cand = jabSlot(it); trail = it.toList(); compass(cand) }
+                j.current()?.let { cand = if (t.petals) Pulse.at(Pulse.table(svc.lang, false), Pulse.jabPetal(it), 'c') else jabSlot(it); trail = it.toList(); if (!t.petals) compass(cand) }
             }
             invalidate(); return
         }
@@ -1091,7 +1123,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val g = svc.prefs.guard.coerceIn(0, 2)
         val brush = g > 0 && t.field == null && t.times.isNotEmpty() && tm - t.times[0] < guardMin[g]
         lastUp = tm
-        if (brush) { cand = null; trail = null; pressedFn = null; pressedStrip = -1; invalidate(); return }
+        if (brush) { if (t.petals && t.petalCount > 0) svc.clearPetals(); cand = null; trail = null; pressedFn = null; pressedStrip = -1; invalidate(); return }
         if (g > 0 && t.fn?.fn == Pulse.Fn.BKSP && !t.repeated) svc.backspace()
         t.field?.let { f ->
             if (f[0].isNaN()) { slideCursor(x, y); curText = null; invalidate(); return }
@@ -1106,7 +1138,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val b = doubleArrayOf(bx(x), by(y))
         t.steady?.let { s -> val q = s.at(b[0], b[1], tm); b[0] = q[0]; b[1] = q[1] }
         when {
-            t.strip >= 0 -> { val s = pressedStrip; pressedStrip = -1; if (s >= 0) svc.pick(s) }
+            t.strip >= 0 -> { val s = pressedStrip; pressedStrip = -1; if (s >= 0) { if (svc.petalLabels().isNotEmpty()) svc.petalAction(s) else svc.pick(s) } }
+            t.petals -> {
+                val out = t.jabs!!.finish()
+                if (t.petalCount > 0) svc.finishPetals()
+                else if (svc.petalPending) { if (out == null && svc.petalOptions.isNotEmpty()) svc.nextPetal() else svc.exactPetal() }
+                else if (out != null) { svc.beginPetals(); svc.addPetal(Pulse.jabPetal(out)); svc.finishPetals() }
+                else if (out == null) svc.space()
+            }
             t.fn == null && t.jabs != null -> {
                 t.jabs!!.finish()?.let { val s = jabSlot(it); svc.typeLetter(s.v, s) }
                 svc.space()   // lifting the finger ends the word

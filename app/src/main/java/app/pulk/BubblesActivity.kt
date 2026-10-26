@@ -47,6 +47,7 @@ class BubblesActivity : Activity() {
     }
 
     private lateinit var prefs: Prefs
+    private fun wordMode() = prefs.mode in listOf("jabs", "petals")
     private lateinit var ui: Ui
     private val handler = Handler(Looper.getMainLooper())
     internal val sounds by lazy { Feedback(this, prefs) }
@@ -80,13 +81,14 @@ class BubblesActivity : Activity() {
         val lv = level(prefs.popped); roundLevel = lv
         val body = ui.column(28)
         body.addView(ui.title("Пузыри"))
-        body.addView(ui.text(if (prefs.mode == "jabs") "Слово толчками: к букве и назад. Можно поднимать палец. Пузырь ждёт."
+        body.addView(ui.text(if (prefs.mode == "petals") "Толкай к лепестку нужной буквы и назад. Можно поднимать палец. Пузырь ждёт."
+            else if (wordMode()) "Слово толчками: к букве и назад. Можно поднимать палец. Пузырь ждёт."
             else listOf("Крупные буквы: прямой смах.", "Добавились буквы у центра: туда и обратно.", "Все буквы: и с поворотом.")[lv] + " Пузырь ждёт — спешить некуда.", 17f, ui.muted))
         count = ui.text("", 18f, ui.muted); body.addView(count)
         bubble = TextView(this).apply {
-            textSize = if (prefs.mode == "jabs") 36f else 64f; setTypeface(typeface, Typeface.BOLD); setTextColor(ui.ink); gravity = Gravity.CENTER
+            textSize = if (wordMode()) 36f else 64f; setTypeface(typeface, Typeface.BOLD); setTextColor(ui.ink); gravity = Gravity.CENTER
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ui.panel); setStroke(ui.px(3), ui.accent) }
-            accessibilityLiveRegion = if (prefs.mode == "jabs") android.view.View.ACCESSIBILITY_LIVE_REGION_NONE else android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
+            accessibilityLiveRegion = if (wordMode()) android.view.View.ACCESSIBILITY_LIVE_REGION_NONE else android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
             layoutParams = LinearLayout.LayoutParams(ui.px(140), ui.px(140)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ui.px(16) }
         }
         body.addView(bubble)
@@ -104,7 +106,7 @@ class BubblesActivity : Activity() {
         })
         body.addView(field)
         val bottom = ui.bottomBar()
-        if (prefs.mode == "jabs") {
+        if (wordMode()) {
             body.addView(ui.onOff("Помощь после промахов", { prefs.bubblesHelp }) { prefs.bubblesHelp = it; aim() })
             body.addView(ui.note("Подсказка → медленный пример → после третьей попытки буква за тебя. Помощь можно отключить."))
             body.addView(ui.note(if (prefs.sound == "voice") "Пузырь произносит слово." else "Голос выключен. Его можно выбрать в настройках звука."))
@@ -116,9 +118,9 @@ class BubblesActivity : Activity() {
     }
 
     private fun choose(prev: String) {
-        letter = if (prefs.mode == "jabs") BubbleWords.next(level(prefs.popped), stats(prefs.letters), prev, Math.random())
+        letter = if (wordMode()) BubbleWords.next(level(prefs.popped), stats(prefs.letters), prev, Math.random())
             else next(level(prefs.popped), stats(prefs.letters), prev, Math.random())
-        words = if (prefs.mode == "jabs") BubbleWords.Progress(letter) else null
+        words = if (wordMode()) BubbleWords.Progress(letter) else null
         speakWord()
     }
     private fun speakWord() { if (foreground && words != null && n < ROUND && prefs.sound == "voice") sounds.say(letter) }
@@ -142,9 +144,13 @@ class BubblesActivity : Activity() {
         if (n >= ROUND) { Coach.reset(); return }
         words?.let { w ->
             Coach.active = true; Coach.jabs = true; Coach.bubbles = true; Coach.next = w.next
+            Coach.petals = prefs.mode == "petals"
             Coach.help = if (!prefs.bubblesHelp || w.complete || (level(prefs.popped) > 0 && w.misses == 0)) 0 else 2
             Coach.example = prefs.bubblesHelp && w.misses >= 2
-            Coach.hint = if (Coach.help > 0) w.next?.let { "«$it»: ${Lessons.how(it, "ru", prefs.left, true)}" } else null
+            Coach.hint = if (Coach.help > 0) w.next?.let {
+                val label = if (Coach.petals) Pulse.table("ru", false).firstOrNull { row -> it in row }?.get(0) ?: it else it
+                "«$it»: ${Lessons.how(label, "ru", prefs.left, true)}"
+            } else null
             // The pop delay may finish after Home: save the new target without teaching or speaking in the background.
             if (foreground) Coach.changed() else Coach.pause()
             return
@@ -177,6 +183,7 @@ class BubblesActivity : Activity() {
         if (w != null || got == letter) {
             if (w == null) { v[0]++; prefs.letters = statsLine(st) }
             prefs.popped = prefs.popped + 1
+            if (prefs.mode == "jabs" && w != null) prefs.jabsWords++
             sounds.drop(if (prefs.dropKind == "off") "off" else "drip")
             n++; miss = 0; note.text = ""; popping = true
             bubble.animate().scaleX(1.5f).scaleY(1.5f).alpha(0f).setDuration(320).start()

@@ -80,6 +80,20 @@ class ScreensTest {
         prefs.mode = "pulse"; Coach.reset()
     }
 
+    @Test fun petalBubblesAndSettings() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "jabs"; jabsWords = 9; popped = 0; sound = "off" }
+        assertTrue(Prefs.modes(prefs, listOf("pulse" to "Пульс")).none { it.first == "petals" })
+        prefs.jabsWords = 10
+        assertTrue(Prefs.modes(prefs, listOf("pulse" to "Пульс")).any { it.first == "petals" })
+        assertEquals("jabs", prefs.mode) // offered, never switched on
+        prefs.mode = "petals"
+        val a = Robolectric.buildActivity(BubblesActivity::class.java).setup().get()
+        assertTrue(Coach.petals && Coach.jabs)
+        shot(a, "screen-bubbles-petals")
+        shot(Robolectric.buildActivity(OptionsActivity::class.java).setup().get(), "screen-petals-settings")
+        prefs.mode = "pulse"; prefs.jabsWords = 0; Coach.reset()
+    }
+
     @Test fun theWizardTurnsOnWhatHelps() {
         val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; guard = 0; wizardDone = false; doors = "" }
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()

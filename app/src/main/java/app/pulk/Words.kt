@@ -10,7 +10,9 @@ import kotlin.math.ln
  * Pure Kotlin so it is tested on the computer.
  */
 class Words(dict: List<String>, lang: String) {
-    private val words: Array<String> = dict.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toTypedArray()
+    private val words: Array<String> = dict.map { it.trim().lowercase() }.filter { it.isNotEmpty() && !StopWords.bad(it) }.toTypedArray()
+    private val petals by lazy { Pulse.PetalIndex(words.toList(), Pulse.table(lang, false)) }
+    fun petalCandidates(key: String): List<String> = petals.candidates(key, user).filterNot { StopWords.bad(it) }
     private val folded: Array<String> = Array(words.size) { fold(words[it]) }
     private val rank = HashMap<String, Int>(words.size * 2).also { m -> folded.forEachIndexed { i, w -> m.putIfAbsent(w, i) } }
     /** Frequency prior of each word, computed once: rarer words cost more (Zipf). */
@@ -34,7 +36,7 @@ class Words(dict: List<String>, lang: String) {
         pairs[p]?.entries?.filter { it.value >= 2 }?.sortedByDescending { it.value }?.forEach { if (it.key !in out) out.add(it.key) }
         (nextCorpus[p] ?: nextCorpus[prev.lowercase()])?.forEach { if (it !in out) out.add(it) }
         if (out.isEmpty()) nextCorpus["^"]?.let { out.addAll(it) }
-        return out.take(n)
+        return out.filterNot { StopWords.bad(it) }.take(n)
     }
 
     fun learnPair(prev: String, w: String) {
@@ -64,7 +66,7 @@ class Words(dict: List<String>, lang: String) {
 
     data class Cand(val word: String, val score: Double, val misses: Int)
 
-    fun isKnown(w: String): Boolean { val f = fold(w.lowercase()); return rank.containsKey(f) || (user[f] ?: 0) >= 2 }
+    fun isKnown(w: String): Boolean { val f = fold(w.lowercase()); return rank.containsKey(f) || (user[f] ?: 0) >= 2 || StopWords.bad(f) }
 
     /** Up to [n] words for the letters typed so far, best first. */
     fun suggest(typed: String, n: Int = 3): List<String> {
@@ -77,7 +79,7 @@ class Words(dict: List<String>, lang: String) {
         }
         val allow = allowance(t.length)
         for (idx in firsts(t[0], allow)) for (i in idx) { val sc = score(t, folded[i], allow, prior[i]); if (!sc.isNaN()) offer(Cand(words[i], sc, miss)) }
-        for ((w, c) in user) if (c >= 1) { val sc = score(t, w, allow, ln(20.0 + 2000.0 / c)); if (!sc.isNaN()) offer(Cand(w, sc, miss)) }
+        for ((w, c) in user) if (c >= 1 && !StopWords.bad(w)) { val sc = score(t, w, allow, ln(20.0 + 2000.0 / c)); if (!sc.isNaN()) offer(Cand(w, sc, miss)) }
         return best.map { shape(it.word, typed) }
     }
 
@@ -94,7 +96,7 @@ class Words(dict: List<String>, lang: String) {
             if (best == null || sc < best!!.score) best = Cand(original, sc, miss)
         }
         for (idx in firsts(t[0], allow)) for (i in idx) consider(folded[i], prior[i], words[i])
-        for ((w, c) in user) if (c >= 2) consider(w, ln(20.0 + 2000.0 / c), w)
+        for ((w, c) in user) if (c >= 2 && !StopWords.bad(w)) consider(w, ln(20.0 + 2000.0 / c), w)
         return best?.let { shape(it.word, typed) }
     }
 
