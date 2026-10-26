@@ -71,6 +71,15 @@ class ScreensTest {
         assertTrue(prefs.wizardDone)
     }
 
+    @Test fun wordBubbles() {
+        val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "jabs"; popped = 0; sound = "off" }
+        val a = Robolectric.buildActivity(BubblesActivity::class.java).setup().get()
+        a.typed(a.words!!.next!!)
+        repeat(2) { a.typed(if (a.words!!.next == "а") "н" else "а") }
+        shot(a, "screen-bubbles-jabs")
+        prefs.mode = "pulse"; Coach.reset()
+    }
+
     @Test fun theWizardTurnsOnWhatHelps() {
         val prefs = Prefs(org.robolectric.RuntimeEnvironment.getApplication()).apply { mode = "pulse"; simple = false; guard = 0; wizardDone = false; doors = "" }
         val wiz = Robolectric.buildActivity(WizardActivity::class.java).setup().get()

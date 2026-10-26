@@ -87,7 +87,7 @@
     bubble = el('circle', { class: 'drop', cx: c[0], cy: c[1], r: 26, fill: C.accent, visibility: 'hidden' });
     bubbleText = el('text', { class: 'drop', x: c[0], y: c[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: C['on-accent'], 'font-size': 30, 'font-weight': 800, visibility: 'hidden' });
     paintLabels();
-    showGuide(guided ? guided.word[guided.i] : null);
+    showGuide(guided ? guided.word[guided.i] : game && game.words && game.progress ? game.hint() : null);
   }
   function caps() { return shiftOnce || !text || /[.!?…]\s$/.test(text) || /\n$/.test(text); }
   function paintLabels() {
@@ -122,7 +122,12 @@
   function strokeFor(ch) { const t = table(); for (let p = 0; p < 8; p++) for (let i = 0; i < 4; i++) if (t[p][i] === ch) return { p: p, i: i, kind: KINDS[i] }; return null; }
   function guidePts(p, kind) {
     const a = p * 45 * DEG, dx = Math.cos(a), dy = Math.sin(a), out = [[0, 0]];
-    if (kind === 'c') out.push([dx * 80, dy * 80]);
+    if (game && game.words) {
+      const r = kind === 'b' ? 22 : 50; out.push([dx * r, dy * r]);
+      if (kind === 'l' || kind === 'r') { const b = a + (kind === 'l' ? 1 : -1) * Math.PI / 2; out.push([dx * r + Math.cos(b) * 30, dy * r + Math.sin(b) * 30]); }
+      out.push([0, 0]);
+    }
+    else if (kind === 'c') out.push([dx * 80, dy * 80]);
     else if (kind === 'b') out.push([dx * 62, dy * 62], [dx * 14, dy * 14]);
     else { const b = a + (kind === 'l' ? 1 : -1) * Math.PI / 2; out.push([dx * 55, dy * 55], [dx * 55 + Math.cos(b) * 36, dy * 55 + Math.sin(b) * 36]); }
     return out.map(function (q) { return scr(PH[0] + q[0], PH[1] + q[1]); });
@@ -142,8 +147,11 @@
     guide.path.setAttribute('visibility', 'visible');
     labels.forEach(function (l) { if (l.p === f.p && l.i === f.i) l.el.setAttribute('fill', C.accent); });
     light(-1, true); guide.t0 = performance.now();
+    guide.dot.setAttribute('visibility', 'hidden');
+    if (game && game.words && (game.progress.misses < 2 || store.get('calm', false) || window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const run = game && game.words ? 2600 : 1300;
     (function tick(now) {
-      const run = 1300, rest = 700, u = ((now - guide.t0) % (run + rest)) / run;
+      const rest = 700, u = ((now - guide.t0) % (run + rest)) / run;
       if (touch || u > 1) guide.dot.setAttribute('visibility', 'hidden');
       else {
         let e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2, d = e * guide.len;
@@ -1372,6 +1380,7 @@
   }
   const ROUND = 10;
   function gameScreen() {
+    if (store.get('mode', 'pulse') === 'jabs') return wordGameScreen();
     const s = begin(); lang = 'ru'; symbols = false; shiftOnce = false; text = '';
     screenAt('game', gameScreen);
     const lv = gameLevel();
@@ -1412,67 +1421,75 @@
     paint(); render();
   }
   function gameStroke(t) {
-    if (game.words) { const last = t.jabs && t.jabs.finish(); if (last) game.add(jab(table(), last).v); game.lift(); return; }
+    if (game.words) { const last = t.jabs && t.jabs.finish(); if (last) game.add(jab(table(), last).v); else if (t.slot && t.slot.petal >= 0) game.add(t.slot.v); return; }
     const s = t.slot || resolve(table(), t.pts); if (s.petal >= 0 && s.v === game.letter) game.hit(); else game.wrong(s.petal >= 0 ? s.v : ''); }
 
-  // «Пузыри-слова»: a word in a bubble, popped by typing it whole with «Толчки» — one touch, the finger lifted checks it.
-  // Whatever the mode in the settings, here the touch is cut into jabs. No time, no losing: a wrong word only wobbles.
-  function poppedWords() { return store.get('poppedWords', 0); }
-  function wordLevel() { const n = poppedWords(); return n < 10 ? 0 : n < 25 ? 1 : 2; }
-  function nextWord(prev) { const ws = P.jabWords(D.RU, wordLevel()).filter(function (w) { return w !== prev; }); return ws[Math.floor(Math.random() * ws.length)]; }
-  const WROUND = 5;
-  function howJab(ch) { const f = strokeFor(ch); return !f ? '' : f.kind === 'c' ? 'толчок к ней подальше и назад' : f.kind === 'b' ? 'короткий толчок и назад' : 'толчок с поворотом и назад'; }
+  // Accepted letters survive lifting the finger; only a complete word pops the bubble.
+  function nextWord(prev) { return P.nextJabWord(D.RU, gameLevel(), store.get('letters', {}), prev, Math.random()); }
+  const WROUND = ROUND;
   function wordGameScreen() {
     const s = begin(); lang = 'ru'; symbols = false; shiftOnce = false; text = '';
     screenAt('wgame', wordGameScreen);
-    const lv = wordLevel();
-    game = { words: true, word: nextWord(''), got: '', n: 0, level: lv, busy: false };
+    const lv = gameLevel();
+    game = { words: true, word: nextWord(''), n: 0, level: lv, busy: false };
+    game.progress = new P.BubbleProgress(game.word);
     s.appendChild(h('h1', 'Пузыри-слова'));
-    s.appendChild(h('p', ['Крупные буквы.', 'Плюс короткие толчки.', 'Все буквы.'][lv] + ' Слово — одним касанием, потом подними палец.', 'note'));
+    s.appendChild(h('p', ['Крупные буквы.', 'Плюс короткие толчки.', 'Все буквы.'][lv] + ' К букве и назад. Можно поднимать палец. Пузырь ждёт.', 'note'));
     const d = h('div', '', 'dots'); s.appendChild(d);
     const ok = h('div', '', 'ok'); s.appendChild(ok);   // above the bubble: the hint must be seen above the star
+    ok.setAttribute('role', 'status');
     const area = h('div', '', 'pond-area words'), bub = h('div', '', 'bubble-l word'); area.appendChild(bub); s.appendChild(area);
-    const other = btn('Другое слово', 'wide', function () { if (game && !game.busy) { game.word = nextWord(game.word); game.got = ''; ok.textContent = ''; paint(); } });
+    const other = btn('Другое слово', 'wide', function () { if (game && !game.busy) { choose(); paint(); } });
     s.appendChild(other);
+    const help = btn('', 'wide', function () { store.set('bubblesHelp', !store.get('bubblesHelp', true)); helpText(); if (game) showGuide(game.hint()); });
+    function helpText() { help.textContent = 'Помощь после промахов: ' + (store.get('bubblesHelp', true) ? 'включена' : 'выключена'); help.setAttribute('aria-pressed', store.get('bubblesHelp', true)); }
+    helpText(); s.appendChild(help);
+    s.appendChild(h('p', 'Подсказка → медленный пример → после третьей попытки буква за тебя. Помощь можно отключить.', 'muted'));
+    s.appendChild(h('p', store.get('words', false) ? 'Пузырь произносит слово.' : 'Голос выключен. Его можно включить в настройке «Говорить по словам».', 'muted'));
+    s.appendChild(btn('Повторить слово', 'wide', function () { if (game) speak(); }));
     s.appendChild(btn('К тренировкам', 'wide', function () { theme = -1; drillsScreen(); }));
-    function letters() {   // the word, its letters lit as they come: right ones in colour, a wrong one crossed
+    function letters() {
       bub.textContent = '';
       for (let i = 0; i < game.word.length; i++) {
         const sp = document.createElement('span'); sp.textContent = game.word[i];
-        if (i < game.got.length) sp.className = game.got[i] === game.word[i] ? 'got' : 'bad';
+        if (i < game.progress.done) sp.className = 'got';
         bub.appendChild(sp);
       }
+      bub.setAttribute('aria-label', game.word + '. Набрано ' + game.progress.done + ' из ' + game.word.length + (game.progress.next ? '. Дальше «' + game.progress.next + '»' : ''));
     }
     function count(n) {
       d.textContent = ''; const b = document.createElement('b');
       for (let i = 0; i < WROUND; i++) b.textContent += i < n ? '●' : '○';
       d.appendChild(b); d.appendChild(document.createTextNode(n + ' из ' + WROUND));
     }
-    function paint() { count(game.n); bub.className = 'bubble-l word'; letters(); }
-    game.start = function () { if (game.busy) return; game.got = ''; letters(); };
-    game.add = function (v) { if (game.busy) return; tick(); game.got += v; letters(); };
-    game.lift = function () {
-      if (game.busy || !game.got) return;   // a tap is nothing
-      if (game.got === game.word) {
-        store.set('poppedWords', poppedWords() + 1);
+    function speak() { if (store.get('words', false)) say(game.word, true); }
+    function choose() { game.word = nextWord(game.word); game.progress = new P.BubbleProgress(game.word); ok.textContent = ''; speak(); }
+    function paint() { count(game.n); bub.className = 'bubble-l word'; letters(); showGuide(game.hint()); }
+    game.hint = function () { return store.get('bubblesHelp', true) && !game.busy && (gameLevel() === 0 || game.progress.misses > 0) ? game.progress.next : null; };
+    game.start = function () {};
+    game.add = function (v) {
+      if (game.busy) return;
+      const p = game.progress, want = p.next, before = p.done, correct = p.add(v, store.get('bubblesHelp', true));
+      const st = store.get('letters', {}), stat = own(st, want) || [0, 0]; stat[correct ? 0 : 1]++; st[want] = stat; store.set('letters', st);
+      ok.textContent = correct ? '' : p.done > before ? 'Вышло «' + v + '». Вместе набрали «' + want + '».' : 'Вышло «' + v + '», ещё раз — без спешки.' + (p.misses >= 2 && store.get('bubblesHelp', true) ? ' Медленный пример на звезде.' : '');
+      if (p.done > before) tick();
+      letters(); showGuide(game.hint());
+      if (p.complete) {
+        store.set('popped', poppedAll() + 1);
         bub.className = 'bubble-l word pop'; ok.style.color = ''; ok.textContent = ''; game.n++; game.busy = true; count(game.n);
         const g = game;
         setTimeout(function () {
           if (game !== g) return;
           g.busy = false;
-          if (g.n < WROUND) { g.word = nextWord(g.word); g.got = ''; paint(); return; }
-          game = null; other.remove();
-          ok.textContent = WROUND + ' слов! +1 капля — в пруду ' + addDrop() + (wordLevel() > g.level ? '. Дальше — новые буквы.' : '');
+          if (g.n < WROUND) { choose(); paint(); return; }
+          showGuide(null); game = null; other.remove();
+          ok.textContent = WROUND + ' слов! +1 капля — в пруду ' + addDrop() + (gameLevel() > g.level ? '. Дальше — новые буквы.' : '');
           area.innerHTML = ''; area.appendChild(btn('Ещё раунд', 'main wide', wordGameScreen));
         }, 380);
         return;
       }
-      let i = 0; while (i < game.got.length && game.got[i] === game.word[i]) i++;
-      bub.className = 'bubble-l word'; void bub.offsetWidth; bub.className = 'bubble-l word wobble';
-      ok.style.color = 'var(--muted)';
-      ok.textContent = 'Вышло «' + game.got + '». ' + (i < game.word.length ? 'Буква «' + game.word[i] + '» — ' + howJab(game.word[i]) + '. ' : 'Лишняя буква в конце. ') + 'Пузырь ждёт.';
     };
-    paint(); render();
+    paint(); render(); speak();
   }
 
   // «Тренировки»: everyday scenes; type or choose; any answer is said
@@ -1493,7 +1510,7 @@
       s.appendChild(gc);
       const wc = h('div', '', 'card choice');
       wc.appendChild(h('div', 'Пузыри-слова — для «Толчков»', 'title'));
-      wc.appendChild(h('div', 'В пузыре слово. Лопай его целиком, одним касанием: толчок к букве и назад, не отрывая пальца. Без времени и без проигрыша.', 'muted'));
+      wc.appendChild(h('div', 'В пузыре короткое слово. Толчок к букве и назад. Можно поднимать палец. Без времени и без проигрыша.', 'muted'));
       wc.appendChild(btn('Играть', 'main wide', wordGameScreen));
       s.appendChild(wc);
       themes().forEach(function (t, i) {

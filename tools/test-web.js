@@ -177,6 +177,90 @@ test('suggestions handle a one-letter word through core Words', () => {
 
 const appSource = read(path.join(root, 'web/app.js'));
 
+test('word bubbles use the same short words as Android and favour difficult letters', () => {
+  const kt = read(path.join(root, 'app/src/main/java/app/pulk/BubbleWords.kt'));
+  const list = [...kt.match(/val WORDS = listOf\(([\s\S]*?)\)/)[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  eq(P.JAB_WORDS, list);
+  ok(list.every(w => w.length >= 2 && w.length <= 4 && dict.includes(w) && !bad(w)));
+  const samples = stats => Array.from({ length: 1000 }, (_, i) => P.nextJabWord(D.RU, 0, stats, '', i / 1000)).filter(w => w.includes('а')).length;
+  ok(samples({ а: [0, 9] }) > samples({}), 'hard letters must occur more often');
+});
+
+function bubbleScreen(settings = {}) {
+  const nodes = [], timers = [], spoken = [], hints = [], ticks = [];
+  function node(tag, text = '', cls = '') {
+    const n = { tag, textContent: text, className: cls, style: {}, children: [], attrs: {},
+      appendChild(c) { this.children.push(c); return c; }, setAttribute(k, v) { this.attrs[k] = v; }, remove() {} };
+    Object.defineProperty(n, 'innerHTML', { set() { this.children = []; this.textContent = ''; } });
+    nodes.push(n); return n;
+  }
+  const values = { ...settings }, store = { get(k, d) { return Object.hasOwn(values, k) ? values[k] : d; }, set(k, v) { values[k] = v; } };
+  const start = appSource.indexOf('  let game = null;'), end = appSource.indexOf('  // «Тренировки»: everyday', start);
+  ok(start > 0 && end > start, 'bubble screen source');
+  const factory = new Function('P', 'D', 'own', 'store', 'begin', 'screenAt', 'h', 'btn', 'document', 'showGuide', 'render', 'tick', 'say', 'setTimeout', 'addDrop', 'table', 'jab', 'resolve', 'missed',
+    'let lang, symbols, shiftOnce, text; function drillsScreen() {}\n' + appSource.slice(start, end) + '\nreturn {start: gameScreen, game: () => game, stroke: gameStroke};');
+  const api = factory(P, D, P.own, store, () => node('section'), () => {}, node,
+    (text, cls, fn) => Object.assign(node('button', text, cls), { click: fn }),
+    { createElement: node, createTextNode: t => node('text', t) }, ch => hints.push(ch), () => {}, () => ticks.push(1), t => spoken.push(t), fn => timers.push(fn), () => 1, () => D.RU, P.jab, P.resolve, () => {});
+  api.start();
+  return { ...api, nodes, timers, spoken, hints, ticks, values, button: label => nodes.find(n => n.tag === 'button' && n.textContent === label) };
+}
+
+test('word bubble accepts separate touches and keyboard letters, pops only at the complete word', () => {
+  const s = bubbleScreen({ mode: 'jabs' }), g = s.game();
+  const word = g.word; eq(s.spoken, [], 'voice off');
+  for (let i = 0; i < word.length; i++) {
+    g.start(); s.stroke({ slot: { petal: 0, v: word[i] } });
+    s.stroke({ jabs: { finish: () => null } }); // lifting or a centre tap keeps progress
+    eq(g.progress.done, i + 1); eq(g.n, i === word.length - 1 ? 1 : 0);
+  }
+  eq(g.busy, true); g.add('а'); eq(g.n, 1); eq(s.values.popped, 1);
+  eq(s.ticks.length, word.length); eq(s.timers.length, 1);
+  s.timers.shift()(); eq(s.game().progress.done, 0); ok(s.game().word !== word);
+});
+
+test('word bubble assistance resets for the next letter and remembers refusal', () => {
+  const s = bubbleScreen({ mode: 'jabs', words: true }), g = s.game(), target = g.progress.next;
+  eq(s.spoken, [g.word]); s.button('Повторить слово').click(); eq(s.spoken, [g.word, g.word]);
+  const wrong = target === 'а' ? 'н' : 'а';
+  g.add(wrong); eq(g.progress.misses, 1); eq(g.progress.done, 0); eq(s.hints.at(-1), target);
+  g.add(wrong); eq(g.progress.misses, 2); eq(g.progress.done, 0);
+  g.add(wrong); eq(g.progress.done, 1); eq(g.progress.misses, 0); eq(s.values.letters[target], [0, 3]);
+  s.button('Помощь после промахов: включена').click(); eq(s.values.bubblesHelp, false);
+  const next = g.progress.next, off = next === 'а' ? 'н' : 'а';
+  for (let i = 0; i < 4; i++) g.add(off);
+  eq(g.progress.done, 1); eq(s.hints.at(-1), null);
+  const again = bubbleScreen(s.values); eq(again.values.bubblesHelp, false); eq(again.hints.at(-1), null);
+});
+
+test('pulse bubbles keep single-letter play', () => {
+  const s = bubbleScreen({ mode: 'pulse' }), g = s.game();
+  eq(!!g.words, false); eq(g.letter.length, 1);
+  g.wrong('х'); eq(g.n, 0); eq(g.miss, 1);
+  s.stroke({ slot: { petal: 0, v: g.letter } }); eq(g.n, 1); eq(s.values.popped, 1);
+});
+
+test('a success fades word bubble help at higher levels', () => {
+  const s = bubbleScreen({ mode: 'jabs', popped: 15 }), g = s.game(), target = g.progress.next;
+  eq(s.hints.at(-1), null);
+  for (let i = 0; i < 2; i++) g.add(target === 'а' ? 'н' : 'а');
+  eq(s.hints.at(-1), target); eq(g.progress.misses, 2);
+  g.add(target); eq(s.hints.at(-1), null); eq(g.progress.misses, 0);
+});
+
+test('word bubbles finish one round, reject later input and restart cleanly', () => {
+  const s = bubbleScreen({ mode: 'jabs' });
+  for (let i = 0; i < 10; i++) {
+    const g = s.game(); [...g.word].forEach(c => g.add(c));
+    eq(g.n, i + 1); eq(s.values.popped, i + 1); s.timers.shift()();
+  }
+  eq(s.game(), null); const roundEnd = s.nodes.find(n => n.className === 'ok').textContent;
+  ok(roundEnd.startsWith('10 слов! +1 капля'));
+  s.button('Повторить слово').click(); s.button('Помощь после промахов: включена').click();
+  s.button('Ещё раунд').click(); eq(s.game().n, 0); eq(s.game().progress.done, 0);
+  eq(s.values.bubblesHelp, false); eq(s.hints.at(-1), null);
+});
+
 function speechFrom(available, chosen = '', busy = false, supported = true, lang = 'ru') {
   const spoken = [], timers = [], hint = { hidden: true }, listeners = {};
   let reads = 0;

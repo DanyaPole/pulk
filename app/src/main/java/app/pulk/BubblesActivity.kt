@@ -9,6 +9,10 @@ import android.os.Looper
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.UnderlineSpan
 import android.view.Gravity
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -45,34 +49,44 @@ class BubblesActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var ui: Ui
     private val handler = Handler(Looper.getMainLooper())
-    private val sounds by lazy { Feedback(this, prefs) }
+    internal val sounds by lazy { Feedback(this, prefs) }
     internal var letter = ""
     internal var n = 0
+    internal var words: BubbleWords.Progress? = null
     private var miss = 0
     private var roundLevel = 0
     private var popping = false   // the bubble is bursting: the next letter is not on yet, more typing counts nothing
+    private var foreground = false
     private lateinit var bubble: TextView
     private lateinit var note: TextView
     private lateinit var count: TextView
     internal lateinit var field: EditText
 
-    override fun onCreate(b: Bundle?) { super.onCreate(b); prefs = Prefs(this); ui = Ui(this); start() }
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b); prefs = Prefs(this); ui = Ui(this)
+        val access = getSystemService(ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+        sounds.exploring = { access.isTouchExplorationEnabled }
+        sounds.announcer = { bubble.announceForAccessibility(it) }
+        start()
+    }
     override fun onDestroy() { Coach.reset(); sounds.shutdown(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
-    override fun onStop() { Coach.pause(); super.onStop() }
-    override fun onStart() { super.onStart(); Coach.resume() }
+    override fun onStop() { foreground = false; Coach.pause(); if (words != null) sounds.shutdown(); super.onStop() }
+    override fun onStart() { super.onStart(); foreground = true; Coach.resume(); speakWord() }
 
     private fun start() {
         handler.removeCallbacksAndMessages(null)
         n = 0; miss = 0; popping = false
+        words = null
         val lv = level(prefs.popped); roundLevel = lv
         val body = ui.column(28)
         body.addView(ui.title("Пузыри"))
-        body.addView(ui.text(listOf("Крупные буквы: прямой смах.", "Добавились буквы у центра: туда и обратно.", "Все буквы: и с поворотом.")[lv] + " Пузырь ждёт — спешить некуда.", 17f, ui.muted))
+        body.addView(ui.text(if (prefs.mode == "jabs") "Слово толчками: к букве и назад. Можно поднимать палец. Пузырь ждёт."
+            else listOf("Крупные буквы: прямой смах.", "Добавились буквы у центра: туда и обратно.", "Все буквы: и с поворотом.")[lv] + " Пузырь ждёт — спешить некуда.", 17f, ui.muted))
         count = ui.text("", 18f, ui.muted); body.addView(count)
         bubble = TextView(this).apply {
-            textSize = 64f; setTypeface(typeface, Typeface.BOLD); setTextColor(ui.ink); gravity = Gravity.CENTER
+            textSize = if (prefs.mode == "jabs") 36f else 64f; setTypeface(typeface, Typeface.BOLD); setTextColor(ui.ink); gravity = Gravity.CENTER
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ui.panel); setStroke(ui.px(3), ui.accent) }
-            accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE   // TalkBack reads each new letter
+            accessibilityLiveRegion = if (prefs.mode == "jabs") android.view.View.ACCESSIBILITY_LIVE_REGION_NONE else android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
             layoutParams = LinearLayout.LayoutParams(ui.px(140), ui.px(140)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ui.px(16) }
         }
         body.addView(bubble)
@@ -83,26 +97,58 @@ class BubblesActivity : Activity() {
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 val t = s?.toString()?.trim()?.lowercase() ?: ""
-                if (t.isEmpty()) return
-                val got = t.last().toString()
+                if (t.isEmpty()) { if (words != null && !s.isNullOrEmpty()) s.clear(); return }
                 s?.clear()   // the field only carries one letter at a time
-                typed(got)
+                if (words != null) t.forEach { typed(it.toString()) } else typed(t.last().toString())
             }
         })
         body.addView(field)
         val bottom = ui.bottomBar()
+        if (prefs.mode == "jabs") {
+            body.addView(ui.onOff("Помощь после промахов", { prefs.bubblesHelp }) { prefs.bubblesHelp = it; aim() })
+            body.addView(ui.note("Подсказка → медленный пример → после третьей попытки буква за тебя. Помощь можно отключить."))
+            body.addView(ui.note(if (prefs.sound == "voice") "Пузырь произносит слово." else "Голос выключен. Его можно выбрать в настройках звука."))
+            bottom.addView(ui.button("Повторить слово") { speakWord() })
+        }
         bottom.addView(ui.button("К тренировкам", main = true) { finish() })
         setContentView(ui.screen(body, bottom))
-        letter = next(lv, stats(prefs.letters), "", Math.random()); paint(); field.requestFocus()
+        choose(""); paint(); field.requestFocus()
+    }
+
+    private fun choose(prev: String) {
+        letter = if (prefs.mode == "jabs") BubbleWords.next(level(prefs.popped), stats(prefs.letters), prev, Math.random())
+            else next(level(prefs.popped), stats(prefs.letters), prev, Math.random())
+        words = if (prefs.mode == "jabs") BubbleWords.Progress(letter) else null
+        speakWord()
+    }
+    private fun speakWord() { if (foreground && words != null && n < ROUND && prefs.sound == "voice") sounds.say(letter) }
+    private fun wordPaint() {
+        val w = words ?: return
+        bubble.text = SpannableString(letter).apply { if (w.done > 0) {
+            setSpan(ForegroundColorSpan(ui.accent), 0, w.done, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(UnderlineSpan(), 0, w.done, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } }
+        bubble.contentDescription = "$letter. Набрано ${w.done} из ${letter.length}" + (w.next?.let { ". Дальше «$it»" } ?: "")
     }
 
     private fun paint() {
         count.text = (0 until ROUND).joinToString("") { if (it < n) "●" else "○" } + "   $n из $ROUND"
         bubble.text = letter; bubble.scaleX = 1f; bubble.scaleY = 1f; bubble.alpha = 1f
+        if (words != null) { wordPaint(); aim(); return }
         // at first the way is lit at once; later only after a miss
         if (level(prefs.popped) == 0 || miss > 0) aim() else Coach.reset()
     }
     private fun aim() {
+        if (n >= ROUND) { Coach.reset(); return }
+        words?.let { w ->
+            Coach.active = true; Coach.jabs = true; Coach.bubbles = true; Coach.next = w.next
+            Coach.help = if (!prefs.bubblesHelp || w.complete || (level(prefs.popped) > 0 && w.misses == 0)) 0 else 2
+            Coach.example = prefs.bubblesHelp && w.misses >= 2
+            Coach.hint = if (Coach.help > 0) w.next?.let { "«$it»: ${Lessons.how(it, "ru", prefs.left, true)}" } else null
+            // The pop delay may finish after Home: save the new target without teaching or speaking in the background.
+            if (foreground) Coach.changed() else Coach.pause()
+            return
+        }
         Coach.active = true; Coach.help = if (miss >= 2) 3 else 2; Coach.next = letter
         Coach.hint = "«$letter»: ${Lessons.how(letter, "ru", prefs.left)}"; Coach.changed()
     }
@@ -110,18 +156,37 @@ class BubblesActivity : Activity() {
     internal fun typed(got: String) {
         if (popping || n >= ROUND) return
         val st = stats(prefs.letters)
-        val v = st.getOrPut(letter) { intArrayOf(0, 0) }
-        if (got == letter) {
-            v[0]++; prefs.letters = statsLine(st); prefs.popped = prefs.popped + 1
+        val w = words
+        val want = w?.next ?: letter
+        val v = st.getOrPut(want) { intArrayOf(0, 0) }
+        if (w != null) {
+            val before = w.done
+            val correct = w.add(got, prefs.bubblesHelp)
+            v[if (correct) 0 else 1]++; prefs.letters = statsLine(st)
+            note.text = if (correct) "" else if (w.done > before) "Вышло «$got». Вместе набрали «$want»." else
+                "Вышло «$got», ещё раз — без спешки." + if (w.misses >= 2 && prefs.bubblesHelp) " Медленный пример на звезде." else ""
+            if (w.done > before) {
+                val table = Pulse.table("ru", false)
+                val p = table.indexOfFirst { want in it }
+                val k = table[p].indexOf(want)
+                sounds.letter(Pulse.Slot(p, Pulse.KINDS[k], want), want, "ru", false)
+            }
+            wordPaint(); aim()
+            if (!w.complete) return
+        }
+        if (w != null || got == letter) {
+            if (w == null) { v[0]++; prefs.letters = statsLine(st) }
+            prefs.popped = prefs.popped + 1
             sounds.drop(if (prefs.dropKind == "off") "off" else "drip")
             n++; miss = 0; note.text = ""; popping = true
             bubble.animate().scaleX(1.5f).scaleY(1.5f).alpha(0f).setDuration(320).start()
             handler.postDelayed({
                 popping = false
-                if (n < ROUND) { letter = next(level(prefs.popped), stats(prefs.letters), letter, Math.random()); paint() }
+                if (n < ROUND) { choose(letter); paint() }
                 else {
                     // the round is over, as in the web: a drop, and «Ещё раунд» when the person wants it
                     Coach.reset(); bubble.text = "★"; bubble.alpha = 1f; bubble.scaleX = 1f; bubble.scaleY = 1f; note.setTextColor(ui.accent); count.text = ""
+                    if (words != null) bubble.contentDescription = "$ROUND слов. Раунд закончен."
                     note.text = "$ROUND пузырей! +1 капля — в пруду ${Pond.add(prefs)}" + if (level(prefs.popped) > roundLevel) ". Дальше — новые буквы." else ""
                     (note.parent as? android.view.ViewGroup)?.let { b -> b.addView(ui.button("Ещё раунд", main = true) { start() }, b.indexOfChild(note) + 1) }
                 }

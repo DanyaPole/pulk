@@ -769,17 +769,30 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         stroke.color = col.accent; stroke.strokeWidth = 3.5f * density; stroke.strokeCap = Paint.Cap.ROUND
         val ctr = scr(Pulse.PH[0], Pulse.PH[1])
         if (s.isSpace) { c.drawCircle(ctr[0], ctr[1], 16 * k, stroke); return }
-        val big = Pulse.spot(s.petal, 'c')
-        val a = scr(big[0], big[1])
-        val p = Path(); p.moveTo(ctr[0], ctr[1]); p.lineTo(a[0], a[1])
-        if (s.kind != 'c') { val e = Pulse.spot(s.petal, s.kind); val b = scr(e[0], e[1]); p.lineTo(b[0], b[1]) }
+        val way = if (Coach.jabs) {
+            val a = s.petal * PI / 4; val r = if (s.kind == 'b') 22.0 else 50.0
+            val x = cos(a) * r; val y = sin(a) * r
+            arrayListOf(ctr, scr(Pulse.PH[0] + x, Pulse.PH[1] + y)).apply {
+                if (s.kind == 'l' || s.kind == 'r') {
+                    val b = a + (if (s.kind == 'l') 1 else -1) * PI / 2
+                    add(scr(Pulse.PH[0] + x + cos(b) * 30, Pulse.PH[1] + y + sin(b) * 30))
+                }
+                add(ctr)
+            }
+        } else {
+            val big = Pulse.spot(s.petal, 'c'); val e = Pulse.spot(s.petal, s.kind)
+            arrayListOf(ctr, scr(big[0], big[1])).apply { if (s.kind != 'c') add(scr(e[0], e[1])) }
+        }
+        val p = Path(); p.moveTo(ctr[0], ctr[1])
+        for (q in way.drop(1)) p.lineTo(q[0], q[1])
         c.drawPath(p, stroke)
-        val e = Pulse.spot(s.petal, s.kind); val q = scr(e[0], e[1])
+        val q = if (Coach.jabs) way[1] else way.last()
         stroke.strokeWidth = 2f * density; c.drawCircle(q[0], q[1], 14 * k, stroke)
+        if (Coach.bubbles && (!Coach.example || svc.prefs.calm || !animationsOn())) return
         // a dot runs the way: 1.3 s along it, 0.7 s rest; eased, so the start and the turn are easy to follow
-        val way = ArrayList<FloatArray>().apply { add(ctr); add(a); if (s.kind != 'c') add(q) }
         var len = 0f; for (i in 1 until way.size) len += hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1])
-        val u = (android.os.SystemClock.uptimeMillis() % 2000L) / 1300f
+        val run = if (Coach.example) 2600L else 1300L
+        val u = (android.os.SystemClock.uptimeMillis() % (run + 700L)) / run.toFloat()
         if (u <= 1f && len > 0f) {
             var d = (if (u < 0.5f) 2 * u * u else 1 - (-2 * u + 2) * (-2 * u + 2) / 2) * len
             for (i in 1 until way.size) {

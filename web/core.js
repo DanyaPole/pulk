@@ -185,16 +185,35 @@
     return s;
   }
 
-  // «Пузыри» for «Толчки»: simple words to pop with one touch each. Like the letter game, the big letters first
+  // «Пузыри» for «Толчки»: short words; accepted letters survive lifting. Like the letter game, the big letters first
   // (one straight jab), then the short jabs, then the jabs with a turn; a level gives only words its letters can type
-  const JAB_WORDS = ['нос', 'сон', 'рот', 'сто', 'три', 'рис', 'она', 'они', 'оса', 'нет', 'торт', 'сено', 'нота', 'роса', 'нора', 'тесто', 'сирена',
-    'шар', 'нож', 'щит', 'щи', 'жена', 'шина', 'отец', 'цена', 'это', 'шарф', 'жара', 'наш',
-    'да', 'мама', 'папа', 'дом', 'кот', 'мяч', 'сок', 'суп', 'хлеб', 'вода', 'лук', 'чай', 'мир', 'лес', 'день', 'ночь', 'утро', 'рука', 'небо', 'друг', 'кошка', 'книга', 'привет', 'спасибо'];
+  const JAB_WORDS = root.PULK.jabWords;
   function jabWords(t, level) {
     const kinds = [[0], [0, 3], [0, 3, 1, 2]][level], ok = {};
     for (let p = 0; p < 8; p++) kinds.forEach(function (k) { if (t[p][k]) ok[t[p][k]] = 1; });
     return JAB_WORDS.filter(function (w) { for (let i = 0; i < w.length; i++) if (!ok[w[i]]) return false; return true; });
   }
+  function nextJabWord(t, level, stats, prev, r) {
+    let ws = jabWords(t, level).filter(w => w !== prev);
+    if (!ws.length) ws = jabWords(t, 0).filter(w => w !== prev);
+    if (!ws.length) return prev;
+    const weights = ws.map(w => 1 + 3 * [...w].reduce((sum, c) => { const v = own(stats, c) || [0, 0]; return sum + v[1] / (v[0] + v[1] + 1); }, 0) / w.length);
+    let x = r * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < ws.length; i++) { x -= weights[i]; if (x <= 0) return ws[i]; }
+    return ws[ws.length - 1];
+  }
+  function BubbleProgress(word) { this.word = word; this.done = 0; this.misses = 0; }
+  Object.defineProperties(BubbleProgress.prototype, {
+    complete: { get: function () { return this.done === this.word.length; } },
+    next: { get: function () { return this.word[this.done] || null; } }
+  });
+  BubbleProgress.prototype.add = function (got, help) {
+    if (this.complete) return false;
+    if (got === this.next) { this.done++; this.misses = 0; return true; }
+    this.misses++;
+    if (help && this.misses >= 3) { this.done++; this.misses = 0; }
+    return false;
+  };
 
   // ---- the 1€ filter (Casiez, Roussel, Vogel, CHI 2012), one coordinate ----
   function alpha(cut, dt) { const tau = 1 / (2 * Math.PI * cut); return 1 / (1 + tau / dt); }
@@ -215,5 +234,5 @@
     return [x * f, y * f];
   }
 
-  root.PulkCore = { DEG: DEG, own: own, R: R, PAD: PAD, OUTER: OUTER, P_MIN: P_MIN, START_R: START_R, P_TURN: P_TURN, HOLD_MS: HOLD_MS, PH: PH, KINDS: KINDS, SPOT: SPOT, ALT: ALT, SPACE: SPACE, spot: spot, petalOf: petalOf, slot: slot, tap: tap, resolve: resolve, KEYS: KEYS, hit: hit, fold: fold, shape: shape, Stop: Stop, Words: Words, JAB_OUT: JAB_OUT, JAB_HOME: JAB_HOME, JAB_SHORT: JAB_SHORT, Jabs: Jabs, jab: jab, JAB_WORDS: JAB_WORDS, jabWords: jabWords, alpha: alpha, OneEuro: OneEuro, LEAN: LEAN, LEAN_MAX: LEAN_MAX, lean: lean };
+  root.PulkCore = { DEG: DEG, own: own, R: R, PAD: PAD, OUTER: OUTER, P_MIN: P_MIN, START_R: START_R, P_TURN: P_TURN, HOLD_MS: HOLD_MS, PH: PH, KINDS: KINDS, SPOT: SPOT, ALT: ALT, SPACE: SPACE, spot: spot, petalOf: petalOf, slot: slot, tap: tap, resolve: resolve, KEYS: KEYS, hit: hit, fold: fold, shape: shape, Stop: Stop, Words: Words, JAB_OUT: JAB_OUT, JAB_HOME: JAB_HOME, JAB_SHORT: JAB_SHORT, Jabs: Jabs, jab: jab, JAB_WORDS: JAB_WORDS, jabWords: jabWords, nextJabWord: nextJabWord, BubbleProgress: BubbleProgress, alpha: alpha, OneEuro: OneEuro, LEAN: LEAN, LEAN_MAX: LEAN_MAX, lean: lean };
 })(typeof window !== 'undefined' ? window : globalThis);

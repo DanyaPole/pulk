@@ -293,6 +293,32 @@ class KeyboardTest {
         spaceTap(); assertEquals("прив ", field.sb.toString())
     }
 
+    @Test fun wordBubblesOwnTheirFeedbackOnlyInTheirOwnField() {
+        Coach.active = true; Coach.bubbles = true; Coach.jabs = true
+        svc.prefs.haptics = true; svc.prefs.sound = "voice"
+        val events = ArrayList<String>(); svc.feedback.trace = { events.add(it) }
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = svc.packageName })
+        svc.typeLetter("н", Pulse.Slot(0, 'c', "н")); svc.space()
+        assertTrue(events.isEmpty()) // the activity will acknowledge accepted letters, without a second voice
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT })
+        svc.typeLetter("н", Pulse.Slot(0, 'c', "н"))
+        assertTrue(events.any { it.startsWith("say ") })
+        events.clear()
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; packageName = svc.packageName })
+        svc.typeLetter("н", Pulse.Slot(0, 'c', "н"))
+        assertTrue(events.any { it.startsWith("buzz ") }); assertFalse(events.any { it.startsWith("say ") })
+        Coach.reset()
+    }
+
+    @Test fun wordBubbleExampleIsDrawnForEitherHand() {
+        Coach.active = true; Coach.bubbles = true; Coach.jabs = true
+        Coach.help = 2; Coach.example = true; Coach.next = "м"
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = svc.packageName })
+        picture("coach-bubbles-right")
+        svc.prefs.hand = "left"; measure(); picture("coach-bubbles-left")
+        Coach.reset()
+    }
+
     @Test fun tutorialHandInHand() {
         Coach.active = true; Coach.next = "м"; Coach.help = 3; Coach.hint = "м: смахни вправо и поверни вверх"
         letter("н")                                 // another app's field (a reply from the shade): no lesson help there

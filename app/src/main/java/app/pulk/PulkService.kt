@@ -355,7 +355,7 @@ class PulkService : InputMethodService() {
         feedback.hush()
         undo = null
         io.commit(s)
-        feedback.letter(slot, s, lang, secure)
+        if (!(coaching() && Coach.bubbles && !secure)) feedback.letter(slot, s, lang, secure)
         if (!shiftLock) shiftOnce = false
         after()
     }
@@ -367,12 +367,12 @@ class PulkService : InputMethodService() {
         // a password, an address or a phone number keeps both spaces: a full stop there would be a wrong character
         if (prose && now - lastSpace < 350 && before.length == 2 && before[1] == ' ' && before[0].isLetterOrDigit()) {
             io.deleteBefore(1); io.commit(". "); lastSpace = 0; undo = null
-            feedback.space(null, secure)
+            if (!(coaching() && Coach.bubbles && !secure)) feedback.space(null, secure)
         } else {
             undo = null   // a space is a new step: ⌫ after it takes back the space, not something done before
             val word = finishWord()
             io.commit(" "); lastSpace = now
-            feedback.space(word, secure)
+            if (!(coaching() && Coach.bubbles && !secure)) feedback.space(word, secure)
         }
         after()
     }

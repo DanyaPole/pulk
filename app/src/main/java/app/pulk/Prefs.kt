@@ -240,6 +240,9 @@ class Prefs(ctx: Context) {
     var letters: String
         get() = sp.getString("letters", "") ?: ""
         set(v) = sp.edit().putString("letters", v).apply()
+    var bubblesHelp: Boolean
+        get() = sp.getBoolean("bubblesHelp", true)
+        set(v) = sp.edit().putBoolean("bubblesHelp", v).apply()
 
     /** The week's journal (see [Together.logged]). */
     var journal: List<String>
