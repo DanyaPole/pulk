@@ -1,23 +1,23 @@
 ---
 name: pulk-release
-description: Как проверить и выпустить Пульк в обеих версиях — Android-клавиатура (C:\dev\projects\pulk) и веб-версия (C:\dev\projects\pulk\web) — на danyapole.github.io/duga/pulk/. Использовать, когда нужно прогнать тесты, проверить экраны, выпустить версию или обновить страницу скачивания и инструкции.
+description: Как проверить и выпустить Пульк в обеих версиях — Android-клавиатура (G:\DEV\projects\pulk) и веб-версия (G:\DEV\projects\pulk\web) — на danyapole.github.io/duga/pulk/. Использовать, когда нужно прогнать тесты, проверить экраны, выпустить версию или обновить страницу скачивания и инструкции.
 ---
 
 # Проверка и выпуск Пулька
 
 ## Проверка после каждого шага
-1. Android: `powershell -NoProfile -File gw.ps1 testDebugUnitTest` в `C:\dev\projects\pulk`, в фоне; пока идёт — файлы не править (иначе компилирует полуготовое). Сводка: `grep -ho 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml` и сложить; упавшие — читать эти xml (вывод PowerShell в cp866). Картинки — `app/build/shots/*.png`, смотреть глазами после правок вида.
-2. Общие данные изменились в Kotlin (буквы, фразы, тренировки, пруд) → `node tools/build-web.js` в `C:\dev\projects\pulk`.
-3. Веб: `node tools/test-web.js` в `C:\dev\projects\pulk`; потом `node tools/build-pages.js` в `C:\dev\projects\duga` — он берёт веб из соседней папки `pulk`, прогоняет те же тесты со словарями сайта, упал тест — сборка останавливается. Затем превью `duga-site` (порт 5174, `/pulk/web/index.html`), прогнать экраны через JS: окно превью часто скрыто — скриншоты обрезаются, rAF не идёт. Консоль без ошибок.
+1. Android: `powershell -NoProfile -File gw.ps1 testDebugUnitTest` в `G:\DEV\projects\pulk`, в фоне; пока идёт — файлы не править (иначе компилирует полуготовое). Сводка: `grep -ho 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml` и сложить; упавшие — читать эти xml (вывод PowerShell в cp866). Картинки — `app/build/shots/*.png`, смотреть глазами после правок вида.
+2. Общие данные изменились в Kotlin (буквы, фразы, тренировки, пруд) → `node tools/build-web.js` в `G:\DEV\projects\pulk`.
+3. Веб: `node tools/test-web.js` в `G:\DEV\projects\pulk`; потом `node tools/build-pages.js` в `G:\DEV\projects\duga` — он берёт веб из соседней папки `pulk`, прогоняет те же тесты со словарями сайта, упал тест — сборка останавливается. Затем превью `duga-site` (порт 5174, `/pulk/web/index.html`), прогнать экраны через JS: окно превью часто скрыто — скриншоты обрезаются, rAF не идёт. Консоль без ошибок.
 4. Честно сказать автору, что проверено (тесты, браузер на компьютере), а что нет (живой телефон).
 
 ## Выпуск Android
 1. Версия: `versionCode`/`versionName` в `app/build.gradle.kts`.
 2. `gw.ps1 assembleRelease` → `app/build/outputs/apk/release/app-release.apk` (подпись из `keys/`, не в git). Скопировать в `dist/pulk-<версия>.apk`. По желанию `aapt2 dump badging`: версия и единственное разрешение VIBRATE.
-3. Коммит в `C:\dev\projects\pulk`: `git -c user.name=DanyaPole -c user.email=DanyaPole@users.noreply.github.com commit …` с `Co-Authored-By`.
+3. Коммит в `G:\DEV\projects\pulk`: `git -c user.name=DanyaPole -c user.email=DanyaPole@users.noreply.github.com commit …` с `Co-Authored-By`.
 
 ## Сайт (обе версии)
-1. APK → `C:\dev\projects\duga\pulk\pulk.apk`; номер в кнопке «Скачать» на `pulk/index.html`.
+1. APK → `G:\DEV\projects\duga\pulk\pulk.apk`; номер в кнопке «Скачать» на `pulk/index.html`.
 2. Изменились возможности — обновить таблицу «Android или браузер» (`pulk/index.html`, id="diff") и инструкции: тексты в `tools/make-guides.js`, потом `node tools/make-guides.js`.
 3. Сначала `git push` в pulk (сайт берёт веб из GitHub-репозитория DanyaPole/pulk). Потом `node tools/build-pages.js`; коммит и `git push` в duga; если в duga коммитить нечего — `gh workflow run pages.yml -R DanyaPole/duga`, чтобы сайт пересобрался; дождаться, что страница отдаёт новое (`curl` по адресу, размер APK).
 4. Коротко автору: что нового, что не проверено на телефоне.
