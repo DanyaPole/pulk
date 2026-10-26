@@ -140,6 +140,19 @@
       if (!petals) petals = new PetalIndex(words, t);
       return petals.candidates(key, user).filter(w => !bad(w));
     };
+    // Pair lookup as Words.kt. The bank disables the sentence-start fallback: it is not pair evidence.
+    const nextCorpus = Object.create(null);
+    this.pairs = Object.create(null);
+    this.loadNext = function (lines) {
+      lines.forEach(l => { const i = l.indexOf('\t'); if (i > 0) nextCorpus[l.slice(0, i)] = l.slice(i + 1).split(' ').filter(Boolean); });
+    };
+    this.next = function (prev, n = 3, fallbackToStart = true) {
+      const p = fold(prev.toLowerCase()), out = [], mine = own(this.pairs, p) || {};
+      Object.keys(mine).filter(w => mine[w] >= 2).sort((a, b) => mine[b] - mine[a] || (a < b ? -1 : a > b ? 1 : 0)).forEach(w => { if (!out.includes(w)) out.push(w); });
+      (own(nextCorpus, p) || own(nextCorpus, prev.toLowerCase()) || []).forEach(w => { if (!out.includes(w)) out.push(w); });
+      if (!out.length && fallbackToStart) out.push(...(own(nextCorpus, '^') || []));
+      return out.filter(w => !bad(w)).slice(0, n);
+    };
     if ('е' in pos) pos['ё'] = pos['е']; if ('ь' in pos) pos['ъ'] = pos['ь'];
     const NEAR = Object.create(null);
     Object.keys(pos).forEach(function (a) {
@@ -187,6 +200,80 @@
       for (const w in user) if (user[w] >= 2 && !bad(w)) consider(w, -user[w], w);
       return best && shape(best.word, typed);
     };
+  }
+
+  // Phrase-local proposals, as ReplacementBank.kt. Feed completed words; omit the key for firm words.
+  // Every i is a stable zero-based WORD index. No voice, storage or text sink; the caller applies the
+  // returned accept change to its editor and can compare textWords() after undo. Reset on external edits.
+  function ReplacementBank(words, profile = 'speak', enabled = true) {
+    const cfg = root.PULK.replacement, phrase = [], refused = new Set(), history = [];
+    let active = enabled, locked = -1;
+    const normal = w => fold(w.toLowerCase());
+    const pairKey = c => JSON.stringify([normal(c.before), normal(c.after)]);
+    Object.defineProperty(this, 'enabled', {
+      get: () => active,
+      set: value => { if (!value) this.endPhrase(); active = value; }
+    });
+    this.addWord = function (word, petalKey, user) {
+      if (!active || !word.trim()) return -1;
+      const candidates = petalKey == null ? [] : words.petalCandidates(petalKey, user);
+      const seen = new Set([normal(word)]), backups = [];
+      // Multiple frequency-ranked candidates are the existing petal engine's only ambiguity signal.
+      if (candidates.length && normal(candidates[0]) === normal(word)) {
+        for (const c of candidates) {
+          if (seen.has(normal(c))) continue;
+          seen.add(normal(c)); backups.push(shape(c, word)); if (backups.length === cfg.MAX_ALTERNATIVES) break;
+        }
+      }
+      phrase.push({ word, backups }); return phrase.length - 1;
+    };
+    this.textWords = () => phrase.map(e => e.word);
+    function support(prev, word) {
+      const rank = words.next(prev, Number.MAX_SAFE_INTEGER, false).findIndex(w => normal(w) === normal(word));
+      return rank < 0 ? 0 : 1 / (rank + 1);
+    }
+    this.pending = function () {
+      if (!active) return [];
+      const out = [];
+      phrase.forEach((entry, i) => {
+        if (i <= locked || !entry.backups.length) return;
+        const candidates = [entry.word].concat(entry.backups);
+        const scores = candidates.map(c => (i > 0 ? support(phrase[i - 1].word, c) : 0) + (i + 1 < phrase.length ? support(c, phrase[i + 1].word) : 0));
+        const best = scores.indexOf(Math.max(...scores)); if (best === 0) return;
+        // Thresholds and evidence floor come from Kotlin through build-web.js (heuristic, not probability).
+        const confidence = scores[best] / (cfg.EVIDENCE_FLOOR + scores.reduce((a, b) => a + b, 0));
+        if (confidence <= (profile === 'write' ? cfg.WRITE_THRESHOLD : cfg.SPEAK_THRESHOLD)) return;
+        const after = candidates[best], change = { index: i, before: entry.word, after,
+          context: phrase.slice(Math.max(0, i - 1), i + 2).map((e, j) => j + Math.max(0, i - 1) === i ? after : e.word).join(' ') };
+        if (!refused.has(pairKey(change))) out.push(change);
+      });
+      return out;
+    };
+    this.count = () => this.pending().length;
+    const find = i => Number.isInteger(i) ? this.pending().find(c => c.index === i) : null;
+    this.listenText = function (i) { const c = find(i); return c ? c.before + ' → ' + c.after + '; ' + c.context : null; };
+    this.accept = function (i) {
+      const c = find(i); if (!c) return null;
+      history.push({ index: i, previous: phrase[i], refusals: [] }); phrase[i] = { word: c.after, backups: [] }; return c;
+    };
+    function refuse(changes) {
+      const keys = Array.from(new Set(changes.map(pairKey))); if (!keys.length) return;
+      keys.forEach(k => refused.add(k)); history.push({ index: -1, previous: null, refusals: keys });
+    }
+    this.keep = function (i) { const c = find(i); if (!c) return false; refuse([c]); return true; };
+    this.keepAll = () => refuse(this.pending());
+    this.undo = function () {
+      const action = history.pop(); if (!action) return false;
+      if (action.previous) phrase[action.index] = action.previous;
+      action.refusals.forEach(k => refused.delete(k)); return true;
+    };
+    this.lock = function (upToIndex) {
+      if (!active || !Number.isInteger(upToIndex)) return;
+      locked = Math.max(locked, upToIndex);
+      for (let j = history.length - 1; j >= 0; j--) if (history[j].previous && history[j].index <= locked) history.splice(j, 1);
+    };
+    // All phrase state, including declined replacement pairs and undo, stays local until this call.
+    this.endPhrase = function () { phrase.length = 0; refused.clear(); history.length = 0; locked = -1; };
   }
 
   // ---- «Толчки» (as Pulse.kt): a whole word without lifting the finger. One touch is cut into jabs — from home
@@ -272,4 +359,5 @@
   root.PulkCore = { DEG: DEG, own: own, R: R, PAD: PAD, OUTER: OUTER, P_MIN: P_MIN, START_R: START_R, P_TURN: P_TURN, HOLD_MS: HOLD_MS, PH: PH, KINDS: KINDS, SPOT: SPOT, ALT: ALT, SPACE: SPACE, spot: spot, petalOf: petalOf, slot: slot, tap: tap, resolve: resolve, KEYS: KEYS, hit: hit, fold: fold, shape: shape, Stop: Stop, Words: Words, JAB_OUT: JAB_OUT, JAB_HOME: JAB_HOME, JAB_SHORT: JAB_SHORT, Jabs: Jabs, jab: jab, JAB_WORDS: JAB_WORDS, jabWords: jabWords, nextJabWord: nextJabWord, BubbleProgress: BubbleProgress, alpha: alpha, OneEuro: OneEuro, LEAN: LEAN, LEAN_MAX: LEAN_MAX, lean: lean };
   root.PulkCore.PetalIndex = PetalIndex;
   root.PulkCore.jabPetal = jabPetal;
+  root.PulkCore.ReplacementBank = ReplacementBank;
 })(typeof window !== 'undefined' ? window : globalThis);

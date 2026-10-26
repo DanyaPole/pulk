@@ -30,12 +30,15 @@ class Words(dict: List<String>, lang: String) {
     }
 
     /** The next word, before a letter of it is typed: this person's own habits first, then the corpus. */
-    fun next(prev: String, n: Int = 3): List<String> {
+    // A replacement needs an actual pair: sentence-start fallback is not evidence about prev.
+    fun next(prev: String, n: Int = 3, fallbackToStart: Boolean = true): List<String> {
         val p = fold(prev.lowercase())
         val out = ArrayList<String>()
-        pairs[p]?.entries?.filter { it.value >= 2 }?.sortedByDescending { it.value }?.forEach { if (it.key !in out) out.add(it.key) }
+        pairs[p]?.entries?.filter { it.value >= 2 }
+            ?.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            ?.forEach { if (it.key !in out) out.add(it.key) }
         (nextCorpus[p] ?: nextCorpus[prev.lowercase()])?.forEach { if (it !in out) out.add(it) }
-        if (out.isEmpty()) nextCorpus["^"]?.let { out.addAll(it) }
+        if (out.isEmpty() && fallbackToStart) nextCorpus["^"]?.let { out.addAll(it) }
         return out.filterNot { StopWords.bad(it) }.take(n)
     }
 

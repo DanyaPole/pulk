@@ -21,6 +21,93 @@ function test(name, fn) {
 function eq(a, b, what) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((what ? what + ': ' : '') + 'got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b)); }
 function ok(c, what) { if (!c) throw new Error(what || 'not true'); }
 
+// Same scenarios as ReplacementBankTest.kt; indices refer to phrase words, not queue positions.
+const bankKey = new P.PetalIndex([], D.RU).key('дом');
+function bank(lines = ['том\tстоит'], profile = 'speak', enabled = true) {
+  const w = new P.Words(['дом', 'том'], D.RU, bad); w.loadNext(lines);
+  return new P.ReplacementBank(w, profile, enabled);
+}
+function bankPair(b) { b.addWord('дом', bankKey); b.addWord('стоит'); }
+test('replacement bank: pending is silent and indices are stable', () => {
+  const b = bank(); b.addWord('вот'); b.addWord('дом', bankKey); eq(b.count(), 0); b.addWord('стоит');
+  const change = { index: 1, before: 'дом', after: 'том', context: 'вот том стоит' };
+  eq(b.pending(), [change]); eq(b.listenText(1), 'дом → том; вот том стоит'); eq(b.textWords(), ['вот', 'дом', 'стоит']);
+  eq(b.accept(0), null); eq(b.keep(99), false); eq(b.listenText(-1), null);
+  const snapshot = b.pending(); snapshot[0].after = 'changed'; snapshot.pop();
+  eq(b.pending(), [change]); eq(b.count(), 1); eq(b.accept('1'), null); eq(b.accept(.5), null);
+});
+test('replacement bank: accept and undo preserve later input', () => {
+  const b = bank(); bankPair(b); eq(b.accept(0).after, 'том'); eq(b.count(), 0); eq(b.textWords(), ['том', 'стоит']);
+  b.addWord('тут'); eq(b.undo(), true); eq(b.textWords(), ['дом', 'стоит', 'тут']); eq(b.count(), 1); eq(b.undo(), false);
+});
+test('replacement bank: keep suppresses the pair and undo restores it', () => {
+  const b = bank(); bankPair(b); eq(b.keep(0), true); bankPair(b); eq(b.count(), 0);
+  eq(b.textWords(), ['дом', 'стоит', 'дом', 'стоит']); eq(b.undo(), true); eq(b.pending().map(p => p.index), [0, 2]);
+  ok(b.accept(2)); ok(b.accept(0)); eq(b.undo(), true); eq(b.textWords(), ['дом', 'стоит', 'том', 'стоит']);
+  eq(b.undo(), true); eq(b.count(), 2);
+});
+test('replacement bank: keepAll is one undoable action', () => {
+  const b = bank(); bankPair(b); bankPair(b); b.keepAll(); eq(b.count(), 0); b.keepAll();
+  eq(b.undo(), true); eq(b.count(), 2); eq(b.undo(), false);
+});
+test('replacement bank: lock also prevents undoing spoken words', () => {
+  const b = bank(); bankPair(b); b.lock(0); eq(b.count(), 0); eq(b.accept(0), null); b.lock(-1); eq(b.count(), 0);
+  bankPair(b); eq(b.pending().map(p => p.index), [2]); ok(b.accept(2)); b.lock(2); eq(b.undo(), false); eq(b.textWords()[2], 'том');
+  const future = bank(); future.lock(4); bankPair(future); eq(future.count(), 0);
+});
+test('replacement bank: passwords store nothing and clear history on disable', () => {
+  const b = bank(undefined, undefined, false); bankPair(b); eq(b.addWord('secret', bankKey), -1); eq(b.textWords(), []);
+  eq(b.count(), 0); eq(b.listenText(0), null); eq(b.accept(0), null); eq(b.keep(0), false); b.keepAll(); eq(b.undo(), false); b.lock(10);
+  b.enabled = true; bankPair(b); eq(b.count(), 1); b.accept(0); b.enabled = false; eq(b.textWords(), []); eq(b.undo(), false);
+  b.enabled = true; bankPair(b); eq(b.count(), 1);
+  const noLookup = new P.ReplacementBank({ petalCandidates() { throw Error('password lookup'); }, next() { throw Error('password pairs'); } }, 'speak', false);
+  bankPair(noLookup); eq(noLookup.count(), 0);
+});
+test('replacement bank: profile threshold, weak evidence and ties', () => {
+  const lines = ['том\tсейчас стоит'], write = bank(lines, 'write'), speak = bank(lines); bankPair(write); bankPair(speak);
+  eq(write.count(), 1); eq(speak.count(), 0);
+  for (const profile of ['write', 'speak']) {
+    const small = bank(['том\tсейчас тут стоит'], profile); bankPair(small); eq(small.count(), 0);
+    const tie = bank(['дом\tстоит', 'том\tстоит'], profile); bankPair(tie); eq(tie.count(), 0);
+  }
+});
+test('replacement bank: start fallback is not evidence; left context works', () => {
+  const w = new P.Words(['дом', 'том'], D.RU, bad); w.loadNext(['^\tстоит']);
+  eq(w.next('дом'), ['стоит']); eq(w.next('дом', 3, false), []);
+  const b = new P.ReplacementBank(w); bankPair(b); eq(b.count(), 0);
+  const left = bank(['вот\tтом']); left.addWord('вот'); left.addWord('дом', bankKey); eq(left.count(), 1); eq(left.pending()[0].context, 'вот том');
+});
+test('replacement bank: exact words, explicit alternatives and case', () => {
+  const b = bank(); b.addWord('дом'); b.addWord('стоит'); eq(b.count(), 0);
+  const explicit = bank(['дом\tстоит']); explicit.addWord('том', bankKey); explicit.addWord('стоит'); eq(explicit.count(), 0);
+  const caps = bank(); caps.addWord('ДОМ', bankKey); caps.addWord('стоит'); eq(caps.accept(0).after, 'ТОМ'); eq(caps.undo(), true); eq(caps.textWords()[0], 'ДОМ');
+  const w = new P.Words(['ёлка', 'елка'], D.RU, bad); w.loadNext(['елка\tстоит']); const m = new P.ReplacementBank(w);
+  m.addWord('ёлка', new P.PetalIndex([], D.RU).key('ёлка')); m.addWord('стоит'); eq(m.count(), 0);
+});
+test('replacement bank: at most three backups and no stop words', () => {
+  const ix = new P.PetalIndex([], D.RU), dict = ['что', 'сто', 'стю', 'зто', 'што'];
+  eq(new Set(dict.map(w => ix.key(w))).size, 1);
+  const w = new P.Words(dict, D.RU, bad); w.loadNext(['што\tлет']); const b = new P.ReplacementBank(w);
+  b.addWord('что', ix.key('что')); b.addWord('лет'); eq(b.count(), 0);
+  const safe = new P.Words(['сука'], D.RU, bad); safe.loadNext(['сука\tстоит']); const s = new P.ReplacementBank(safe);
+  s.addWord('слово', ix.key('сука'), { сука: 100 }); s.addWord('стоит'); eq(s.count(), 0);
+});
+test('replacement bank: phrase end clears all phrase state', () => {
+  const b = bank(); bankPair(b); b.keep(0); b.lock(20); b.endPhrase(); eq(b.textWords(), []); eq(b.count(), 0); eq(b.undo(), false);
+  bankPair(b); eq(b.count(), 1); b.accept(0); b.endPhrase(); eq(b.undo(), false);
+});
+test('replacement bank: real corpora in both languages and personal pairs', () => {
+  for (const [lang, before, after, right] of [['ru', 'что', 'сто', 'лет'], ['en', 'you', 'loo', 'paper']]) {
+    const w = new P.Words(read(path.join(dictDir, 'dict_' + lang + '.txt')).trim().split('\n'), D[lang.toUpperCase()], bad);
+    w.loadNext(read(path.join(dictDir, 'next_' + lang + '.txt')).split('\n'));
+    const b = new P.ReplacementBank(w); b.addWord(before, new P.PetalIndex([], D[lang.toUpperCase()]).key(before)); b.addWord(right);
+    eq(b.pending().map(p => p.after), [after]);
+  }
+  const w = new P.Words(['дом', 'том'], D.RU, bad); w.pairs['том'] = { стоит: 2 };
+  const b = new P.ReplacementBank(w); bankPair(b); eq(b.count(), 1);
+  w.pairs['том']['быстро'] = 2; eq(w.next('ТОМ', 3, false), ['быстро', 'стоит']); eq(b.count(), 0);
+});
+
 test('petal index: frequency, personal words, normalisation and English punctuation', () => {
   const ix = new P.PetalIndex(['дом', 'том', 'дам'], D.RU), k = ix.key('дом');
   eq(ix.candidates(k), ['дом', 'том']); eq(ix.candidates(k, { том: 5 }), ['том', 'дом']); eq(ix.candidates(k), ['дом', 'том']);
@@ -555,7 +642,7 @@ test('very long input is handled', () => {
 });
 
 test('the browser has the same dictionaries and next-word pairs as the Android app', () => {
-  for (const f of ['dict_ru.txt', 'dict_en.txt', 'next_ru.txt'])
+  for (const f of ['dict_ru.txt', 'dict_en.txt', 'next_ru.txt', 'next_en.txt'])
     ok(read(path.join(root, 'web', f)) === read(path.join(root, 'app/src/main/assets', f)), f + ' is the app\'s (run node tools/build-web.js)');
 });
 
