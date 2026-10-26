@@ -57,6 +57,74 @@ class PulkService : InputMethodService() {
     private val refused = HashSet<String>()
     private var unsaved = 0
 
+    internal var replacements: ReplacementInput? = null; private set
+    private var replacementKey: String? = null
+    private var applyingReplacement = false
+    private fun cached(s: TextSink) = CachedText(s).apply {
+        onCommit = { text -> if (!applyingReplacement) { replacements?.append(text, replacementKey); replacementKey = null } }
+        onDelete = { n -> if (!applyingReplacement) replacements?.trim(n) }
+    }
+    internal fun endReplacements() { replacements?.endPhrase(); view?.closeReplacements(); view?.updateReplacementUi() }
+    private fun replacementInput() {
+        val enabled = prose && !secure && !coaching()
+        val profile = if (ownField && editor?.fieldId in listOf(Ui.ID_SPEAK, Ui.ID_TALK_CHILD)) ReplacementBank.Profile.SPEAK else ReplacementBank.Profile.WRITE
+        replacements = ReplacementInput(if (enabled) words(lang) else Words(emptyList(), lang), profile, enabled)
+    }
+    private fun validReplacements(): Boolean {
+        val r = replacements ?: return false
+        if (!r.bank.enabled || secure) return false
+        if (sink.before(r.text.length) != r.text || selStart != selEnd) { endReplacements(); return false }
+        return true
+    }
+    internal fun reviewReplacements(): Boolean {
+        if (!validReplacements()) return false
+        val r = replacements ?: return false
+        r.finishWord()
+        if (r.bank.count() == 0) return false
+        feedback.hush(); feedback.replacement()
+        view?.showReplacements() ?: return false
+        if (!isInputViewShown) requestShowSelf(0)
+        return true
+    }
+    internal fun acceptReplacement(i: Int) = editReplacement { it.accept(i) }
+    internal fun undoReplacement() = editReplacement { it.undo() }
+    private fun editReplacement(edit: (ReplacementInput) -> Boolean) {
+        if (!validReplacements()) return
+        val r = replacements ?: return
+        val before = r.text
+        if (!edit(r)) return
+        if (before != r.text) {
+            applyingReplacement = true
+            val ic = if (sink === realSink) currentInputConnection else null
+            ic?.beginBatchEdit()
+            try { io.deleteBefore(before.length); io.commit(r.text) }
+            finally { ic?.endBatchEdit(); applyingReplacement = false }
+            clearPetals(); undo = null
+        }
+        after()
+    }
+    internal fun keepReplacement(i: Int) { if (validReplacements()) replacements?.bank?.keep(i); after() }
+    internal fun keepAllReplacements() { if (validReplacements()) replacements?.bank?.keepAll(); after() }
+    internal fun listenReplacement(i: Int) {
+        if (!validReplacements()) return
+        replacements?.bank?.pending()?.find { it.index == i }?.let {
+            feedback.say("Вышло „${it.before}“. Заменить на „${it.after}“? ${it.context}")
+        }
+    }
+    private fun lockSpokenWords() { replacements?.let { it.bank.lock(it.bank.textWords().lastIndex) } }
+    internal fun readPhrase() {
+        if (secure || reviewReplacements()) return
+        lockSpokenWords(); feedback.say(textBefore + textAfter, 1.1f)
+    }
+    private fun matches(field: android.widget.EditText) = editor?.packageName == packageName && editor?.fieldId == field.id
+    companion object {
+        private var active = java.lang.ref.WeakReference<PulkService>(null)
+        internal val changingReplacement get() = active.get()?.applyingReplacement == true
+        internal fun beforeSpeak(field: android.widget.EditText): Boolean = active.get()?.takeIf { it.matches(field) }?.reviewReplacements() ?: false
+        internal fun wordSpoken(field: android.widget.EditText) { active.get()?.takeIf { it.matches(field) }?.lockSpokenWords() }
+        internal fun phraseSpoken(field: android.widget.EditText) { active.get()?.takeIf { it.matches(field) }?.let { it.lockSpokenWords(); it.endReplacements() } }
+    }
+
     internal var petalKey = ""; private set
     internal var petalOptions: List<String> = emptyList(); private set
     internal var petalChoice = 0; private set
@@ -98,9 +166,12 @@ class PulkService : InputMethodService() {
         petalTyping = false
         val w = petalOptions.firstOrNull()
         if (w == null) { clearPetals(); feedback.mode(); view?.invalidate(); return }
+        replacementKey = petalKey
         io.commit("$w "); petalTail = "$w "; undo = null
         if (!shiftLock) shiftOnce = false
-        feedback.space(w, false); after()
+        feedback.space(w, false)
+        if (prefs.sound == "voice") lockSpokenWords()
+        after()
     }
     internal fun nextPetal() {
         if (petalOptions.isEmpty()) { clearPetals(); return }
@@ -108,6 +179,7 @@ class PulkService : InputMethodService() {
         if (!petalsMode() || io.before(tail.length) != tail) { clearPetals(); return }
         petalChoice = (petalChoice + 1) % petalOptions.size
         val w = petalOptions[petalChoice]
+        endReplacements() // an explicit choice is firm; prior positions are no longer reused
         io.deleteBefore(tail.length); io.commit("$w "); petalTail = "$w "
         feedback.touch()
         if (prefs.sound == "voice" || feedback.exploring()) feedback.say(w)
@@ -142,9 +214,9 @@ class PulkService : InputMethodService() {
     private var selStart = -1
     private var selEnd = -1
     var sink: TextSink = realSink
-        set(v) { field = v; io = CachedText(v) }
+        set(v) { field = v; io = cached(v) }
     /** Every question about the text goes through here: the app is read once per change, not once per question. */
-    private var io = CachedText(realSink)
+    private var io = cached(realSink)
 
     override fun onCreate() {
         super.onCreate()
@@ -156,7 +228,10 @@ class PulkService : InputMethodService() {
         Thread { words("ru"); words("en") }.start() // ready before the first word, without holding up the keyboard
     }
 
-    override fun onDestroy() { save(); feedback.shutdown(); Coach.onChange = null; super.onDestroy() }
+    override fun onDestroy() {
+        endReplacements(); if (active.get() === this) active.clear()
+        save(); feedback.shutdown(); Coach.onChange = null; super.onDestroy()
+    }
 
     override fun onCreateInputView(): View = PulseView(this, this).also { v ->
         view = v
@@ -168,6 +243,10 @@ class PulkService : InputMethodService() {
     /** Scanning: an outside switch (it acts as a keyboard key: space, enter, the centre of a d-pad) is the one button. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val v = view
+        if (v?.reviewingReplacements == true) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) { v.closeReplacements(); return true }
+            return true
+        }
         if (prefs.mode == "scan" && isInputViewShown && v != null &&
             (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER)) {
             if (event.repeatCount == 0) v.scanPress()
@@ -177,6 +256,7 @@ class PulkService : InputMethodService() {
         return super.onKeyDown(keyCode, event)
     }
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (view?.reviewingReplacements == true) return true
         // the switch's release is ours too: an Enter let through would move the app to its next field at every press
         if (prefs.mode == "scan" && isInputViewShown && view != null &&
             (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER)) return true
@@ -213,6 +293,7 @@ class PulkService : InputMethodService() {
         j.add(b[0], b[1])?.let { val s = Pulse.jab(Pulse.table(lang, symbols), it); typeLetter(s.v, s) }
     }
     override fun onGenericMotionEvent(e: android.view.MotionEvent): Boolean {
+        if (view?.reviewingReplacements == true) return true
         if (isInputViewShown && e.isFromSource(android.view.InputDevice.SOURCE_JOYSTICK) && e.actionMasked == android.view.MotionEvent.ACTION_MOVE) {
             stickAt(e.getAxisValue(android.view.MotionEvent.AXIS_X), e.getAxisValue(android.view.MotionEvent.AXIS_Y)); return true
         }
@@ -249,23 +330,36 @@ class PulkService : InputMethodService() {
     /** The keyboard opened, hid or changed shape: Android asks for the insets again. */
     fun insetsChanged() { view?.requestLayout() }
 
+    override fun onStartInput(info: EditorInfo, restarting: Boolean) {
+        super.onStartInput(info, restarting)
+        startInput(info)
+    }
+
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        startInput(info)
-        if (!restarting) { view?.newField(); view?.open(sound = true) } // a new field: the keyboard comes out again if it was hidden
+        val sameField = editor != null && editor?.packageName == info.packageName && editor?.fieldId == info.fieldId &&
+            editor?.inputType == info.inputType && lang == prefs.lang
+        // Showing the keyboard again is not a phrase boundary. A new input is handled above.
+        if (!sameField) startInput(info)
+        traceInputActive = true; prefs.applyBias()
+        val reviewing = view?.reviewingReplacements == true
+        if (!restarting) { if (!reviewing) view?.newField(); view?.open(sound = !reviewing) }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        if (finishingInput) endReplacements() else view?.closeReplacements()
         traceInputActive = false
         traceSession++
         save(); keyStar.reset(); stickJabs = null   // a key or stick held as the field closed types nothing later
         super.onFinishInputView(finishingInput)
     }
+    override fun onFinishInput() { endReplacements(); super.onFinishInput() }
     /** Android is short of memory and may close Пульк without a word: the learned words are written down first. */
     override fun onTrimMemory(level: Int) { save(); super.onTrimMemory(level) }
 
     /** Reads what kind of field this is. Separate from the Android callback so it can be tested. */
     fun startInput(info: EditorInfo) {
+        endReplacements(); active = java.lang.ref.WeakReference(this)
         traceInputActive = true
         traceSession++
         clearPetals(); exactWord = false; feedback.hush()
@@ -291,6 +385,7 @@ class PulkService : InputMethodService() {
         learnHere = suggestHere && prefs.learn && (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
         editor = info
         ownField = info.packageName == packageName
+        replacementInput()
         selStart = info.initialSelStart; selEnd = info.initialSelEnd
         io.drop(); io.expect = if (selStart == selEnd) selStart else -1
         shiftOnce = false; undo = null
@@ -332,7 +427,7 @@ class PulkService : InputMethodService() {
         super.onUpdateSelection(a, b, c, d, e, f)
         selStart = c; selEnd = d
         // our own typing moves the cursor exactly where we expect it: then what we know of the text is still right
-        if (c != d || c != io.expect) { io.drop(); clearPetals(); exactWord = false }
+        if (c != d || c != io.expect) { endReplacements(); io.drop(); clearPetals(); exactWord = false }
         io.expect = if (c == d) c else -1
         updateAutoCap(); refreshCands(); refreshText(); view?.invalidate()
     }
@@ -476,6 +571,7 @@ class PulkService : InputMethodService() {
             val word = finishWord()
             io.commit(" "); lastSpace = now
             if (!(coaching() && Coach.bubbles && !secure)) feedback.space(word, secure)
+            if (!secure && prefs.sound == "voice" && word != null) lockSpokenWords()
         }
         exactWord = false; after()
     }
@@ -489,6 +585,7 @@ class PulkService : InputMethodService() {
         undo = Undo(typed, "$w ", keep = typed)   // refusing a suggestion also says: this word is mine
         learn(w)
         feedback.space(w, secure)
+        if (!secure && prefs.sound == "voice") lockSpokenWords()
         after()
     }
 
@@ -514,6 +611,7 @@ class PulkService : InputMethodService() {
     }
 
     fun deleteWord() {
+        endReplacements()
         clearPetals(); exactWord = false
         val before = io.before(60)
         val m = Regex("\\S+\\s*$").find(before)?.value?.length ?: return // the word and the spaces after it
@@ -523,6 +621,7 @@ class PulkService : InputMethodService() {
     }
 
     fun backspace() {
+        endReplacements()
         if (petalTail != null) { exactPetal(); return }
         clearPetals()
         feedback.hush()
@@ -545,13 +644,15 @@ class PulkService : InputMethodService() {
 
     fun enter() {
         clearPetals(); exactWord = false
+        replacements?.finishWord()
+        if (reviewReplacements()) return
         val info = editor ?: currentInputEditorInfo
         val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
         val noAction = (info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
         finishWord(); undo = null
         if (!noAction && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) io.action(action)
         else io.key(KeyEvent.KEYCODE_ENTER)
-        feedback.mode(); after()
+        endReplacements(); feedback.mode(); after()
     }
 
     fun shiftTap(double: Boolean) {
@@ -561,7 +662,7 @@ class PulkService : InputMethodService() {
         feedback.mode(); view?.invalidate()
     }
 
-    fun switchLang() { clearPetals(); exactWord = false; lang = if (lang == "ru") "en" else "ru"; prefs.lang = lang; symbols = false; feedback.mode(); after() }
+    fun switchLang() { endReplacements(); clearPetals(); exactWord = false; lang = if (lang == "ru") "en" else "ru"; prefs.lang = lang; replacementInput(); symbols = false; feedback.mode(); after() }
     fun toggleSymbols() { clearPetals(); exactWord = false; symbols = !symbols; feedback.mode(); after() }
 
     /** Long press on ⌄: the app's settings, right from the keyboard. */
@@ -570,12 +671,13 @@ class PulkService : InputMethodService() {
     /** Long press on the language key: Android's list of keyboards, to get back to another one. */
     fun pickKeyboard() { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() }
 
-    private fun after() { updateAutoCap(); refreshCands(); refreshText(); view?.invalidate() }
+    private fun after() { updateAutoCap(); refreshCands(); refreshText(); view?.updateReplacementUi(); view?.invalidate() }
 
     /** The text around the cursor, for the keyboard's own text window. Passwords show as dots. */
     /** The view asks: the cursor goes [delta] characters along; suggestions start over at the new place. */
     fun moveCursor(delta: Int) {
         if (delta == 0) return
+        endReplacements()
         clearPetals(); exactWord = false
         undo = null
         io.moveCursor(delta)
@@ -598,6 +700,8 @@ class PulkService : InputMethodService() {
  * text, the cursor moving — drops it, and the next question reads again.
  */
 class CachedText(private val s: TextSink) : TextSink {
+    var onCommit: ((String) -> Unit)? = null
+    var onDelete: ((Int) -> Unit)? = null
     private var b: String? = null
     private var a: String? = null
     private var caps: Pair<Int, Boolean>? = null
@@ -623,6 +727,7 @@ class CachedText(private val s: TextSink) : TextSink {
     override fun commit(s: String) {
         b = b?.let { (it + s).takeLast(SPAN) }; caps = null
         if (expect >= 0) expect += s.length
+        onCommit?.invoke(s)
         this.s.commit(s)
     }
     override fun deleteBefore(n: Int) {
@@ -630,6 +735,7 @@ class CachedText(private val s: TextSink) : TextSink {
         // only when what we know reaches back far enough; otherwise read again next time
         b = if (c != null && (c.length >= n || c.length < SPAN)) c.dropLast(n) else null; caps = null
         if (expect >= 0) expect = maxOf(0, expect - n)
+        onDelete?.invoke(n)
         s.deleteBefore(n)
     }
     override fun key(code: Int) {

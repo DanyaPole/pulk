@@ -360,4 +360,42 @@
   root.PulkCore.PetalIndex = PetalIndex;
   root.PulkCore.jabPetal = jabPetal;
   root.PulkCore.ReplacementBank = ReplacementBank;
+
+  // Text typed since a boundary; proposal word indices never double as character offsets.
+  function ReplacementInput(words, profile, enabled) {
+    this.bank = new ReplacementBank(words, profile, enabled);
+    this.text = ''; this.spans = []; this.scanned = 0;
+  }
+  ReplacementInput.prototype.scan = function (finish, autoStart, key, user) {
+    const re = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu; re.lastIndex = this.scanned;
+    let m;
+    while ((m = re.exec(this.text))) {
+      const end = m.index + m[0].length;
+      if (end === this.text.length && !finish) break;
+      this.bank.addWord(m[0], m.index === autoStart ? key : null, user);
+      this.spans.push({ start: m.index, end }); this.scanned = end;
+    }
+  };
+  ReplacementInput.prototype.append = function (s, key, user) {
+    if (!this.bank.enabled || !s) return;
+    if (this.spans.length && this.spans.at(-1).end === this.text.length && /^[\p{L}\p{N}]/u.test(s)) this.endPhrase();
+    const start = this.text.length; this.text += s; this.scan(false, start, key, user);
+  };
+  ReplacementInput.prototype.trim = function (n) {
+    if (n > this.text.length - (this.spans.length ? this.spans.at(-1).end : 0)) { this.endPhrase(); return; }
+    this.text = this.text.slice(0, this.text.length - n); this.scanned = Math.min(this.scanned, this.text.length);
+  };
+  ReplacementInput.prototype.finishWord = function () { this.scan(true); };
+  ReplacementInput.prototype.rewrite = function () {
+    const ws = this.bank.textWords(); let out = '', at = 0;
+    this.spans = this.spans.map((s, i) => {
+      out += this.text.slice(at, s.start); const start = out.length; out += ws[i]; at = s.end;
+      return { start, end: out.length };
+    });
+    this.text = out + this.text.slice(at); this.scanned = this.spans.length ? this.spans.at(-1).end : 0;
+  };
+  ReplacementInput.prototype.accept = function (i) { if (!this.bank.accept(i)) return false; this.rewrite(); return true; };
+  ReplacementInput.prototype.undo = function () { if (!this.bank.undo()) return false; this.rewrite(); return true; };
+  ReplacementInput.prototype.endPhrase = function () { this.bank.endPhrase(); this.text = ''; this.spans = []; this.scanned = 0; };
+  root.PulkCore.ReplacementInput = ReplacementInput;
 })(typeof window !== 'undefined' ? window : globalThis);

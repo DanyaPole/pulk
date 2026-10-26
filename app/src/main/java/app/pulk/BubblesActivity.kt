@@ -92,15 +92,18 @@ class BubblesActivity : Activity() {
             accessibilityLiveRegion = if (wordMode()) android.view.View.ACCESSIBILITY_LIVE_REGION_NONE else android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
             layoutParams = LinearLayout.LayoutParams(ui.px(140), ui.px(140)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ui.px(16) }
         }
+        // Leave room for whole direction words on a narrow phone and with enlarged text.
+        val stacked = resources.configuration.screenWidthDp < 400 || prefs.bigText
         val target = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             layoutDirection = if (prefs.left) android.view.View.LAYOUT_DIRECTION_RTL else android.view.View.LAYOUT_DIRECTION_LTR
         }
         target.addView(bubble)
         guidance = ui.text("", 17f).apply {
             background = GradientDrawable().apply { cornerRadius = ui.px(16).toFloat(); setColor(ui.panel); setStroke(ui.px(2), ui.ink) }
             setPadding(ui.px(12), ui.px(8), ui.px(12), ui.px(8))
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = ui.px(12) }
+            layoutParams = if (stacked) LinearLayout.LayoutParams(-1, -2).apply { topMargin = ui.px(12) }
+                else LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = ui.px(12) }
             accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         target.addView(guidance); body.addView(target)

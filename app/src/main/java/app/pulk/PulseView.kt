@@ -29,9 +29,49 @@ import kotlin.math.sqrt
  * go to the app. The keyboard slides out of the corner with a drop sound («пульк») and hides back into it.
  * Geometry is the same as in the web prototype (base units), scaled to the phone; the left hand is a mirror image.
  */
-class PulseView(context: Context, private val svc: PulkService) : View(context) {
+class PulseView(context: Context, private val svc: PulkService) : android.widget.FrameLayout(context) {
     private val handler = Handler(Looper.getMainLooper())
     private val density = resources.displayMetrics.density
+    private var replacementPanel: ReplacementPanel? = null
+    private val replacementBadge = Ui(context).button("") { svc.reviewReplacements() }.apply {
+        visibility = GONE
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+        accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_NONE
+        setAccessibilityDelegate(object : AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00003, "Разобрать замены"))
+                info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00004, "Оставить всё"))
+            }
+            override fun performAccessibilityAction(host: View, action: Int, args: android.os.Bundle?): Boolean = when (action) {
+                0x00f00003 -> svc.reviewReplacements()
+                0x00f00004 -> { svc.keepAllReplacements(); true }
+                else -> super.performAccessibilityAction(host, action, args)
+            }
+        })
+    }
+    internal fun updateReplacementUi() {
+        val n = svc.replacements?.bank?.count() ?: 0
+        replacementBadge.text = "замен: $n"
+        replacementBadge.contentDescription = "Замен: $n. Разобрать замены"
+        val v = if (n > 0 && isOpen && replacementPanel == null) VISIBLE else GONE
+        if (replacementBadge.visibility != v) { replacementBadge.visibility = v; requestLayout(); svc.insetsChanged() }
+        replacementPanel?.refresh()
+    }
+    internal fun showReplacements() {
+        if (replacementPanel != null) return
+        val bank = svc.replacements?.bank ?: return
+        cancelTouches()
+        handler.removeCallbacks(scanTick); scanning = false
+        replacementPanel = ReplacementPanel(context, svc.prefs, bank, svc::listenReplacement, svc::acceptReplacement,
+            svc::keepReplacement, svc::keepAllReplacements, svc::undoReplacement, ::closeReplacements).also { addView(it) }
+        updateReplacementUi(); requestLayout(); svc.insetsChanged()
+    }
+    internal fun closeReplacements() {
+        replacementPanel?.let { removeView(it) }; replacementPanel = null
+        updateReplacementUi(); requestLayout(); svc.insetsChanged()
+    }
+    internal val reviewingReplacements get() = replacementPanel != null
 
     private class Colors(val bg: Int, val key: Int, val fn: Int, val zone: Int, val press: Int, val line: Int,
                          val fg: Int, val muted: Int, val accent: Int, val accentFg: Int, val halo: Int, val glassEdge: Int)
@@ -103,9 +143,22 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             hf = max(cornerH, avail.toFloat())
         }
         val h = Math.ceil(hf.toDouble()).toInt()
+        if (replacementPanel != null) {
+            val panelH = min((540 * density).toInt(), resources.displayMetrics.heightPixels - statusBar())
+            replacementPanel?.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(panelH, MeasureSpec.EXACTLY))
+            setMeasuredDimension(w, panelH); return
+        }
+        replacementBadge.measure(MeasureSpec.makeMeasureSpec(min(w / 2, (140 * density).toInt()), MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
         cx = w + 4 * density; cy = h + 4 * density
         setMeasuredDimension(w, h)
         forgetShapes()
+    }
+
+    private fun layoutReplacements() {
+        replacementPanel?.layout(0, 0, width, height)
+        val x = if (left) (8 * density).toInt() else width - replacementBadge.measuredWidth - (8 * density).toInt()
+        val y = ((height - cornerH) + (stripH - replacementBadge.measuredHeight) / 2).toInt()
+        replacementBadge.layout(x, y, x + replacementBadge.measuredWidth, y + replacementBadge.measuredHeight)
     }
 
     // ---- open / hidden ----
@@ -127,7 +180,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         animateTo(0f, 170, DecelerateInterpolator())
     }
     /** Without animation, e.g. when the keyboard window is hidden by the system. */
-    fun reset(open: Boolean) { anim?.cancel(); anim = null; isOpen = open; g = if (open) 1f else 0f; if (!open) cancelTouches(); invalidate() }
+    fun reset(open: Boolean) { anim?.cancel(); anim = null; isOpen = open; g = if (open) 1f else 0f; if (!open) cancelTouches(); updateReplacementUi(); invalidate() }
 
     /** Every finger is forgotten: a held ⌫ stops deleting, a long press does nothing later, an open petal closes. */
     private fun cancelTouches() {
@@ -152,21 +205,27 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     /** The parts of the view that are the keyboard; the rest belongs to the app behind. */
     fun touchRegion(out: Region) {
+        if (replacementPanel != null) { out.set(0, 0, width, height); return }
         if (!isOpen) { out.set(handleRect()); return }
         if (screenZone()) { out.set(0, 0, width, height); return }   // all of it: the finger may start anywhere
         if (classicMode()) {
             val r = Region(0, gridTop(), width, height)
             for (rc in chipRects()) r.op(Rect(rc.left.toInt(), rc.top.toInt(), rc.right.toInt(), rc.bottom.toInt()), Region.Op.UNION)
-            out.set(r); return
+            badgeRegion(r); out.set(r); return
         }
         val r = Region(shapeRegion())
         fieldRect()?.let { f -> r.op(Rect(f.left.toInt(), f.top.toInt(), f.right.toInt(), f.bottom.toInt()), Region.Op.UNION) }
         for (rc in chipRects()) r.op(Rect(rc.left.toInt(), rc.top.toInt(), rc.right.toInt(), rc.bottom.toInt()), Region.Op.UNION)
-        out.set(r)
+        badgeRegion(r); out.set(r)
+    }
+    private fun badgeRegion(r: Region) {
+        if (replacementBadge.visibility == VISIBLE) r.op(Rect(replacementBadge.left, replacementBadge.top, replacementBadge.right, replacementBadge.bottom), Region.Op.UNION)
     }
 
     /** Where the app's own content should end: the arc's height at the middle of the screen. */
     fun contentTop(): Int {
+        if (replacementPanel != null) return 0
+        if (replacementBadge.visibility == VISIBLE) return max(0, replacementBadge.top)
         if (!isOpen) return height
         if (screenZone()) return max(0, (cy - 75 * k).toInt())        // the app shows down to the keys at the bottom
         if (classicMode()) return max(0, gridTop() - (STRIP_DP * density).toInt())
@@ -267,8 +326,9 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val pad = 18 * density; val gap = 8 * density; val h = 48 * density
         val top = (height - cornerH) + (stripH - h) / 2   // above the corner keyboard, whatever the zone
         val out = ArrayList<RectF>()
-        var edge = width - 8 * density  // from the thumb's side
-        val maxW = (width - 16 * density - gap * (items.size - 1)) / items.size
+        val badgeW = if (replacementBadge.visibility == VISIBLE) replacementBadge.measuredWidth + gap else 0f
+        var edge = width - 8 * density - badgeW  // from the thumb's side
+        val maxW = (width - 16 * density - badgeW - gap * (items.size - 1)) / items.size
         for (s in items) {
             val w = min(max(48 * density, txt.measureText(s) + pad * 2), if (items.size == 1) width - 16 * density else maxW)
             val r = RectF(edge - w, top, edge, top + h)
@@ -363,6 +423,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private fun handleRect(): Rect { val c = handleCentre(); val r = (30 * density).toInt(); return Rect(c[0].toInt() - r, c[1].toInt() - r, c[0].toInt() + r, c[1].toInt() + r) }
 
     override fun onDraw(c: Canvas) {
+        if (replacementPanel != null) return
         val col = colors()
         // the handle in the corner, when the keyboard is hidden (and under it while it comes out)
         if (g < 1f) drawHandle(c, col, 1f - g)
@@ -679,7 +740,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private var scanning = false
     private val scanTick = object : Runnable {
         override fun run() {
-            if (!scanMode() || !isOpen) { scanning = false; return }
+            if (!scanMode() || !isOpen || replacementPanel != null) { scanning = false; return }
             val n = if (scanPetal < 0) scanGroups.size else 5   // four letters and «назад»
             scanAt = (scanAt + 1) % n
             if (scanAt == 0 && scanPetal >= 0 && ++scanLoops >= 2) { scanPetal = -1; scanLoops = 0 }   // nothing chosen twice round: back
@@ -705,6 +766,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
     /** The one button was pressed. */
     fun scanPress() {
+        if (replacementPanel != null) return
         if (!scanMode()) return
         if (!isOpen) { open(sound = true); return }   // folded: the press brings the keyboard back, it types nothing unseen
         val t = Pulse.table(svc.lang, svc.symbols)
@@ -894,6 +956,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     private val a11y = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
     private fun exploring() = a11y.isEnabled && a11y.isTouchExplorationEnabled
     init {
+        setWillNotDraw(false)
+        addView(replacementBadge)
         contentDescription = "Клавиатура Пульк. Поставь палец и веди к букве — услышишь её, отпусти — напечатается. Касание без движения — пробел."
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
@@ -909,12 +973,18 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
+        if ((svc.replacements?.bank?.count() ?: 0) > 0) {
+            info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00003, "Разобрать замены"))
+            info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00004, "Оставить всё"))
+        }
         if (svc.petalsMode() && svc.petalPending) {
             info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00001, "Другой вариант слова"))
             info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00002, "Набрать по буквам"))
         }
     }
     override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
+        if (action == 0x00f00003) return svc.reviewReplacements()
+        if (action == 0x00f00004) { svc.keepAllReplacements(); return true }
         if (svc.petalsMode() && svc.petalPending) {
             if (action == 0x00f00001) { svc.nextPetal(); invalidate(); return true }
             if (action == 0x00f00002) { svc.exactPetal(); invalidate(); return true }
@@ -933,6 +1003,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (replacementPanel != null) return true
         // scanning: the whole keyboard is one big button (the hidden keyboard's circle still opens it)
         if (classicMode() && isOpen && anim == null) return classicTouch(e)
         if (scanMode() && isOpen && anim == null) { if (e.actionMasked == MotionEvent.ACTION_DOWN) scanPress(); return true }
@@ -1154,7 +1225,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
             val r = fieldRect()
             fieldDrag = null
             if (r != null) {
-                if (hypot(x - f[2], y - f[3]) < 10 * density) { if (svc.prefs.sound == "voice" && !svc.isSecure) svc.feedback.say(svc.textBefore + svc.textAfter, 1.1f) }
+                if (hypot(x - f[2], y - f[3]) < 10 * density) { if (svc.prefs.sound == "voice" && !svc.isSecure) svc.readPhrase() }
                 else { svc.prefs.fieldX = r.left / width; svc.prefs.fieldUp = (height - r.top) / density }
             }
             svc.insetsChanged(); invalidate(); return
@@ -1217,6 +1288,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         super.onLayout(changed, l, t, r, b)
+        layoutReplacements()
         // ⌫ runs along the screen's edge, where Android's own back gesture starts: keep that edge for ⌫
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             val key = Pulse.FN_KEYS.first { it.fn == Pulse.Fn.BKSP }

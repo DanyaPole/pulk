@@ -292,22 +292,58 @@ test('suggestions handle a one-letter word through core Words', () => {
 
 const appSource = read(path.join(root, 'web/app.js'));
 
+test('page startup supplies real word pairs and personal pairs to the bank in either load order and language', () => {
+  const a = appSource.indexOf('  const dicts ='), b = appSource.indexOf('  // what this person says:', a);
+  ok(a >= 0 && b > a);
+  for (const corpusFirst of [false, true]) {
+    const waiting = {}, personal = { вот: { том: 2 } };
+    function fetch(url) {
+      const callbacks = [], chain = { then(fn) { callbacks.push(fn); return chain; }, catch() { return chain; } };
+      waiting[url] = () => {
+        const data = { 'dict_ru.txt': 'дом\nтом\nстоит', 'next_ru.txt': 'том\tстоит', 'dict_en.txt': 'you\nloo\npaper', 'next_en.txt': 'loo\tpaper' };
+        let value = { ok: true, text: () => data[url] }; callbacks.forEach(fn => { value = fn(value); });
+      };
+      return chain;
+    }
+    const api = new Function('P', 'D', 'window', 'store', 'fetch', 'paintChips',
+      "let lang = 'ru', symbols = false; const Words = P.Words;\n" + appSource.slice(a, b) + '\nreturn {loadDict, words, setLang: l => {lang = l;}};')(
+      P, D, box.window, { get: (k, d) => k === 'pairs' ? personal : d }, fetch, () => {});
+    for (const lang of ['ru', 'en']) {
+      api.setLang(lang); api.loadDict(lang);
+      const order = ['dict_' + lang + '.txt', 'next_' + lang + '.txt']; if (corpusFirst) order.reverse();
+      order.forEach(f => { ok(waiting[f], f + ' requested'); waiting[f](); });
+      const w = api.words(), before = lang === 'ru' ? 'дом' : 'you', after = lang === 'ru' ? 'том' : 'loo', right = lang === 'ru' ? 'стоит' : 'paper';
+      eq(w.next(after, 3, false), [right], lang + ' corpus reaches Words');
+      eq(w.next('вот', 3, false), ['том'], 'personal pairs reach Words');
+      const r = new P.ReplacementBank(w); r.addWord(before, new P.PetalIndex([], lang === 'ru' ? D.RU : D.EN).key(before)); r.addWord(right);
+      eq(r.count(), 1, lang + ' bank receives evidence from the page loader');
+    }
+  }
+});
+
 // Run the page's real pointer handlers, typing and petal state with small DOM/voice substitutes.
 function petalPage(settings = {}) {
   const values = { mode: 'petals', ...settings }, spoken = [], handlers = {}, chips = [];
   const store = { get(k, d) { return Object.hasOwn(values, k) ? values[k] : d; }, set(k, v) { values[k] = v; } };
-  const elem = () => ({ setAttribute() {}, textContent: '' });
+  const elem = () => ({ setAttribute() {}, textContent: '', querySelector: () => null, open: false,
+    showModal() { this.open = true; }, close() { this.open = false; } });
+  const nodes = Object.fromEntries(['text', 'replacementReview', 'replacementProgress', 'replacementPair', 'replacementContext', 'replacementListen', 'replacementAccept', 'replacementKeep', 'replacementKeepAll', 'replacementUndo', 'replacementBack', 'replacementNext', 'replacementClose'].map(id => [id, elem()]));
   const svg = { addEventListener(k, f) { handlers[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
   const document = { addEventListener() {}, visibilityState: 'visible', createElement: elem };
   function block(start, end) { const a = appSource.indexOf(start), b = appSource.indexOf(end, a); ok(a >= 0 && b > a, start); return appSource.slice(a, b); }
-  const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0;
+  const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0, tab = 'speak', talking = false;
+    const $ = id => nodes[id];
     const FIX_GLOW_MS = 1500, P_MIN = P.P_MIN, HOLD_MS = P.HOLD_MS, ALT = P.ALT, Jabs = P.Jabs, jab = P.jab, resolve = P.resolve;
     const bubble = elem(), bubbleText = elem(), trail = elem();
     const dict = new P.Words(store.get('dictionary', ['том', 'дом', 'мама', 'мыла', 'в', 'я', 'и']), D.RU, bad);
+    dict.loadNext(store.get('pairs', []));
     function table() { return D.RU; } function words() { return store.get('unavailable', false) ? null : dict; } function userWords() { return store.get('user', {}); }
     function caps() { return shiftOnce || !text || /[.!?…]\\s$/.test(text); } function currentWord() { const m = /[\\p{L}']+$/u.exec(text); return m ? m[0] : ''; }
-    function tick() {} function render() {} function paintChips() { chips.push(petalOptions.slice()); }
-    function say(t) { spoken.push(t); } function sayWord() { if (store.get('words', false)) say(text.trim().split(' ').at(-1)); }
+    function tick() {} function render() { syncReplacements(); } function paintChips() { chips.push(petalOptions.slice()); }
+    function say(t) { spoken.push(t); } function remember() {} function talk() {} function talkScreen() {} function speakScreen() {}
+    ${block('  let replacementInput =', '  // ---- typing display ----')}
+    ${block('  function sayWord()', '  // the screen stays on')}
+    ${block('  function sayAll()', '  function showBig(')}
     function guardMin() { return store.get('guard', 0); } function guardGap() { return 0; }
     function keepAwake() {} function light() {} function leanTo() {} function layout() {} function gameStroke() {} function guidedStroke() {}
     function Steady() { this.at = (x, y) => [x, y]; } function toBase(x, y) { return [x, y]; } function scr(x, y) { return [x, y]; } function xy(q) { return q.join(','); }
@@ -316,12 +352,18 @@ function petalPage(settings = {}) {
     ${block('  function typeLetter(v)', '  // a guided word:')}
     ${block('  // ---- «Толчки»: the cutting', '  // ---- a steadier hand')}
     ${block('  // ---- touch on the keyboard', '  // ---- a joystick,')}
-    return { handlers, state: () => ({text, key: petalKey, options: petalOptions, exactWord, petalTyping, pending: petalPending()}),
+    return { handlers, state: () => ({text, key: petalKey, options: petalOptions, exactWord, petalTyping, pending: petalPending(), replacements: replacementPending(), review: nodes.replacementReview.open}),
+      review: openReplacementReview, sayAll, takeWord, accept: () => nodes.replacementAccept.onclick(),
+      keepAll: () => nodes.replacementKeepAll.onclick(), undo: () => nodes.replacementUndo.onclick(), close: closeReplacementReview,
+      listen: () => nodes.replacementListen.onclick(),
+      bankWords: () => replacementInput ? replacementInput.bank.textWords() : [],
+      setPassword: () => { nodes.text.querySelector = () => ({type: 'password'}); syncReplacements(); },
+      externalEdit: v => { text = v; resetReplacements(); },
       next: nextPetal, exact: exactPetal, type: typeLetter, space, backspace, setGame: g => {game = g;},
       setSymbols: v => {symbols = v;}, setMode: v => {store.set('mode', v);}, clear: clearPetals,
       emptyOptions: () => {petalOptions = [];} };
   `;
-  const api = new Function('P', 'D', 'bad', 'store', 'spoken', 'svg', 'document', 'elem', 'chips', 'handlers', code)(P, D, bad, store, spoken, svg, document, elem, chips, handlers);
+  const api = new Function('P', 'D', 'bad', 'store', 'spoken', 'svg', 'document', 'elem', 'chips', 'handlers', 'nodes', code)(P, D, bad, store, spoken, svg, document, elem, chips, handlers, nodes);
   const event = (x, y) => ({ pointerId: 1, clientX: x, clientY: y, timeStamp: Date.now(), preventDefault() {} });
   api.down = (x = 0, y = 0) => handlers.pointerdown(event(x, y));
   api.move = (x, y) => handlers.pointermove(event(x, y));
@@ -331,6 +373,43 @@ function petalPage(settings = {}) {
   api.tap = () => { api.down(); api.up(); };
   return { ...api, spoken, values, chips };
 }
+
+function replacementPage() {
+  const a = petalPage({ dictionary: ['дом', 'том', 'стоит'], pairs: ['том\tстоит'] });
+  a.word('дом'); a.up(); a.takeWord('стоит'); return a;
+}
+test('replacement UI: phrase end opens review, close and waiting never change text or speak', () => {
+  const a = replacementPage(); eq(a.state().replacements.length, 1); eq(a.state().text, 'Дом стоит ');
+  a.sayAll(); ok(a.state().review); eq(a.spoken, []); eq(a.state().text, 'Дом стоит ');
+  a.close(); ok(!a.state().review); eq(a.state().text, 'Дом стоит '); eq(a.spoken, []);
+});
+test('replacement UI: accept edits the real text, never speaks, and undo restores it', () => {
+  const a = replacementPage(); a.review(); a.accept(); eq(a.state().text, 'Том стоит '); eq(a.spoken, []);
+  eq(a.state().replacements, []); a.undo(); eq(a.state().text, 'Дом стоит '); eq(a.state().replacements.length, 1); eq(a.spoken, []);
+  a.accept(); a.close(); a.sayAll(); eq(a.spoken, ['Том стоит']); eq(a.state().text, '');
+});
+test('replacement UI: listen reads the pair only after a press and leaves the text intact', () => {
+  const a = replacementPage(); a.review(); eq(a.spoken, []); a.listen();
+  eq(a.state().text, 'Дом стоит '); eq(a.spoken.length, 1); ok(a.spoken[0].includes('Дом') && a.spoken[0].includes('Том'));
+});
+test('replacement UI: keep all is silent, undoable and needs a separate say action', () => {
+  const a = replacementPage(); a.review(); a.keepAll(); eq(a.state().text, 'Дом стоит '); eq(a.spoken, []); eq(a.state().replacements, []);
+  a.undo(); eq(a.state().replacements.length, 1); a.keepAll(); a.close(); a.sayAll(); eq(a.spoken, ['Дом стоит']);
+});
+test('replacement UI: external edits, deletion, manual alternatives and passwords retire proposals', () => {
+  const a = replacementPage(); a.externalEdit('Другой текст'); eq(a.bankWords(), []); ok(!a.review());
+  const b = replacementPage(); b.backspace(); eq(b.state().replacements, []);
+  const c = replacementPage(); c.review(); c.setPassword(); eq(c.bankWords(), []); eq(c.state().replacements, []); ok(!c.state().review);
+  c.accept(); c.undo(); c.sayAll(); eq(c.spoken, []); eq(c.bankWords(), []);
+  const d = petalPage({ dictionary: ['дом', 'том', 'стоит'], pairs: ['дом\tстоит'] }); d.word('дом'); d.up(); d.next(); d.takeWord('стоит'); eq(d.state().replacements, []);
+});
+test('replacement input preserves punctuation, repeated words and locked speech', () => {
+  const w = new P.Words(['что', 'сто'], D.RU, bad); w.loadNext(['сто\tлет']);
+  const r = new P.ReplacementInput(w, 'speak', true), k = new P.PetalIndex([], D.RU).key('что');
+  r.append('Что ', k); r.append('лет, '); r.append('что ', k); r.append('лет!'); r.finishWord(); eq(r.bank.pending().map(p => p.index), [0, 2]);
+  ok(r.accept(2)); ok(r.accept(0)); eq(r.text, 'Сто лет, сто лет!'); ok(r.undo()); eq(r.text, 'Что лет, сто лет!');
+  r.bank.lock(3); ok(!r.undo()); eq(r.text, 'Что лет, сто лет!');
+});
 
 test('petal page: preview, release, circular choices, buttons and precise word without autocorrection', () => {
   const a = petalPage(); a.word('дом'); eq(a.state().text, ''); eq(a.state().options, ['Том', 'Дом']); eq(a.spoken, []);
@@ -476,7 +555,7 @@ function speechFrom(available, chosen = '', busy = false, supported = true, lang
   const start = appSource.indexOf("  let lastSaid = ''"), end = appSource.indexOf('  // «Говорить по словам»', start);
   ok(start >= 0 && end > start, 'speech source is present');
   const api = new Function('window', 'speechSynthesis', 'SpeechSynthesisUtterance', 'store', '$', 'setTimeout', 'lang',
-    appSource.slice(start, end) + '\nreturn {say, voices, last: () => lastSaid, hideVoiceHint: typeof hideVoiceHint === "function" ? hideVoiceHint : () => {}, refreshWith: fn => { if (typeof paintVoiceSettings !== "undefined") paintVoiceSettings = fn; }};')(
+    'function replacementSecure() { return false; }\n' + appSource.slice(start, end) + '\nreturn {say, voices, last: () => lastSaid, hideVoiceHint: typeof hideVoiceHint === "function" ? hideVoiceHint : () => {}, refreshWith: fn => { if (typeof paintVoiceSettings !== "undefined") paintVoiceSettings = fn; }};')(
     { speechSynthesis: supported ? ss : null }, ss, function (text) { this.text = text; },
     { get: (k, def) => k === 'voice' ? chosen : def }, () => hint, fn => timers.push(fn), lang);
   return { ...api, spoken, hint, reads: () => reads, changed: vs => { available = vs; ok(listeners.voiceschanged, 'global voiceschanged listener'); listeners.voiceschanged(); },
@@ -528,7 +607,7 @@ test('rebuilding the speaking screen keeps the first pending phrase', () => {
   const start = appSource.indexOf('  function begin(mode)'), end = appSource.indexOf('  // «Говорить».', start);
   ok(start >= 0 && end > start, 'screen rebuild source is present');
   const begin = new Function('$', 'document', 'showGuide', 'hideVoiceHint',
-    'let paintVoiceSettings, talking, game, probe, sysKbd = false, chipMode, chipAction, onEnter, guided, exactWord; function clearPetals() {}\n' + appSource.slice(start, end) + 'return begin;')(
+    'let paintVoiceSettings, talking, game, probe, sysKbd = false, chipMode, chipAction, onEnter, guided, exactWord; function clearPetals() {} function resetReplacements() {}\n' + appSource.slice(start, end) + 'return begin;')(
     () => ({ innerHTML: '' }), { body: { classList: { remove() {} } } }, () => {}, s.hideVoiceHint);
   s.say('Хочу пить'); begin('speak'); s.changed([ru]);
   eq(s.spoken.map(u => u.text), ['Хочу пить']);
@@ -648,7 +727,7 @@ test('the browser has the same dictionaries and next-word pairs as the Android a
 
 test('both dictionaries are kept for use without internet', () => {
   const html = read(path.join(root, 'web/index.html'));
-  for (const f of ['dict_ru.txt', 'dict_en.txt', 'next_ru.txt']) ok(html.indexOf("'" + f + "'") >= 0, f + ' is in the offline list of web/index.html');
+  for (const f of ['dict_ru.txt', 'dict_en.txt', 'next_ru.txt', 'next_en.txt']) ok(html.indexOf("'" + f + "'") >= 0, f + ' is in the offline list of web/index.html');
 });
 
 test('the page script parses', () => {

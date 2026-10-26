@@ -169,20 +169,31 @@
 
   // ---- words: the dictionary, this person's own words and pairs (the matching itself is in core.js) ----
   // stop list (stopwords.js): rude and obscene words are never offered — children type here too
-  const dicts = {}, next = Object.create(null), bad = P.Stop(window.PULK_STOP);
+  const dicts = {}, next = Object.create(null), nextLines = Object.create(null), bad = P.Stop(window.PULK_STOP);
   const soft = (window.PULK_STOP && window.PULK_STOP.soft) || {};
   function loadDict(l) {
     if (dicts[l]) return;
     dicts[l] = 'loading';
+    loadNext(l);
     fetch('dict_' + l + '.txt').then(function (r) { return r.ok ? r.text() : ''; })
-      .then(function (t) { dicts[l] = new Words(t.split(/\r?\n/), l === 'ru' ? D.RU : D.EN, bad); paintChips(); })
+      .then(function (t) { const w = new Words(t.split(/\r?\n/), l === 'ru' ? D.RU : D.EN, bad); w.loadNext(nextLines[l] || []); dicts[l] = w; paintChips(); })
       .catch(function () { dicts[l] = null; });
   }
+  function loadNext(l) {
+    if (nextLines[l]) return;
+    nextLines[l] = [];
+    fetch('next_' + l + '.txt').then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+      const lines = t.split(/\r?\n/); nextLines[l] = lines;
+      if (l === 'ru') lines.forEach(function (line) { const i = line.indexOf('\t'); if (i > 0) next[line.slice(0, i)] = line.slice(i + 1).split(' '); });
+      const w = dicts[l]; if (w && w !== 'loading') w.loadNext(lines);
+      paintChips();
+    }).catch(function () {});
+  }
   loadDict('ru');
-  fetch('next_ru.txt').then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
-    t.split(/\r?\n/).forEach(function (l) { const i = l.indexOf('\t'); if (i > 0) next[l.slice(0, i)] = l.slice(i + 1).split(' '); });
-  }).catch(function () {});
-  function words() { const w = dicts[lang]; return w && w !== 'loading' && !symbols ? w : null; }
+  function words() {
+    const w = dicts[lang]; if (!w || w === 'loading' || symbols) return null;
+    w.pairs = store.get('pairs', {}); return w;
+  }
   // what this person says: their words are known to suggestions (and never "corrected"), their word pairs come first
   function userWords() {
     const u = Object.assign(Object.create(null), store.get('user', {}));
@@ -229,8 +240,67 @@
 
   // ---- typing ----
   let text = '', onEnter = null, lastFix = null;
+  // ---- replacement review: text changes only through the explicit accept/undo buttons ----
+  let replacementInput = null, replacementSeen = '', replacementLang = '', replacementProfile = '', replacementPosition = 0;
+  function replacementSecure() { const t = $('text'), f = t && t.querySelector('input'); return !!(f && f.type === 'password'); }
+  function resetReplacements() {
+    if (replacementInput) replacementInput.endPhrase();
+    replacementInput = null; replacementSeen = text; closeReplacementReview();
+  }
+  function syncReplacements(key, finish) {
+    if (replacementSecure() || game || guided || probe) { resetReplacements(); return; }
+    const W = words(), profile = tab === 'speak' ? 'speak' : 'write';
+    if (!W) { resetReplacements(); return; }
+    if (!replacementInput || replacementLang !== lang || replacementProfile !== profile) {
+      if (replacementInput) resetReplacements();
+      replacementInput = new P.ReplacementInput(W, profile, true); replacementLang = lang; replacementProfile = profile;
+    }
+    let common = 0;
+    while (common < text.length && common < replacementSeen.length && text[common] === replacementSeen[common]) common++;
+    if (common < replacementSeen.length) replacementInput.trim(replacementSeen.length - common);
+    replacementInput.append(text.slice(common), key, userWords()); replacementSeen = text;
+    if (finish) replacementInput.finishWord();
+  }
+  function replacementPending() { return replacementInput ? replacementInput.bank.pending() : []; }
+  function closeReplacementReview() { const d = $('replacementReview'); if (d && d.open) d.close(); }
+  function paintReplacementReview() {
+    const ps = replacementPending(); replacementPosition = Math.max(0, Math.min(replacementPosition, ps.length - 1));
+    const p = ps[replacementPosition];
+    $('replacementProgress').textContent = p ? (replacementPosition + 1) + ' из ' + ps.length : 'Всё разобрано';
+    $('replacementPair').textContent = p ? p.before + ' → ' + p.after : 'Можно вернуться к набору';
+    $('replacementPair').setAttribute('aria-label', p ? 'Вышло „' + p.before + '“. Заменить на „' + p.after + '“?' : 'Всё разобрано');
+    $('replacementContext').textContent = p ? p.context : '';
+    ['replacementListen', 'replacementAccept', 'replacementKeep'].forEach(id => { $(id).disabled = !p; });
+    $('replacementBack').disabled = replacementPosition === 0;
+    $('replacementNext').disabled = replacementPosition >= ps.length - 1;
+  }
+  function replacementAction(fn) {
+    if (replacementSecure() || !replacementInput || replacementSeen !== text || !text.endsWith(replacementInput.text)) { resetReplacements(); render(); return; }
+    const before = replacementInput.text;
+    fn(replacementInput, replacementPending()[replacementPosition]);
+    text = text.slice(0, text.length - before.length) + replacementInput.text; replacementSeen = text;
+    lastFix = null; clearPetals(); render(); paintReplacementReview();
+  }
+  function openReplacementReview() {
+    syncReplacements(null, true);
+    if (!replacementPending().length) return false;
+    const d = $('replacementReview'); replacementPosition = 0;
+    $('replacementListen').onclick = function () { const p = replacementPending()[replacementPosition]; if (p && !replacementSecure()) say('Вышло „' + p.before + '“. Заменить на „' + p.after + '“? ' + p.context, true); };
+    $('replacementAccept').onclick = function () { replacementAction((r, p) => { if (p) r.accept(p.index); }); };
+    $('replacementKeep').onclick = function () { replacementAction((r, p) => { if (p) r.bank.keep(p.index); }); };
+    $('replacementKeepAll').onclick = function () { replacementAction(r => r.bank.keepAll()); };
+    $('replacementUndo').onclick = function () { replacementAction(r => r.undo()); };
+    $('replacementBack').onclick = function () { replacementPosition--; paintReplacementReview(); };
+    $('replacementNext').onclick = function () { replacementPosition++; paintReplacementReview(); };
+    $('replacementClose').onclick = closeReplacementReview;
+    d.oncancel = function (e) { e.preventDefault(); closeReplacementReview(); };
+    paintReplacementReview(); if (!d.open) d.showModal(); return true;
+  }
+  function lockSpokenWords() { if (replacementInput) replacementInput.bank.lock(replacementInput.bank.textWords().length - 1); }
+  // ---- typing display ----
   const FIX_GLOW_MS = 1500;
   function render() {
+    syncReplacements();
     // the star and the word chips only where they type something: not over the pond or the adult's forms
     document.body.classList.toggle('nostar', !$('text') && !game && !probe);
     const t = $('text'); if (!t) { paintLabels(); return; }   // no text on this screen, but the star's keys still change
@@ -252,7 +322,8 @@
     if (!f) {
       t.textContent = ''; f = document.createElement('input'); f.type = 'text'; f.className = 'sys'; f.setAttribute('autocomplete', 'off');
       f.placeholder = t.getAttribute('data-hint') || '';
-      f.oninput = function () { text = f.value; lastFix = null; chipsSoon(); };
+      f.oninput = function () { text = f.value; resetReplacements(); lastFix = null; chipsSoon(); };
+      f.onselect = resetReplacements; f.onclick = resetReplacements;
       f.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); if (onEnter) onEnter(); } };
       t.appendChild(f);
     }
@@ -272,7 +343,7 @@
   // which letters are hard for this hand: the game brings them more often
   function missed(ch) { ch = ch.toLowerCase(); const st = store.get('letters', {}), v = own(st, ch) || [0, 0]; v[1]++; st[ch] = v; store.set('letters', st); }
   function fixLastWord() {
-    const w = currentWord(), W = words(); if (guided || exactWord || w.length < 2) return null;
+    const w = currentWord(), W = words(); if (replacementSecure() || guided || exactWord || w.length < 2) return null;
     const f = fold(w.toLowerCase()), kind = own(soft, f);
     let c;
     if (kind && own(userWords(), f) < 2) c = shape(kind, w);   // a rude word: its kinder twin (stopwords.js «soft»)
@@ -294,6 +365,7 @@
     if (fix) setTimeout(render, FIX_GLOW_MS + 20);
   }
   function backspace() {
+    resetReplacements();
     if (petalTail !== null) { exactPetal(); return; }
     clearPetals();
     if (lastFix && text === lastFix.at) { text = lastFix.undo; const u = userWords(), f = fold(lastFix.word.toLowerCase()); u[f] = Math.max(2, own(u, f) + 1); store.set('user', u); lastFix = null; render(); return; }
@@ -326,7 +398,7 @@
   // «Лепестки»: a tap after release cycles the committed word. An outward stroke without a return
   // discards it and opens precise «Пульс» for one word. Neither gesture needs a deadline or a direction.
   let petalKey = '', petalOptions = [], petalChoice = 0, petalTail = null, petalCapital = false, petalTyping = false, exactWord = false;
-  function petalsOn() { return store.get('mode', 'pulse') === 'petals' && !exactWord && !symbols && !game && !guided && !probe; }
+  function petalsOn() { return store.get('mode', 'pulse') === 'petals' && !replacementSecure() && !exactWord && !symbols && !game && !guided && !probe; }
   function petalPending() { return petalTail !== null || (!!petalKey && !petalTyping); }
   function clearPetals() { petalKey = ''; petalOptions = []; petalChoice = 0; petalTail = null; petalTyping = false; }
   function beginPetals() { clearPetals(); petalCapital = caps(); petalTyping = true; }
@@ -341,17 +413,19 @@
     if (!petalTyping) return;
     petalTyping = false;
     if (!petalOptions.length) { clearPetals(); paintChips(); return; }
-    petalTail = petalOptions[0] + ' '; text += petalTail; shiftOnce = false; lastFix = null; render(); sayWord();
+    petalTail = petalOptions[0] + ' '; text += petalTail; shiftOnce = false; lastFix = null; syncReplacements(petalKey); render(); sayWord();
   }
   function nextPetal() {
     if (!petalOptions.length) { clearPetals(); paintChips(); return; }
     if (petalTail === null) return;
     if (!petalsOn() || !text.endsWith(petalTail)) { clearPetals(); return; }
     const n = petalTail.length; petalChoice = (petalChoice + 1) % petalOptions.length;
-    petalTail = petalOptions[petalChoice] + ' '; text = text.slice(0, -n) + petalTail;
+    text = text.slice(0, -n); resetReplacements();
+    petalTail = petalOptions[petalChoice] + ' '; text += petalTail;
     tick(); render(); if (store.get('words', false)) say(petalOptions[petalChoice], true);
   }
   function exactPetal() {
+    resetReplacements();
     if (petalTail !== null && text.endsWith(petalTail)) text = text.slice(0, -petalTail.length);
     clearPetals(); exactWord = true; tick(); render();
   }
@@ -452,9 +526,9 @@
       switch (t.key.fn) {
         case 'space': space(); break; case 'enter': if (onEnter) onEnter(); break;
         case 'shift': shiftOnce = !shiftOnce; lastFix = null; paintLabels(); break;
-        case 'lang': clearPetals(); exactWord = false; lang = lang === 'ru' ? 'en' : 'ru'; symbols = false; lastFix = null; loadDict(lang); render(); break;
+        case 'lang': resetReplacements(); clearPetals(); exactWord = false; lang = lang === 'ru' ? 'en' : 'ru'; symbols = false; lastFix = null; loadDict(lang); render(); break;
         case 'sym': clearPetals(); exactWord = false; symbols = !symbols; lastFix = null; render(); break;
-        case 'say': say(text.trim() || lastSaid); break;
+        case 'say': if (!text.trim()) say(lastSaid); else if (!openReplacementReview()) { lockSpokenWords(); say(text.trim()); } break;
       }
       return;
     }
@@ -576,6 +650,8 @@
   }
   function paintChips() {
     const box = $('chips'); box.innerHTML = ''; if (!$('text') && !game) return;
+    const n = replacementSecure() ? 0 : replacementPending().length;
+    if (n) { const b = chip('замен: ' + n, 'replacement-badge', openReplacementReview); b.setAttribute('aria-label', 'Замен: ' + n + '. Разобрать замены'); b.setAttribute('aria-haspopup', 'dialog'); box.appendChild(b); }
     if (petalTyping || petalPending()) {
       const label = petalOptions[petalChoice] || 'Пока нет слова';
       const status = document.createElement('span'); status.textContent = label; status.setAttribute('role', 'status'); box.appendChild(status);
@@ -593,6 +669,7 @@
   // «пульк» on every letter: a short soft drop, heard without looking (there is no vibration on iPhone)
   let audio = null, drop = null;
   function tick() {
+    if (replacementSecure()) return;
     if (!store.get('tick', true) || store.get('calm', false)) return;
     try {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
@@ -629,6 +706,7 @@
     speechSynthesis.getVoices();   // start loading before the first touch, including outside the settings
   }
   function say(t, word) {
+    if (replacementSecure()) return;
     t = (t || '').trim(); if (!t) return;
     if (!word || !lastSaid) lastSaid = t;
     pendingSpeech = null;
@@ -651,7 +729,7 @@
     try { if (ss.speaking || ss.pending) { ss.cancel(); setTimeout(function () { if (utter === u) try { ss.speak(u); } catch (e) {} }, 60); } else ss.speak(u); } catch (e) {}
   }
   // «Говорить по словам»: each finished word is said at once, so the person beside follows the phrase as it grows
-  function sayWord() { if (tab !== 'speak' || guided || !store.get('words', false)) return; const m = /([\p{L}\p{N}-]+) $/u.exec(text); if (m) say(m[1], true); }
+  function sayWord() { if (tab !== 'speak' || guided || replacementSecure() || !store.get('words', false)) return; const m = /([\p{L}\p{N}-]+) $/u.exec(text); if (m) { say(m[1], true); lockSpokenWords(); } }
   // the screen stays on during a conversation: while one types an answer, the partner waits, and so must the phone
   let wake = null;
   function keepAwake() {
@@ -670,9 +748,11 @@
   function talk(who, t) { t = (t || '').trim(); if (!t) return; const l = store.get('talk', []); l.push({ w: who, t: t, at: Date.now() }); store.set('talk', l.slice(-100)); }
   let talking = false;
   function sayAll() {
+    if (replacementSecure()) { resetReplacements(); return; }
     const fix = fixLastWord(); if (fix) lastFix = null;   // a slip in the last word is fixed before it is said aloud
+    if (replacementSecure() || openReplacementReview()) return;
     const t = text.trim(); if (!t) return;
-    say(t); remember(t); text = ''; lastFix = null;
+    lockSpokenWords(); say(t); remember(t); text = ''; resetReplacements(); lastFix = null;
     if (tab === 'speak') { talk('me', t); if (talking) talkScreen(); else speakScreen(true); } else render();
   }
   function showBig(t) {
@@ -738,6 +818,7 @@
     restoring = true; try { e.show(); } finally { restoring = false; }
   });
   function begin(mode) {   // every screen starts clean: no guide, no game, no leftover action or Enter
+    resetReplacements();
     clearPetals(); exactWord = false;
   if (mode !== 'speak') hideVoiceHint();   // подсказка про голос не висит поверх чужих экранов
     paintVoiceSettings = null;

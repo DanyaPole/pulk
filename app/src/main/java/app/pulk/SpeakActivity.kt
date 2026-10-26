@@ -60,8 +60,10 @@ class SpeakActivity : Activity() {
 
     /** The whole text: said, remembered, the field cleared for the next one. */
     internal fun sayAll() {
+        if (PulkService.beforeSpeak(field)) return
         val t = field.text.toString().trim(); if (t.isEmpty()) return
         sayMine(t)
+        PulkService.phraseSpoken(field)
         field.setText("")
         if (::historyBox.isInitialized) paintHistory()
     }
@@ -147,7 +149,7 @@ class SpeakActivity : Activity() {
             override fun afterTextChanged(s: Editable?) {
                 val t = s?.toString() ?: ""
                 // word by word: a space after a word says that word
-                if (prefs.speakWords && t.length == lastLen + 1 && t.endsWith(" ")) Regex("[\\p{L}\\p{N}-]+(?= $)").find(t)?.value?.let { say(it) }
+                if (!PulkService.changingReplacement && prefs.speakWords && t.length == lastLen + 1 && t.endsWith(" ")) Regex("[\\p{L}\\p{N}-]+(?= $)").find(t)?.value?.let { say(it); PulkService.wordSpoken(field) }
                 lastLen = t.length
                 paintCompletions(t)
             }

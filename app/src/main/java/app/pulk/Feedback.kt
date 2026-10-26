@@ -48,6 +48,7 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     /** The finger came down. */
     fun touch() = buzz(6)
+    fun replacement() = buzz(18)
 
     /** When TalkBack is on, speech goes through it (one voice, the person's own settings) instead of our own. */
     var announcer: ((String) -> Unit)? = null
@@ -106,7 +107,10 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
         buzz(28)
         if (prefs.sound == "off") return
         tone(listOf(Triple(131.0, 0.0, 0.12)), 0.3)
-        if (prefs.sound == "voice" && !secure && !lastWord.isNullOrEmpty()) handler.postDelayed({ say(lastWord, 1.2f) }, 140)
+        if (prefs.sound == "voice" && !secure && !lastWord.isNullOrEmpty()) {
+            val r = Runnable { pendingName = null; say(lastWord, 1.2f) }
+            pendingName = r; handler.postDelayed(r, 140)
+        }
     }
 
     fun backspace() {

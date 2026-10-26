@@ -21,7 +21,7 @@ import android.widget.TextView
  * everything to press at the bottom, the main action 64 dp, nothing pressable in the far top corner.
  * Selection is never colour alone: a chosen option is filled and carries a check mark.
  */
-class Ui(private val a: Activity) {
+class Ui(private val a: Context) {
     private val dark = a.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
     val bg = c(if (dark) "#0B1114" else "#EEF3F5")
     val panel = c(if (dark) "#1B262C" else "#FFFFFF")
