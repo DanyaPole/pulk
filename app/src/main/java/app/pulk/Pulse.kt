@@ -156,9 +156,11 @@ object Pulse {
         if (far < P_MIN) return tap(t, ox, oy, blind)
         var start = 1
         while (hypot(px(start), py(start)) < START_R) start++
-        // Project the first outside sample onto the circle; sparse two-point strokes still work.
-        val sd = hypot(px(start), py(start))
-        val sx = px(start) * START_R / sd; val sy = py(start) * START_R / sd
+        // Anchor = the first three samples outside the circle, projected onto it; one sample is too noisy.
+        var ax = 0.0; var ay = 0.0
+        for (i in start until minOf(n, start + 3)) if (hypot(px(i), py(i)) >= START_R) { ax += px(i); ay += py(i) }
+        val sd = hypot(ax, ay).let { if (it == 0.0) 1.0 else it }
+        val sx = ax * START_R / sd; val sy = ay * START_R / sd
         val ex = px(n - 1) - sx; val ey = py(n - 1) - sy
         // Tap/return distances stay relative to the touch to preserve short out-and-back strokes.
         val endD = hypot(px(n - 1), py(n - 1))

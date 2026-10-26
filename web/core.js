@@ -32,8 +32,10 @@
     if (far < P_MIN) return tap(t, ox, oy);
     let start = 1;
     while (Math.hypot(px(start), py(start)) < START_R) start++;
-    // Project the first outside sample onto the circle; sparse strokes still work.
-    const sd = Math.hypot(px(start), py(start)), sx = px(start) * START_R / sd, sy = py(start) * START_R / sd;
+    // Anchor = the first three samples outside the circle, projected onto it; one sample is too noisy.
+    let ax = 0, ay = 0;
+    for (let j = start; j < Math.min(n, start + 3); j++) if (Math.hypot(px(j), py(j)) >= START_R) { ax += px(j); ay += py(j); }
+    const sd = Math.hypot(ax, ay) || 1, sx = ax * START_R / sd, sy = ay * START_R / sd;
     const ex = px(n - 1) - sx, ey = py(n - 1) - sy, endD = Math.hypot(px(n - 1), py(n - 1));
     // Tap/return distances stay relative to the touch to preserve short out-and-back strokes.
     if (far >= 24 && endD < far * 0.5) return slot(t, petalOf(px(fi) - sx, py(fi) - sy), 'b');
