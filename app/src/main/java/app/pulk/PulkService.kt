@@ -256,6 +256,8 @@ class PulkService : InputMethodService() {
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        traceInputActive = false
+        traceSession++
         save(); keyStar.reset(); stickJabs = null   // a key or stick held as the field closed types nothing later
         super.onFinishInputView(finishingInput)
     }
@@ -264,6 +266,8 @@ class PulkService : InputMethodService() {
 
     /** Reads what kind of field this is. Separate from the Android callback so it can be tested. */
     fun startInput(info: EditorInfo) {
+        traceInputActive = true
+        traceSession++
         clearPetals(); exactWord = false; feedback.hush()
         lang = prefs.lang
         mergeFamily()
@@ -294,12 +298,35 @@ class PulkService : InputMethodService() {
         view?.refresh()
     }
     private var editor: EditorInfo? = null
+    private var traceInputActive = false
+    private var traceSession = 0
     /** The field belongs to Пульк itself (a lesson, «Пузыри»): only there the lesson's help and hints apply. */
     private var ownField = false
     private var numberField = false
     /** A lesson is on and this is its field: a reply typed from the notification shade meanwhile gets no lesson help. */
     fun coaching() = Coach.active && ownField && !secure
     val isSecure get() = secure
+
+    internal fun traceLabel(): GestureTraces.Label? {
+        val info = editor ?: return null
+        if (!traceInputActive || !prefs.recordTraces || !coaching() || symbols ||
+            (info.inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT ||
+            info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0 ||
+            info.fieldId != Coach.traceField || info.fieldId !in listOf(GestureTraces.LESSON, GestureTraces.BUBBLES, GestureTraces.SPEAK_LESSON)) return null
+        val want = Coach.next ?: return null
+        val table = Pulse.table(lang, false)
+        val petal = table.indexOfFirst { want in it }
+        if (petal < 0 || want.length != 1 || !want[0].isLetter()) return null
+        val mode = if (Coach.petals) "petals" else if (Coach.jabs) "jabs" else "pulse"
+        return GestureTraces.Label(info.fieldId, if (mode == "petals") petal.toString() else want, mode, lang,
+            prefs.hand, prefs.tol.toDouble(), Pulse.bias.toList(), prefs.traceGeneration, traceSession)
+    }
+
+    internal fun recordTrace(label: GestureTraces.Label?, pts: DoubleArray, times: LongArray, scaleDp: Double, got: String) {
+        // Recheck at completion: switching fields, stopping the lesson or withdrawing consent discards the sample.
+        if (label == null || traceLabel() != label) return
+        GestureTraces.append(this, label, pts, times, scaleDp, got)
+    }
 
     override fun onUpdateSelection(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
         super.onUpdateSelection(a, b, c, d, e, f)

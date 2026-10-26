@@ -94,6 +94,29 @@ class KeyboardTest {
         return floatArrayOf(if (left) view.width - x else x, y)
     }
 
+    @Test fun recordsOnlyLabelledLessonGesturesBeforeHelp() {
+        GestureTraces.clear(svc); GestureTraces.consent(svc, true)
+        svc.prefs.tol = 1f; svc.prefs.smooth = 0f; svc.prefs.bias = ""
+        Coach.active = true; Coach.help = 3; Coach.next = "о"; Coach.traceField = GestureTraces.LESSON
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = svc.packageName; fieldId = GestureTraces.LESSON })
+        stroke(listOf(0.0 to 45.0))
+        val r = org.json.JSONObject(GestureTraces.file(svc).readLines()[1])
+        assertEquals("о", r.getString("target")); assertEquals("н", r.getString("recognized"))
+        assertEquals(mapOf("pulse" to (0 to 1)), TraceReplayTest.replay(GestureTraces.file(svc)))
+        Coach.jabs = true; Coach.next = "н"; Coach.help = 0
+        stroke(listOf(0.0 to 45.0, 180.0 to 45.0))
+        assertEquals(2, GestureTraces.count(svc))
+        assertEquals("jabs", org.json.JSONObject(GestureTraces.file(svc).readLines()[2]).getString("mode"))
+        Coach.petals = true
+        stroke(listOf(0.0 to 45.0, 180.0 to 45.0))
+        assertEquals(3, GestureTraces.count(svc))
+        assertEquals("petals", org.json.JSONObject(GestureTraces.file(svc).readLines()[3]).getString("mode"))
+        svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = "other.app" })
+        stroke(listOf(0.0 to 45.0, 180.0 to 45.0))
+        assertEquals(3, GestureTraces.count(svc))
+        GestureTraces.consent(svc, false); GestureTraces.clear(svc); Coach.reset()
+    }
+
     private var t0 = 0L
     private fun ev(action: Int, p: FloatArray): MotionEvent {
         t0 += 16

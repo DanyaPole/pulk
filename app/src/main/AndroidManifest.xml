@@ -16,6 +16,9 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
+        <provider android:name=".TraceProvider" android:authorities="${applicationId}.traces"
+            android:exported="false" android:grantUriPermissions="true" />
+
         <service
             android:name=".PulkService"
             android:exported="true"

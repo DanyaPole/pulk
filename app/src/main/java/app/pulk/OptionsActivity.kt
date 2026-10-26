@@ -99,6 +99,27 @@ class OptionsActivity : Activity() {
         body.addView(ui.button("Забыть мои слова") { prefs.forget = true; (it as Button).text = "Забудет при следующем открытии клавиатуры" })
         body.addView(ui.note("Слова хранятся только на телефоне. В полях паролей, адресов и в режиме инкогнито клавиатура ничего не запоминает."))
 
+        body.addView(ui.h("Помочь улучшить Пульк"))
+        body.addView(ui.note("Можно записывать форму и время движений к заданной букве в уроках и «Пузырях»: цель, что распознал Пульк, способ набора, рука и настройка под руку. Без набранного текста, имён и данных телефона. Обычный набор, свободные ответы, пароли и защищённые поля не записываются никогда."))
+        body.addView(ui.note("Всё остаётся на телефоне. Чтобы отдать файл, нажми «Отправить/сохранить файл» и сам выбери приложение в «Поделиться». Пульк ничего не отправляет сам. Запись можно выключить, а записи — стереть."))
+        body.addView(ui.onOff("Записывать движения пальца", { prefs.recordTraces }) { GestureTraces.consent(this, it) })
+        val traceCount = ui.note("Записано движений: ${GestureTraces.count(this)}. До 5 МБ; затем запись ждёт очистки.")
+        body.addView(traceCount)
+        body.addView(ui.button("Отправить/сохранить файл") {
+            try {
+                val uri = GestureTraces.snapshot(this)
+                if (uri == null) { traceCount.text = "Пока нет записей. Они появятся в уроках и «Пузырях», если включить запись."; return@button }
+                val send = Intent(Intent.ACTION_SEND).setType("application/x-ndjson")
+                    .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                send.clipData = android.content.ClipData.newRawUri("Движения Пулька", uri)
+                startActivity(Intent.createChooser(send, "Отправить/сохранить файл"))
+            } catch (_: Exception) { traceCount.text = "Не получилось открыть файл. Записи остались на телефоне, можно попробовать ещё раз." }
+        })
+        body.addView(ui.button("Стереть все движения") {
+            try { GestureTraces.clear(this); traceCount.text = "Записано движений: 0. Всё стёрто." }
+            catch (_: java.io.IOException) { traceCount.text = "Не получилось стереть записи. Попробуй ещё раз." }
+        })
+
         body.addView(ui.h("Вид и звук"))
         body.addView(ui.choice("Звук «пульк» при появлении", listOf("bul" to "Буль", "glass" to "Стакан", "drip" to "Капелька", "off" to "Выкл"), { prefs.dropKind }) { prefs.dropKind = it; drops.drop(it) })
         body.addView(ui.onOff("Окно текста над клавиатурой", { prefs.textWindow }) { prefs.textWindow = it })

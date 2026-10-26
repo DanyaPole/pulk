@@ -1,0 +1,5 @@
+{"schema":"pulk-traces","version":1,"coordinates":"filtered-dp-relative","unit":"stroke-or-jab"}
+{"mode":"pulse","target":"н","recognized":"н","lang":"ru","hand":"right","tol":1,"scaleDp":1,"bias":[0,0,0,0,0,0,0,0],"points":[[0,0,0],[15,0,16],[30,0,32],[50,0,48]]}
+{"mode":"pulse","target":"а","recognized":"н","lang":"ru","hand":"left","tol":2,"scaleDp":0.5,"bias":[0,0,0,0,0,0,0,0],"points":[[0,0,0],[-15,0,16],[-30,0,32],[-50,0,48]]}
+{"mode":"jabs","target":"ф","recognized":"ф","lang":"ru","hand":"right","tol":1,"scaleDp":1,"bias":[0,0,0,0,0,0,0,0],"points":[[0,0,0],[0,-15,16],[0,-22,32],[0,0,64]]}
+{"mode":"petals","target":"2","recognized":"2","lang":"ru","hand":"left","tol":1.5,"scaleDp":1,"bias":[0,0,0,0,0,0,0,0],"points":[[0,0,0],[0,-22.5,16],[0,-60,32],[0,0,64]]}

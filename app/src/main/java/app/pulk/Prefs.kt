@@ -6,6 +6,14 @@ import android.content.Context
 class Prefs(ctx: Context) {
     private val sp = ctx.getSharedPreferences("pulk", Context.MODE_PRIVATE)
 
+    /** Consent is separate from word learning. Off even for existing installations. */
+    var recordTraces: Boolean
+        get() = sp.getBoolean("record_traces", false)
+        set(v) = sp.edit().putBoolean("record_traces", v).apply()
+    var traceGeneration: Int
+        get() = sp.getInt("trace_generation", 0)
+        set(v) = sp.edit().putInt("trace_generation", v).apply()
+
     var hand: String
         get() = sp.getString("hand", "right") ?: "right"
         set(v) = sp.edit().putString("hand", v).apply()

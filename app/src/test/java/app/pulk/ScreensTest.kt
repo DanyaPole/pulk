@@ -21,11 +21,18 @@ import java.io.File
 @Config(sdk = [34], qualifiers = "w412dp-h892dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ScreensTest {
+    companion object {
+        internal fun layout(a: Activity): View {
+            val root = a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+            val w = 412 * 3; val h = 892 * 3
+            root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+            root.layout(0, 0, w, h)
+            return root
+        }
+    }
     private fun shot(a: Activity, name: String) {
-        val root = a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
-        val w = 412 * 3; val h = 892 * 3
-        root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
-        root.layout(0, 0, w, h)
+        val root = layout(a)
+        val w = root.width; val h = root.height
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         root.draw(Canvas(bmp))
         File("build/shots").mkdirs()

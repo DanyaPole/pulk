@@ -157,6 +157,7 @@ class TutorialActivity : Activity() {
         }
         root.addView(imeBanner)
         field = EditText(this).apply {
+            id = GestureTraces.LESSON
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             setTextColor(fg); textSize = 24f; setHintTextColor(muted); hint = "Печатай здесь"
             background = GradientDrawable().apply { cornerRadius = px(12).toFloat(); setColor(panel); setStroke(px(1), line) }
@@ -215,7 +216,7 @@ class TutorialActivity : Activity() {
     private fun updateCoach(text: String) {
         val st = steps.getOrNull(i) ?: return
         val nx = Lessons.next(st, text)
-        Coach.next = nx; Coach.help = help
+        Coach.next = nx; Coach.help = help; Coach.traceField = GestureTraces.LESSON
         Coach.hint = if (help >= 1 && nx != null) "«${if (nx == " ") "пробел" else nx}»: ${Lessons.how(nx, prefs.lang, prefs.left, Lessons.isJabs(level))}" else null
         Coach.changed()
         if (help >= 1) status?.apply { setTextColor(fg); this.text = Coach.hint ?: "Можно стереть ⌫ — или продолжай, одна ошибка не страшна." }

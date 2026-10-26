@@ -37,7 +37,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    testOptions { unitTests { isIncludeAndroidResources = true } }
+    testOptions { unitTests {
+        isIncludeAndroidResources = true
+        // Robolectric closes shared-file descriptors through Android's java.io interceptor on JDK 17.
+        all { it.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED") }
+    } }
 }
 // no dependencies on purpose: the keyboard uses only the Android framework
 

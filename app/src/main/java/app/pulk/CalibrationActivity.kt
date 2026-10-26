@@ -85,6 +85,7 @@ class CalibrationActivity : Activity() {
         private var downX = 0f; private var downY = 0f; private var far = 0f; private var farX = 0f; private var farY = 0f
         private var note = ""
         private val left = prefs.left
+        init { isFocusable = true; contentDescription = say() }
 
         private fun kDp(): Double {
             val m = resources.displayMetrics

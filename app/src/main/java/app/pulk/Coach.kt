@@ -9,6 +9,8 @@ object Coach {
     @Volatile var active = false
     /** The letter (or " ") the learner is about to type, if the text so far is on track. */
     @Volatile var next: String? = null
+    /** Only these dedicated fields may supply a labelled trajectory; never a free answer. */
+    @Volatile var traceField = 0
     /** 0 none · 1 hint in words · 2 the keyboard lights the letter and its path · 3 hand in hand: near strokes become the letter. */
     @Volatile var help = 0
     /** The last level is typed by ear: the letters on the star are hidden. */
@@ -31,15 +33,16 @@ object Coach {
      * in other apps. Its state is put aside and comes back when the lesson is on screen again.
      */
     private var saved: Array<Any?>? = null
-    fun pause() { if (!active) return; saved = arrayOf(next, help, hideLabels, hint, jabs, example, bubbles, petals); active = false; changed() }
+    fun pause() { if (!active) return; saved = arrayOf(next, help, hideLabels, hint, jabs, example, bubbles, petals, traceField); active = false; changed() }
     fun resume() {
         val s = saved ?: return; saved = null
         next = s[0] as String?; help = s[1] as Int; hideLabels = s[2] as Boolean; hint = s[3] as String?; jabs = s[4] as Boolean
         example = s[5] as Boolean
         bubbles = s[6] as Boolean
         petals = s[7] as Boolean
+        traceField = s[8] as Int
         active = true; changed()
     }
 
-    fun reset() { saved = null; active = false; next = null; help = 0; hideLabels = false; hint = null; jabs = false; petals = false; example = false; bubbles = false; changed() }
+    fun reset() { saved = null; active = false; next = null; traceField = 0; help = 0; hideLabels = false; hint = null; jabs = false; petals = false; example = false; bubbles = false; changed() }
 }

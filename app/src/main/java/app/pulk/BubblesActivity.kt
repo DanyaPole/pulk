@@ -93,7 +93,7 @@ class BubblesActivity : Activity() {
         }
         body.addView(bubble)
         note = ui.text("", 17f, ui.muted).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }; body.addView(note)
-        field = EditText(this).apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; textSize = 22f; hint = "Печатай звездой здесь"; setTextColor(ui.ink); setHintTextColor(ui.muted) }
+        field = EditText(this).apply { id = GestureTraces.BUBBLES; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; textSize = 22f; hint = "Печатай звездой здесь"; setTextColor(ui.ink); setHintTextColor(ui.muted) }
         field.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -138,10 +138,11 @@ class BubblesActivity : Activity() {
         bubble.text = letter; bubble.scaleX = 1f; bubble.scaleY = 1f; bubble.alpha = 1f
         if (words != null) { wordPaint(); aim(); return }
         // at first the way is lit at once; later only after a miss
-        if (level(prefs.popped) == 0 || miss > 0) aim() else Coach.reset()
+        aim()
     }
     private fun aim() {
         if (n >= ROUND) { Coach.reset(); return }
+        Coach.traceField = GestureTraces.BUBBLES
         words?.let { w ->
             Coach.active = true; Coach.jabs = true; Coach.bubbles = true; Coach.next = w.next
             Coach.petals = prefs.mode == "petals"
@@ -155,8 +156,8 @@ class BubblesActivity : Activity() {
             if (foreground) Coach.changed() else Coach.pause()
             return
         }
-        Coach.active = true; Coach.help = if (miss >= 2) 3 else 2; Coach.next = letter
-        Coach.hint = "«$letter»: ${Lessons.how(letter, "ru", prefs.left)}"; Coach.changed()
+        Coach.active = true; Coach.help = if (miss >= 2) 3 else if (level(prefs.popped) == 0 || miss > 0) 2 else 0; Coach.next = letter
+        Coach.hint = if (Coach.help > 0) "«$letter»: ${Lessons.how(letter, "ru", prefs.left)}" else null; Coach.changed()
     }
 
     internal fun typed(got: String) {

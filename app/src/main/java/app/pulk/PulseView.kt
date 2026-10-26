@@ -865,6 +865,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var hold: Runnable? = null
         var repeat: Runnable? = null
         var jabs: Pulse.Jabs? = null   // «Толчки»: this touch is a word
+        var trace: GestureTraces.Label? = null
         var petals = false
         var petalCount = 0
         var cursorX = Float.NaN        // holding space: the cursor follows the finger from here (screen x)
@@ -976,6 +977,15 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         return helped(Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts))
     }
 
+    private fun recordJab(t: Touch, pts: DoubleArray) {
+        if (t.trace == null) return
+        val got = if (t.trace?.mode == "petals") Pulse.jabPetal(pts).toString() else Pulse.jab(Pulse.table(svc.lang, svc.symbols), pts).v
+        val start = t.times.size - (pts.size / 2 - 1)
+        val home = (start - 1 downTo 0).firstOrNull { t.pts[2 * it] == pts[0] && t.pts[2 * it + 1] == pts[1] } ?: return
+        val times = (listOf(t.times[home]) + t.times.drop(start)).toLongArray()
+        svc.recordTrace(t.trace, pts, times, (k / density).toDouble(), got)
+    }
+
     private fun chipAt(x: Float, y: Float): Int = chipRects().indexOfFirst { it.contains(x, y) }
 
     /** Accidental touches (see [Prefs.guard]): shorter than this is a brush, not a letter; sooner than that after a touch, a bounce. */
@@ -1008,6 +1018,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val fn = if (inStrip) null else Pulse.hit(b[0], b[1])?.takeUnless { hiddenInSimple(it.fn) }
         val t = Touch(fn, chip, handle = false)
         if (fn == null && !inStrip) t.steady = Pulse.Steady(b[0], b[1], svc.prefs.tol.toDouble(), svc.prefs.smooth.toDouble())
+        if (fn == null && !inStrip) t.trace = svc.traceLabel()
         t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm); t.anchorX = b[0]; t.anchorY = b[1]
         touches[id] = t
         svc.feedback.touch()
@@ -1098,8 +1109,13 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         }
         val j = t.jabs
         if (j != null) {
+            if (!j.isOut && t.trace != null) {
+                val next = svc.traceLabel()
+                t.trace = next?.takeIf { it.session == t.trace?.session && it.generation == t.trace?.generation }
+            }
             val done = j.add(b[0], b[1])
             if (done != null) {
+                recordJab(t, done)
                 if (t.petals) {
                     if (t.petalCount++ == 0) svc.beginPetals()
                     svc.addPetal(Pulse.jabPetal(done)); cand = null; trail = null; invalidate(); return
@@ -1147,7 +1163,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 else if (out == null) svc.space()
             }
             t.fn == null && t.jabs != null -> {
-                t.jabs!!.finish()?.let { val s = jabSlot(it); svc.typeLetter(s.v, s) }
+                t.jabs!!.finish()?.let { recordJab(t, it); val s = jabSlot(it); svc.typeLetter(s.v, s) }
                 svc.space()   // lifting the finger ends the word
             }
             t.fn == null && tapsMode() && isTap(t, b) -> tapStep(t.pts[0], t.pts[1])
@@ -1156,6 +1172,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
                 // the point where the finger left is not used (it jumps as the pad lifts), unless nothing moved
                 if (t.pts.size == 2 && hypot(b[0] - t.pts[0], b[1] - t.pts[1]) >= Pulse.P_MIN) { t.pts.add(b[0]); t.pts.add(b[1]); t.times.add(tm) }
                 val pts = Pulse.trimLift(t.pts.toDoubleArray(), t.times.toLongArray(), tm)
+                if (t.trace != null) svc.recordTrace(t.trace, pts, t.times.take(pts.size / 2).toLongArray(), (k / density).toDouble(),
+                    Pulse.resolve(Pulse.table(svc.lang, svc.symbols), pts, tapIsSpace()).v)
                 val slot = resolveNow(pts)
                 val alt = if (t.long) Pulse.ALT[slot.v] else null
                 if (slot.isSpace) svc.space() else svc.typeLetter(alt ?: slot.v, slot)

@@ -113,11 +113,12 @@ class SpeakLessonActivity : Activity() {
         }
         fun aim() {
             val ch = word[i].toString()
-            Coach.active = true; Coach.help = if (miss >= 2) 3 else 2; Coach.next = ch
+            Coach.active = true; Coach.help = if (miss >= 2) 3 else 2; Coach.next = ch; Coach.traceField = GestureTraces.SPEAK_LESSON
             Coach.hint = "«$ch»: ${Lessons.how(ch, prefs.lang, prefs.left)}"; Coach.changed()
             paintTarget()
         }
         val field = EditText(this).apply {
+            id = GestureTraces.SPEAK_LESSON
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             textSize = 30f; setTextColor(ui.ink); setHintTextColor(ui.muted); hint = word
         }
