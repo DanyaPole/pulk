@@ -59,6 +59,7 @@ class BubblesActivity : Activity() {
     private var popping = false   // the bubble is bursting: the next letter is not on yet, more typing counts nothing
     private var foreground = false
     private lateinit var bubble: TextView
+    internal lateinit var guidance: TextView
     private lateinit var note: TextView
     private lateinit var count: TextView
     internal lateinit var field: EditText
@@ -81,9 +82,9 @@ class BubblesActivity : Activity() {
         val lv = level(prefs.popped); roundLevel = lv
         val body = ui.column(28)
         body.addView(ui.title("Пузыри"))
-        body.addView(ui.text(if (prefs.mode == "petals") "Толкай к лепестку нужной буквы и назад. Можно поднимать палец. Пузырь ждёт."
+        val instructions = ui.text(if (prefs.mode == "petals") "Толкай к лепестку нужной буквы и назад. Можно поднимать палец. Пузырь ждёт."
             else if (wordMode()) "Слово толчками: к букве и назад. Можно поднимать палец. Пузырь ждёт."
-            else listOf("Крупные буквы: прямой смах.", "Добавились буквы у центра: туда и обратно.", "Все буквы: и с поворотом.")[lv] + " Пузырь ждёт — спешить некуда.", 17f, ui.muted))
+            else listOf("Крупные буквы: прямой смах.", "Добавились буквы у центра: туда и обратно.", "Все буквы: и с поворотом.")[lv] + " Пузырь ждёт — спешить некуда.", 17f, ui.muted)
         count = ui.text("", 18f, ui.muted); body.addView(count)
         bubble = TextView(this).apply {
             textSize = if (wordMode()) 36f else 64f; setTypeface(typeface, Typeface.BOLD); setTextColor(ui.ink); gravity = Gravity.CENTER
@@ -91,7 +92,19 @@ class BubblesActivity : Activity() {
             accessibilityLiveRegion = if (wordMode()) android.view.View.ACCESSIBILITY_LIVE_REGION_NONE else android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
             layoutParams = LinearLayout.LayoutParams(ui.px(140), ui.px(140)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ui.px(16) }
         }
-        body.addView(bubble)
+        val target = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = if (prefs.left) android.view.View.LAYOUT_DIRECTION_RTL else android.view.View.LAYOUT_DIRECTION_LTR
+        }
+        target.addView(bubble)
+        guidance = ui.text("", 17f).apply {
+            background = GradientDrawable().apply { cornerRadius = ui.px(16).toFloat(); setColor(ui.panel); setStroke(ui.px(2), ui.ink) }
+            setPadding(ui.px(12), ui.px(8), ui.px(12), ui.px(8))
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = ui.px(12) }
+            accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        target.addView(guidance); body.addView(target)
+        body.addView(instructions)
         note = ui.text("", 17f, ui.muted).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }; body.addView(note)
         field = EditText(this).apply { id = GestureTraces.BUBBLES; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS; textSize = 22f; hint = "Печатай звездой здесь"; setTextColor(ui.ink); setHintTextColor(ui.muted) }
         field.addTextChangedListener(object : TextWatcher {
@@ -141,7 +154,7 @@ class BubblesActivity : Activity() {
         aim()
     }
     private fun aim() {
-        if (n >= ROUND) { Coach.reset(); return }
+        if (n >= ROUND) { Coach.reset(); showHint(); return }
         Coach.traceField = GestureTraces.BUBBLES
         words?.let { w ->
             Coach.active = true; Coach.jabs = true; Coach.bubbles = true; Coach.next = w.next
@@ -152,12 +165,19 @@ class BubblesActivity : Activity() {
                 val label = if (Coach.petals) Pulse.table("ru", false).firstOrNull { row -> it in row }?.get(0) ?: it else it
                 "«$it»: ${Lessons.how(label, "ru", prefs.left, true)}"
             } else null
+            showHint()
             // The pop delay may finish after Home: save the new target without teaching or speaking in the background.
             if (foreground) Coach.changed() else Coach.pause()
             return
         }
         Coach.active = true; Coach.help = if (miss >= 2) 3 else if (level(prefs.popped) == 0 || miss > 0) 2 else 0; Coach.next = letter
-        Coach.hint = if (Coach.help > 0) "«$letter»: ${Lessons.how(letter, "ru", prefs.left)}" else null; Coach.changed()
+        Coach.hint = if (Coach.help > 0) "«$letter»: ${Lessons.how(letter, "ru", prefs.left)}" else null; showHint(); Coach.changed()
+    }
+
+    private fun showHint() {
+        guidance.text = Coach.hint.orEmpty()
+        // Keep the bubble in place when help fades after success.
+        guidance.visibility = if (Coach.hint == null) android.view.View.INVISIBLE else android.view.View.VISIBLE
     }
 
     internal fun typed(got: String) {
@@ -193,7 +213,7 @@ class BubblesActivity : Activity() {
                 if (n < ROUND) { choose(letter); paint() }
                 else {
                     // the round is over, as in the web: a drop, and «Ещё раунд» when the person wants it
-                    Coach.reset(); bubble.text = "★"; bubble.alpha = 1f; bubble.scaleX = 1f; bubble.scaleY = 1f; note.setTextColor(ui.accent); count.text = ""
+                    Coach.reset(); showHint(); bubble.text = "★"; bubble.alpha = 1f; bubble.scaleX = 1f; bubble.scaleY = 1f; note.setTextColor(ui.accent); count.text = ""
                     if (words != null) bubble.contentDescription = "$ROUND слов. Раунд закончен."
                     note.text = "$ROUND пузырей! +1 капля — в пруду ${Pond.add(prefs)}" + if (level(prefs.popped) > roundLevel) ". Дальше — новые буквы." else ""
                     (note.parent as? android.view.ViewGroup)?.let { b -> b.addView(ui.button("Ещё раунд", main = true) { start() }, b.indexOfChild(note) + 1) }

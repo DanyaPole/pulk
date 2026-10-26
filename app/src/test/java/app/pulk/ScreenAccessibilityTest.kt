@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.RectF
+import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
@@ -13,6 +15,8 @@ import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.text.InputType
 import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.EditText
@@ -32,6 +36,106 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w412dp-h892dp-xxhdpi")
 class ScreenAccessibilityTest {
+    @Test fun opaqueBoundedChips() = chips()
+    @Test @Config(qualifiers = "w412dp-h892dp-night-xxhdpi") fun opaqueBoundedDarkChips() = chips()
+
+    @Test fun bubbleHintStaysOutsideControls() = bubbleHint()
+    @Test @Config(qualifiers = "w412dp-h892dp-night-xxhdpi") fun darkBubbleHintStaysOutsideControls() = bubbleHint()
+
+    private fun bubbleHint() {
+        val ctx = RuntimeEnvironment.getApplication()
+        val prefs = Prefs(ctx).apply { popped = 0; sound = "off"; bubblesHelp = true; bigText = true }
+        for (mode in listOf("pulse", "jabs", "petals")) for (hand in listOf("right", "left")) {
+            prefs.mode = mode; prefs.hand = hand
+            val controller = Robolectric.buildActivity(BubblesActivity::class.java).setup()
+            val a = controller.get()
+            val svc = Robolectric.setupService(PulkService::class.java)
+            try {
+                val root = a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+                val d = root.resources.displayMetrics.density
+                fun visible(v: View): Rect? = Rect().takeIf { v.getGlobalVisibleRect(it) }
+                for ((w, h) in listOf(412 to 892, 412 to 550, 320 to 480)) {
+                    root.measure(View.MeasureSpec.makeMeasureSpec((w * d).toInt(), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec((h * d).toInt(), View.MeasureSpec.EXACTLY))
+                    root.layout(0, 0, root.measuredWidth, root.measuredHeight)
+                    // On a short screen the body scrolls; hidden content cannot cover the fixed footer.
+                    a.guidance.requestRectangleOnScreen(Rect(0, 0, a.guidance.width, a.guidance.height), true)
+                    // Robolectric's global visibility can include content clipped by a resized ScrollView.
+                    val local = Rect(0, 0, a.guidance.width, a.guidance.height)
+                    (root as ViewGroup).offsetDescendantRectToMyCoords(a.guidance, local)
+                    val scroll = (root.getChildAt(0) as android.widget.ScrollView)
+                    val viewport = Rect(scroll.left, scroll.top, scroll.right, scroll.bottom)
+                    assertTrue("hint outside scroll viewport: $local / $viewport", viewport.contains(local))
+                    val hint = visible(a.guidance) ?: throw AssertionError("hint is not visible")
+                    assertTrue(a.guidance.text.isNotBlank())
+                    assertTrue("hint is clipped", hint.height() == a.guidance.height)
+                    assertTrue("hint outside width: $hint", hint.left >= 0 && hint.right <= root.width)
+                    for (control in all(root).filter { it is Button || it is EditText })
+                        visible(control)?.let { assertTrue("hint overlaps ${label(control)} on $w x $h", !Rect.intersects(hint, it)) }
+                    val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        root.draw(Canvas(bmp))
+                        val dir = java.io.File("build/shots").apply { mkdirs() }
+                        java.io.File(dir, "hint-$mode-$hand-$w-$h-${if (Ui(a).bg == Color.parseColor("#0B1114")) "dark" else "light"}.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 90, it) }
+                    } finally { bmp.recycle() }
+                }
+                svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = svc.packageName; fieldId = GestureTraces.BUBBLES })
+                assertTrue(svc.coaching())
+                val keyboard = svc.onCreateInputView() as PulseView
+                assertTrue("Bubbles must not paint a second hint over the buttons", keyboard.chipRects().isEmpty())
+                svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT; packageName = svc.packageName; fieldId = GestureTraces.LESSON })
+                Coach.traceField = GestureTraces.LESSON
+                assertTrue("other lessons keep their keyboard hint", keyboard.chipRects().isNotEmpty())
+                if (mode != "pulse") {
+                    all(root).filterIsInstance<Button>().first { it.text.toString().contains("Выкл") }.performClick()
+                    assertTrue("help can be hidden", a.guidance.visibility == View.INVISIBLE && a.guidance.text.isEmpty())
+                }
+            } finally { svc.onDestroy(); controller.pause().stop().destroy(); Coach.reset(); prefs.bubblesHelp = true }
+        }
+        prefs.bigText = false
+    }
+
+    private fun chips() {
+        val svc = Robolectric.setupService(PulkService::class.java)
+        try {
+            svc.prefs.sound = "off"; svc.prefs.mode = "pulse"; svc.prefs.textWindow = false
+            for (hand in listOf("right", "left")) for (strong in listOf(false, true)) {
+                svc.prefs.hand = hand; svc.prefs.theme = if (strong) "contrast" else "auto"
+                svc.startInput(EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT })
+                svc.javaClass.getDeclaredField("cands").apply { isAccessible = true }.set(svc, listOf("Я", "Ты", "Очень длинная подсказка"))
+                val view = svc.onCreateInputView() as PulseView
+                for (dp in listOf(320, 412)) {
+                    val d = view.resources.displayMetrics.density
+                    view.measure(View.MeasureSpec.makeMeasureSpec((dp * d).toInt(), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight); view.reset(open = true)
+                    val rects = view.chipRects()
+                    assertTrue(rects.size == 3)
+                    for ((i, r) in rects.withIndex()) {
+                        assertTrue("chip outside screen: $r", r.left >= 3 * d && r.right <= view.width - 3 * d && r.top >= 0 && r.bottom <= view.height)
+                        assertTrue("small chip: $r", r.width() >= 48 * d && r.height() >= 48 * d)
+                        assertTrue(rects.take(i).none { RectF.intersects(it, r) })
+                    }
+                    assertTrue(if (hand == "left") rects[0].centerX() < rects[1].centerX() else rects[0].centerX() > rects[1].centerX())
+                    val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        view.draw(Canvas(bmp))
+                        val ui = Ui(Robolectric.buildActivity(Activity::class.java).setup().get())
+                        for ((i, r) in rects.withIndex()) {
+                            val bg = bmp.getPixel(r.centerX().toInt(), (r.top + 10 * d).toInt())
+                            assertTrue("transparent chip $i", Color.alpha(bg) == 255)
+                            val ink = if (i == 0) ui.onAccent else ui.ink
+                            assertTrue("chip contrast", contrast.invoke(null, ink, bg) as Double >= 4.5)
+                            val edge = bmp.getPixel(r.centerX().toInt(), r.top.toInt())
+                            val rim = bmp.getPixel(r.centerX().toInt(), (r.top - 2 * d).toInt())
+                            for (host in listOf(Color.WHITE, Color.BLACK, Color.GRAY))
+                                assertTrue("chip outline contrast", maxOf(contrast.invoke(null, edge, host) as Double, contrast.invoke(null, rim, host) as Double) >= 3.0)
+                        }
+                        val dir = java.io.File("build/shots").apply { mkdirs() }
+                        java.io.File(dir, "chips-$hand-$strong-$dp-${if (ui.bg == Color.parseColor("#0B1114")) "dark" else "light"}.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 90, it) }
+                    } finally { bmp.recycle() }
+                }
+            }
+        } finally { svc.onDestroy(); Coach.reset() }
+    }
     // Reuse Android's contrast and alpha-composition calculations; no second luminance implementation.
     private val colors = Class.forName("com.android.internal.graphics.ColorUtils")
     private val contrast = colors.getMethod("calculateContrast", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)

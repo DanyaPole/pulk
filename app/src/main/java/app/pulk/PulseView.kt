@@ -252,6 +252,8 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
 
     // ---- suggestions: chips floating above the keyboard, the best nearest to the thumb ----
     private fun chipText(): List<String> {
+        // Bubbles owns a place for its instruction beside the bubble, outside the IME overlay.
+        if (svc.coaching() && Coach.traceField == GestureTraces.BUBBLES) return emptyList()
         val petals = svc.petalLabels(); if (petals.isNotEmpty()) return petals
         val c = svc.cands.take(3)
         if (c.isNotEmpty()) return c
@@ -268,7 +270,7 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         var edge = width - 8 * density  // from the thumb's side
         val maxW = (width - 16 * density - gap * (items.size - 1)) / items.size
         for (s in items) {
-            val w = min(txt.measureText(s) + pad * 2, if (items.size == 1) width - 16 * density else maxW)
+            val w = min(max(48 * density, txt.measureText(s) + pad * 2), if (items.size == 1) width - 16 * density else maxW)
             val r = RectF(edge - w, top, edge, top + h)
             out.add(if (left) RectF(width - r.right, r.top, width - r.left, r.bottom) else r)
             edge -= w + gap
@@ -758,8 +760,14 @@ class PulseView(context: Context, private val svc: PulkService) : View(context) 
         val rects = chipRects()
         val isHint = svc.cands.isEmpty() || svc.petalLabels().isNotEmpty()
         for ((i, r) in rects.withIndex()) {
-            fill.style = Paint.Style.FILL; fill.color = if (pressedStrip == i) col.press else if (i == 0 && !isHint) col.accent else col.fn
-            if (svc.petalLabels().isEmpty() || svc.petalClickable(i)) c.drawRoundRect(r, r.height() / 2, r.height() / 2, fill)
+            // Opaque even for status labels: the host app may have text immediately behind us.
+            fill.style = Paint.Style.FILL; fill.color = if (i == 0 && !isHint) col.accent else if (pressedStrip == i) col.press else col.key
+            c.drawRoundRect(r, r.height() / 2, r.height() / 2, fill)
+            // A two-tone edge remains visible against an unknown light or dark host.
+            stroke.color = col.key; stroke.strokeWidth = 6 * density
+            c.drawRoundRect(r, r.height() / 2, r.height() / 2, stroke)
+            stroke.color = col.fg; stroke.strokeWidth = (if (pressedStrip == i) 4 else 2) * density
+            c.drawRoundRect(r, r.height() / 2, r.height() / 2, stroke)
             txt.color = if (i == 0 && !isHint) col.accentFg else col.fg; txt.isFakeBoldText = i == 0 && !isHint; txt.textSize = 17f * density
             val maxW = r.width() - 20 * density; val w = txt.measureText(items[i]); if (w > maxW) txt.textSize *= maxW / w
             c.drawText(items[i], r.centerX(), r.centerY() - (txt.ascent() + txt.descent()) / 2, txt)

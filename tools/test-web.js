@@ -490,7 +490,10 @@ test('the voice hint announces text only and keeps both actions accessible', () 
 });
 test('left-hand layout puts «Сказать» at the left edge', () => {
   const html = read(path.join(root, 'web/index.html'));
-  ok(/body\.left-hand #chips button\.main[^}]*order:\s*-1[^}]*left:\s*0/.test(html), 'left-hand main action rule');
+  ok(/body\.left-hand #chips\s*\{[^}]*flex-direction:\s*row\s*;/.test(html), 'left-hand starts at the left edge');
+  ok(/#chips button\.main[^}]*order:\s*-1/.test(html), 'main action comes first');
+  ok(/#chips\s*\{[^}]*flex-wrap:\s*wrap-reverse/.test(html), 'chips wrap with the first choice nearest the thumb');
+  ok(/#chips > \*[^}]*background:\s*var\(--panel\)[^}]*border:\s*2px solid var\(--ink\)/.test(html), 'status and action chips have an opaque panel and contrasting outline');
 });
 
 // the stop list: children use Пульк too, so rude, obscene and sexual words are never offered
