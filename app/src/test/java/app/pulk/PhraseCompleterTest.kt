@@ -30,7 +30,9 @@ class PhraseCompleterTest {
     @Test fun sharedTailStopsAtDoubtAndAtFourWords() {
         val c = completer(listOf("мне пожалуйста стакан воды", "мне пожалуйста стакан чая"))
         assertEquals(listOf("стакан"), c.suggest(prefix)!!.tail)
-        assertEquals(listOf("один", "два", "три", "четыре"), completer(listOf("мне пожалуйста один два три четыре пять")).suggest(prefix)!!.tail)
+        assertNull(completer(listOf("мне пожалуйста один два три четыре пять")).suggest(prefix))
+        val longPrefix = prefix + listOf("один", "два", "три")
+        assertEquals(listOf("четыре", "пять", "шесть", "семь"), completer(listOf("мне пожалуйста один два три четыре пять шесть семь восемь")).suggest(longPrefix)!!.tail)
     }
 
     @Test fun phraseEndCountsAsEvidenceAndNeverFallsBackToPairs() {
@@ -41,11 +43,57 @@ class PhraseCompleterTest {
     }
 
     @Test fun profileThresholdAndDeduplication() {
-        val ready = listOf("мне пожалуйста воды")
-        assertNotNull(completer(ready = ready, profile = PhraseCompleter.Profile.WRITE).suggest(prefix))
-        assertNull(completer(ready = ready).suggest(prefix))
-        assertNull(completer(ready = ready + ready).suggest(prefix))
-        assertNotNull(completer(ready, ready).suggest(prefix))
+        val ready = listOf("мне пожалуйста стакан воды")
+        val input = prefix + "стакан"
+        assertNotNull(completer(ready = ready, profile = PhraseCompleter.Profile.WRITE).suggest(input))
+        assertNull(completer(ready = ready).suggest(input))
+        assertNull(completer(ready = ready + ready).suggest(input))
+        assertNotNull(completer(ready, ready).suggest(input))
+    }
+
+    @Test fun readyPrefixNeedsThreeWordsAndAtLeastHalfRoundedUp() {
+        val phrase = "один два три четыре пять шесть семь"
+        val c = completer(ready = listOf(phrase), profile = PhraseCompleter.Profile.WRITE)
+        assertNull(c.suggest(listOf("один", "два", "три")))
+        assertEquals("пять шесть семь", c.suggest(listOf("один", "два", "три", "четыре"))!!.text)
+        val even = completer(ready = listOf("один два три четыре пять шесть"), profile = PhraseCompleter.Profile.WRITE)
+        assertNull(even.suggest(listOf("один", "два")))
+        assertEquals("четыре пять шесть", even.suggest(listOf("один", "два", "три"))!!.text)
+    }
+
+    @Test fun ownPrefixIsSofterButStillNeedsHalfAndTwoWords() {
+        for (profile in PhraseCompleter.Profile.values()) {
+            val phrase = listOf("мне пожалуйста стакан воды")
+            assertEquals("стакан воды", completer(own = phrase, profile = profile).suggest(prefix)!!.text)
+            assertNull(completer(ready = phrase, profile = profile).suggest(prefix))
+            assertNull(completer(own = phrase, profile = profile).suggest(listOf("мне")))
+            assertNull(completer(own = listOf("мне пожалуйста принеси стакан воды"), profile = profile).suggest(prefix))
+            // An own duplicate keeps its own threshold instead of being counted twice.
+            assertEquals("стакан воды", completer(phrase, phrase, profile).suggest(prefix)!!.text)
+        }
+    }
+
+    @Test fun everyMatchingSourceMustPassLengthWithoutFallingBackToChains() {
+        val short = "один два три четыре пять шесть"
+        val long = "$short семь"
+        val input = listOf("один", "два", "три")
+        for (profile in PhraseCompleter.Profile.values()) {
+            assertNull(completer(listOf(short), listOf(long), profile).suggest(input))
+            assertNull(completer(listOf(long), listOf(short), profile).suggest(input))
+        }
+    }
+
+    @Test fun aWeightedMajorityCannotHideABranchOrPhraseEnd() {
+        val endings = listOf("воды", "чая", "сока", "молока", "кефира", "какао", "компота", "морса")
+        for (profile in PhraseCompleter.Profile.values()) {
+            val majority = endings.map { "мне пожалуйста стакан $it" }
+            assertNull(completer(majority + "мне пожалуйста кружку кофе", profile = profile).suggest(prefix))
+            val withEnd = endings.map { "мне пожалуйста принеси стакан воды $it" } + "мне пожалуйста принеси стакан"
+            val input = prefix + listOf("принеси", "стакан")
+            assertEquals("воды", completer(own = withEnd.dropLast(1), profile = profile).suggest(input)!!.text)
+            assertNull(completer(own = withEnd, profile = profile).suggest(input))
+            assertEquals("стакан", completer(own = withEnd, profile = profile).suggest(prefix + "принеси")!!.text)
+        }
     }
 
     @Test fun passwordsDoNotReadInputOrSourcesAndKeepNoPreviousRequest() {
@@ -104,6 +152,7 @@ class PhraseCompleterTest {
     @Test fun unsafeSourcesAndSentenceBoundariesAreNotRewritten() {
         for (phrase in listOf("мне пожалуйста воды. Потом чаю", "мне пожалуйста 2 таблетки", "мне пожалуйста сука"))
             assertNull(completer(listOf(phrase)).suggest(prefix))
+        assertNull(completer(listOf("мне пожалуйста воды. Потом чаю")).suggest(prefix + "воды"))
         val c = completer(listOf("мне пожалуйста воды"))
         assertNull(c.suggest(listOf("мне.", "пожалуйста"))); assertNull(c.suggest(listOf("", "пожалуйста")))
     }
@@ -122,7 +171,10 @@ class PhraseCompleterTest {
             val w = Words(emptyList(), lang).apply { loadNext(File(assets, "next_$lang.txt").readLines()) }
             val c = PhraseCompleter(w, PhraseCompleter.Profile.WRITE)
             assertNull(c.suggest(listOf("zzunknown", "zzunknown")))
-            if (lang == "ru") assertEquals("печатаю", c.suggest(listOf("подожди", "я"))!!.text)
+            if (lang == "ru") {
+                assertNull(c.suggest(listOf("подожди", "я")))
+                assertEquals("туалет", c.suggest(listOf("мне", "нужно", "в"))!!.text)
+            }
         }
     }
 }

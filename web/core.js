@@ -234,6 +234,8 @@
       add(readyPhrases === null ? root.PULK.quick.concat(root.PULK.situations.flatMap(s => s[1]), root.PULK.day.flatMap(d => d[2])) : readyPhrases, 1);
       let matching = Array.from(sources.values()).filter(s => starts(s.tokens, prefix));
       const fromPhrases = matching.length > 0;
+      // Check every match; removing a longer source could hide a different intent.
+      if (matching.some(s => prefix.length < Math.max(s.weight === cfg.OWN_WEIGHT ? cfg.MIN_PREFIX_OWN : cfg.MIN_PREFIX, Math.ceil(s.tokens.length / 2)))) return null;
       if (!fromPhrases) {
         if (!cfg.CHAIN_TAILS) return null;
         const left = next(prefix[prefix.length - 2]).map(normal);
@@ -248,7 +250,9 @@
             const key = s.tokens[context.length] === undefined ? '' : normal(s.tokens[context.length]);
             votes.set(key, (votes.get(key) || 0) + s.weight);
           }
-          const best = Array.from(votes).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
+          // Stop at any branch, including phrase ends, regardless of the majority's weight.
+          if (votes.size !== 1) return result(tail);
+          const best = Array.from(votes)[0];
           if (!best[0]) return result(tail);
           candidate = matching.find(s => s.tokens[context.length] !== undefined && normal(s.tokens[context.length]) === best[0]).tokens[context.length];
           confidence = best[1] / (Array.from(votes.values()).reduce((a, b) => a + b, 0) + cfg.EVIDENCE_FLOOR);

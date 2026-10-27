@@ -34,6 +34,8 @@ class PhraseCompleter(
         add(readyPhrases, 1.0)
         var matching = sources.values.filter { starts(it.tokens, prefix) }
         val fromPhrases = matching.isNotEmpty()
+        // Check ALL matches before voting: discarding a longer source could hide a different intent.
+        if (matching.any { prefix.size < maxOf(if (it.weight == OWN_WEIGHT) MIN_PREFIX_OWN else MIN_PREFIX, (it.tokens.size + 1) / 2) }) return null
         if (!fromPhrases && !CHAIN_TAILS) return null
         // A bigram alone ignores the earlier intent. Require an unambiguous observed left pair.
         if (!fromPhrases && next(prefix[prefix.lastIndex - 1]).map(::normal) != listOf(normal(prefix.last()))) return null
@@ -49,7 +51,9 @@ class PhraseCompleter(
                     val key = s.tokens.getOrNull(context.size)?.let(::normal) ?: "" // end is evidence too
                     votes[key] = (votes[key] ?: 0.0) + s.weight
                 }
-                val best = votes.entries.sortedWith(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key }).first()
+                // A majority cannot authorize a branch; stop at the shared tail, including phrase ends.
+                if (votes.size != 1) return result(tail)
+                val best = votes.entries.single()
                 if (best.key.isEmpty()) return result(tail)
                 candidate = matching.first { it.tokens.getOrNull(context.size)?.let(::normal) == best.key }.tokens[context.size]
                 confidence = best.value / (votes.values.sum() + EVIDENCE_FLOOR)
@@ -91,6 +95,10 @@ class PhraseCompleter(
         // выключено замером 27.10: 0 % точности на новых фразах; включать только при ≥80 % на отложенной выборке
         const val CHAIN_TAILS = false
         const val MIN_CONTEXT = 2
+        // Pilot admission heuristic, not trained on the benchmark: require at least half the source
+        // (rounded up), and three ready-phrase words; explicitly saved own phrases may start at two.
+        const val MIN_PREFIX = 3
+        const val MIN_PREFIX_OWN = 2
         const val MAX_TAIL = 4
         const val OWN_WEIGHT = 2.0
         // Heuristic evidence share, NOT a calibrated probability. One unique corpus/ready continuation

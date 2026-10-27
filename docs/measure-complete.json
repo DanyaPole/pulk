@@ -1,5 +1,5 @@
 {
-  "method": "Real ready-phrase prefixes, >=2 completed words; correct = the entire proposed 1–4 word tail matches the next real words. Replay includes target; heldOut removes every normalized copy of the target from all phrase sources. Personal sources are empty, model bigrams are frozen. Routes are separate: phrasePrefix has a source starting with the whole input; chain has none (also counted when disabled). --with-chain repeats the measurement with fallback enabled in an isolated VM. Unweighted by real usage.",
+  "method": "Real ready-phrase prefixes, >=2 completed words; correct = the entire proposed 1–4 word tail matches the next real words. Replay includes target; heldOut removes every normalized copy of the target from all phrase sources. Personal sources are empty, model bigrams are frozen. Phrase admission requires the fixed MIN_PREFIX (MIN_PREFIX_OWN for own sources), at least half of every matching source rounded up, and unanimous next words. All >=2-word prefixes stay in the denominator, even when admission rejects them. Routes are separate: phrasePrefix has a source starting with the whole input; chain has none (also counted when disabled). --with-chain repeats the measurement with fallback enabled in an isolated VM. Unweighted by real usage.",
   "limitations": "Only Russian full phrases exist in this source set; English model loaded but accuracy not measured. No personal history available. Shared prefixes may have multiple valid meanings: another valid continuation is still a mismatch to this target. No independent natural-language test corpus or phone timing.",
   "corpusRows": {
     "ru": 12901,
@@ -13,25 +13,25 @@
       "profile": "write",
       "chainTails": false,
       "evaluated": 54,
-      "proposed": 43,
-      "correct": 43,
-      "exactRemainder": 39,
+      "proposed": 12,
+      "correct": 12,
+      "exactRemainder": 12,
       "falseExamples": [],
       "false": 0,
-      "coveragePercent": 79.63,
+      "coveragePercent": 22.22,
       "precisionPercent": 100,
       "falseAmongProposalsPercent": 0,
       "falseAmongAllPercent": 0,
-      "meanSuggestMs": 1.444,
+      "meanSuggestMs": 1.306,
       "routes": {
         "phrasePrefix": {
           "evaluated": 54,
-          "proposed": 43,
-          "correct": 43,
-          "exactRemainder": 39,
+          "proposed": 12,
+          "correct": 12,
+          "exactRemainder": 12,
           "falseExamples": [],
           "false": 0,
-          "coveragePercent": 79.63,
+          "coveragePercent": 22.22,
           "precisionPercent": 100,
           "falseAmongProposalsPercent": 0,
           "falseAmongAllPercent": 0
@@ -55,27 +55,27 @@
       "profile": "speak",
       "chainTails": false,
       "evaluated": 54,
-      "proposed": 4,
-      "correct": 4,
+      "proposed": 0,
+      "correct": 0,
       "exactRemainder": 0,
       "falseExamples": [],
       "false": 0,
-      "coveragePercent": 7.41,
-      "precisionPercent": 100,
-      "falseAmongProposalsPercent": 0,
+      "coveragePercent": 0,
+      "precisionPercent": null,
+      "falseAmongProposalsPercent": null,
       "falseAmongAllPercent": 0,
-      "meanSuggestMs": 1.209,
+      "meanSuggestMs": 1.102,
       "routes": {
         "phrasePrefix": {
           "evaluated": 54,
-          "proposed": 4,
-          "correct": 4,
+          "proposed": 0,
+          "correct": 0,
           "exactRemainder": 0,
           "falseExamples": [],
           "false": 0,
-          "coveragePercent": 7.41,
-          "precisionPercent": 100,
-          "falseAmongProposalsPercent": 0,
+          "coveragePercent": 0,
+          "precisionPercent": null,
+          "falseAmongProposalsPercent": null,
           "falseAmongAllPercent": 0
         },
         "chain": {
@@ -97,80 +97,50 @@
       "profile": "write",
       "chainTails": false,
       "evaluated": 54,
-      "proposed": 12,
+      "proposed": 2,
       "correct": 0,
       "exactRemainder": 0,
       "falseExamples": [
-        {
-          "prefix": "я не",
-          "proposed": "могу говорить буду отвечать",
-          "real": "могу говорить но всё понимаю"
-        },
-        {
-          "prefix": "я не могу",
-          "proposed": "говорить буду отвечать текстом",
-          "real": "говорить но всё понимаю"
-        },
         {
           "prefix": "я не могу говорить",
           "proposed": "буду отвечать текстом",
           "real": "но всё понимаю"
         },
         {
-          "prefix": "у меня",
-          "proposed": "аллергия",
-          "real": "болит здесь"
-        },
-        {
-          "prefix": "у меня",
-          "proposed": "болит здесь",
-          "real": "аллергия"
+          "prefix": "я не могу говорить",
+          "proposed": "но всё понимаю",
+          "real": "буду отвечать текстом"
         }
       ],
-      "false": 12,
-      "coveragePercent": 22.22,
+      "false": 2,
+      "coveragePercent": 3.7,
       "precisionPercent": 0,
       "falseAmongProposalsPercent": 100,
-      "falseAmongAllPercent": 22.22,
-      "meanSuggestMs": 1.216,
+      "falseAmongAllPercent": 3.7,
+      "meanSuggestMs": 1.111,
       "routes": {
         "phrasePrefix": {
           "evaluated": 15,
-          "proposed": 12,
+          "proposed": 2,
           "correct": 0,
           "exactRemainder": 0,
           "falseExamples": [
-            {
-              "prefix": "я не",
-              "proposed": "могу говорить буду отвечать",
-              "real": "могу говорить но всё понимаю"
-            },
-            {
-              "prefix": "я не могу",
-              "proposed": "говорить буду отвечать текстом",
-              "real": "говорить но всё понимаю"
-            },
             {
               "prefix": "я не могу говорить",
               "proposed": "буду отвечать текстом",
               "real": "но всё понимаю"
             },
             {
-              "prefix": "у меня",
-              "proposed": "аллергия",
-              "real": "болит здесь"
-            },
-            {
-              "prefix": "у меня",
-              "proposed": "болит здесь",
-              "real": "аллергия"
+              "prefix": "я не могу говорить",
+              "proposed": "но всё понимаю",
+              "real": "буду отвечать текстом"
             }
           ],
-          "false": 12,
-          "coveragePercent": 80,
+          "false": 2,
+          "coveragePercent": 13.33,
           "precisionPercent": 0,
           "falseAmongProposalsPercent": 100,
-          "falseAmongAllPercent": 80
+          "falseAmongAllPercent": 13.33
         },
         "chain": {
           "evaluated": 39,
@@ -200,7 +170,7 @@
       "precisionPercent": null,
       "falseAmongProposalsPercent": null,
       "falseAmongAllPercent": 0,
-      "meanSuggestMs": 1.083,
+      "meanSuggestMs": 1.13,
       "routes": {
         "phrasePrefix": {
           "evaluated": 15,
@@ -233,25 +203,25 @@
       "profile": "write",
       "chainTails": true,
       "evaluated": 54,
-      "proposed": 43,
-      "correct": 43,
-      "exactRemainder": 39,
+      "proposed": 12,
+      "correct": 12,
+      "exactRemainder": 12,
       "falseExamples": [],
       "false": 0,
-      "coveragePercent": 79.63,
+      "coveragePercent": 22.22,
       "precisionPercent": 100,
       "falseAmongProposalsPercent": 0,
       "falseAmongAllPercent": 0,
-      "meanSuggestMs": 1.14,
+      "meanSuggestMs": 1.098,
       "routes": {
         "phrasePrefix": {
           "evaluated": 54,
-          "proposed": 43,
-          "correct": 43,
-          "exactRemainder": 39,
+          "proposed": 12,
+          "correct": 12,
+          "exactRemainder": 12,
           "falseExamples": [],
           "false": 0,
-          "coveragePercent": 79.63,
+          "coveragePercent": 22.22,
           "precisionPercent": 100,
           "falseAmongProposalsPercent": 0,
           "falseAmongAllPercent": 0
@@ -275,27 +245,27 @@
       "profile": "speak",
       "chainTails": true,
       "evaluated": 54,
-      "proposed": 4,
-      "correct": 4,
+      "proposed": 0,
+      "correct": 0,
       "exactRemainder": 0,
       "falseExamples": [],
       "false": 0,
-      "coveragePercent": 7.41,
-      "precisionPercent": 100,
-      "falseAmongProposalsPercent": 0,
+      "coveragePercent": 0,
+      "precisionPercent": null,
+      "falseAmongProposalsPercent": null,
       "falseAmongAllPercent": 0,
-      "meanSuggestMs": 1.155,
+      "meanSuggestMs": 1.085,
       "routes": {
         "phrasePrefix": {
           "evaluated": 54,
-          "proposed": 4,
-          "correct": 4,
+          "proposed": 0,
+          "correct": 0,
           "exactRemainder": 0,
           "falseExamples": [],
           "false": 0,
-          "coveragePercent": 7.41,
-          "precisionPercent": 100,
-          "falseAmongProposalsPercent": 0,
+          "coveragePercent": 0,
+          "precisionPercent": null,
+          "falseAmongProposalsPercent": null,
           "falseAmongAllPercent": 0
         },
         "chain": {
@@ -317,80 +287,50 @@
       "profile": "write",
       "chainTails": true,
       "evaluated": 54,
-      "proposed": 12,
+      "proposed": 2,
       "correct": 0,
       "exactRemainder": 0,
       "falseExamples": [
-        {
-          "prefix": "я не",
-          "proposed": "могу говорить буду отвечать",
-          "real": "могу говорить но всё понимаю"
-        },
-        {
-          "prefix": "я не могу",
-          "proposed": "говорить буду отвечать текстом",
-          "real": "говорить но всё понимаю"
-        },
         {
           "prefix": "я не могу говорить",
           "proposed": "буду отвечать текстом",
           "real": "но всё понимаю"
         },
         {
-          "prefix": "у меня",
-          "proposed": "аллергия",
-          "real": "болит здесь"
-        },
-        {
-          "prefix": "у меня",
-          "proposed": "болит здесь",
-          "real": "аллергия"
+          "prefix": "я не могу говорить",
+          "proposed": "но всё понимаю",
+          "real": "буду отвечать текстом"
         }
       ],
-      "false": 12,
-      "coveragePercent": 22.22,
+      "false": 2,
+      "coveragePercent": 3.7,
       "precisionPercent": 0,
       "falseAmongProposalsPercent": 100,
-      "falseAmongAllPercent": 22.22,
-      "meanSuggestMs": 1.099,
+      "falseAmongAllPercent": 3.7,
+      "meanSuggestMs": 1.073,
       "routes": {
         "phrasePrefix": {
           "evaluated": 15,
-          "proposed": 12,
+          "proposed": 2,
           "correct": 0,
           "exactRemainder": 0,
           "falseExamples": [
-            {
-              "prefix": "я не",
-              "proposed": "могу говорить буду отвечать",
-              "real": "могу говорить но всё понимаю"
-            },
-            {
-              "prefix": "я не могу",
-              "proposed": "говорить буду отвечать текстом",
-              "real": "говорить но всё понимаю"
-            },
             {
               "prefix": "я не могу говорить",
               "proposed": "буду отвечать текстом",
               "real": "но всё понимаю"
             },
             {
-              "prefix": "у меня",
-              "proposed": "аллергия",
-              "real": "болит здесь"
-            },
-            {
-              "prefix": "у меня",
-              "proposed": "болит здесь",
-              "real": "аллергия"
+              "prefix": "я не могу говорить",
+              "proposed": "но всё понимаю",
+              "real": "буду отвечать текстом"
             }
           ],
-          "false": 12,
-          "coveragePercent": 80,
+          "false": 2,
+          "coveragePercent": 13.33,
           "precisionPercent": 0,
           "falseAmongProposalsPercent": 100,
-          "falseAmongAllPercent": 80
+          "falseAmongAllPercent": 13.33
         },
         "chain": {
           "evaluated": 39,
@@ -420,7 +360,7 @@
       "precisionPercent": null,
       "falseAmongProposalsPercent": null,
       "falseAmongAllPercent": 0,
-      "meanSuggestMs": 1.118,
+      "meanSuggestMs": 1.194,
       "routes": {
         "phrasePrefix": {
           "evaluated": 15,

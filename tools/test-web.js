@@ -39,7 +39,9 @@ test('completion: little or ambiguous data stays quiet', () => {
 });
 test('completion: shared tail stops at doubt and four words', () => {
   eq(completer(['мне пожалуйста стакан воды', 'мне пожалуйста стакан чая']).suggest(completePrefix).tail, ['стакан']);
-  eq(completer(['мне пожалуйста один два три четыре пять']).suggest(completePrefix).tail, ['один', 'два', 'три', 'четыре']);
+  eq(completer(['мне пожалуйста один два три четыре пять']).suggest(completePrefix), null);
+  const input = completePrefix.concat('один', 'два', 'три');
+  eq(completer(['мне пожалуйста один два три четыре пять шесть семь восемь']).suggest(input).tail, ['четыре', 'пять', 'шесть', 'семь']);
 });
 test('completion: phrase end is evidence and never falls back to pairs', () => {
   eq(completer(['мне пожалуйста', 'мне пожалуйста воды']).suggest(completePrefix), null);
@@ -47,9 +49,46 @@ test('completion: phrase end is evidence and never falls back to pairs', () => {
   eq(c.suggest(completePrefix).tail, ['воды']); eq(c.suggest(completePrefix.concat('воды')), null);
 });
 test('completion: profile threshold and deduplication', () => {
-  const ready = ['мне пожалуйста воды'];
-  ok(completer([], ready, 'write').suggest(completePrefix)); eq(completer([], ready).suggest(completePrefix), null);
-  eq(completer([], ready.concat(ready)).suggest(completePrefix), null); ok(completer(ready, ready).suggest(completePrefix));
+  const ready = ['мне пожалуйста стакан воды'], input = completePrefix.concat('стакан');
+  ok(completer([], ready, 'write').suggest(input)); eq(completer([], ready).suggest(input), null);
+  eq(completer([], ready.concat(ready)).suggest(input), null); ok(completer(ready, ready).suggest(input));
+});
+test('completion: ready prefix needs three words and half rounded up', () => {
+  const c = completer([], ['один два три четыре пять шесть семь'], 'write');
+  eq(c.suggest(['один', 'два', 'три']), null);
+  eq(c.suggest(['один', 'два', 'три', 'четыре']).text, 'пять шесть семь');
+  const even = completer([], ['один два три четыре пять шесть'], 'write');
+  eq(even.suggest(['один', 'два']), null);
+  eq(even.suggest(['один', 'два', 'три']).text, 'четыре пять шесть');
+});
+test('completion: own prefix is softer but still needs half and two words', () => {
+  for (const profile of ['write', 'speak']) {
+    const phrase = ['мне пожалуйста стакан воды'];
+    eq(completer(phrase, [], profile).suggest(completePrefix).text, 'стакан воды');
+    eq(completer([], phrase, profile).suggest(completePrefix), null);
+    eq(completer(phrase, [], profile).suggest(['мне']), null);
+    eq(completer(['мне пожалуйста принеси стакан воды'], [], profile).suggest(completePrefix), null);
+    eq(completer(phrase, phrase, profile).suggest(completePrefix).text, 'стакан воды');
+  }
+});
+test('completion: every matching source must pass length without chain fallback', () => {
+  const short = 'один два три четыре пять шесть', long = short + ' семь', input = ['один', 'два', 'три'];
+  for (const profile of ['write', 'speak']) {
+    eq(completer([short], [long], profile).suggest(input), null);
+    eq(completer([long], [short], profile).suggest(input), null);
+  }
+});
+test('completion: weighted majority cannot hide a branch or phrase end', () => {
+  const endings = ['воды', 'чая', 'сока', 'молока', 'кефира', 'какао', 'компота', 'морса'];
+  for (const profile of ['write', 'speak']) {
+    const majority = endings.map(w => 'мне пожалуйста стакан ' + w);
+    eq(completer(majority.concat('мне пожалуйста кружку кофе'), [], profile).suggest(completePrefix), null);
+    const withEnd = endings.map(w => 'мне пожалуйста принеси стакан воды ' + w).concat('мне пожалуйста принеси стакан');
+    const input = completePrefix.concat('принеси', 'стакан');
+    eq(completer(withEnd.slice(0, -1), [], profile).suggest(input).text, 'воды');
+    eq(completer(withEnd, [], profile).suggest(input), null);
+    eq(completer(withEnd, [], profile).suggest(completePrefix.concat('принеси')).text, 'стакан');
+  }
 });
 test('completion: passwords inspect neither words nor sources nor input', () => {
   const secret = new Proxy({}, { get() { throw Error('password inspected'); } });
@@ -91,6 +130,7 @@ test('completion: cycles and pair punctuation cannot extend known phrases', () =
 test('completion: unsafe sources and sentence boundaries are not rewritten', () => {
   for (const phrase of ['мне пожалуйста воды. Потом чаю', 'мне пожалуйста 2 таблетки', 'мне пожалуйста сука'])
     eq(completer([phrase]).suggest(completePrefix), null);
+  eq(completer(['мне пожалуйста воды. Потом чаю']).suggest(completePrefix.concat('воды')), null);
   const c = completer(['мне пожалуйста воды']);
   eq(c.suggest(['мне.', 'пожалуйста']), null); eq(c.suggest(['', 'пожалуйста']), null);
 });
@@ -105,7 +145,10 @@ test('completion: default ready phrases and real corpora', () => {
     const w = new P.Words([], lang === 'ru' ? D.RU : D.EN, bad);
     w.loadNext(read(path.join(root, 'app/src/main/assets', 'next_' + lang + '.txt')).split('\n'));
     const c = new P.PhraseCompleter(w, 'write'); eq(c.suggest(['zzunknown', 'zzunknown']), null);
-    if (lang === 'ru') eq(c.suggest(['подожди', 'я']).text, 'печатаю');
+    if (lang === 'ru') {
+      eq(c.suggest(['подожди', 'я']), null);
+      eq(c.suggest(['мне', 'нужно', 'в']).text, 'туалет');
+    }
   }
 });
 test('completion: shared thresholds and question markers come from Kotlin', () => {

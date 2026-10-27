@@ -74,7 +74,7 @@ try {
   }
 } finally { D.completion.CHAIN_TAILS = shippedChainTails; }
 const result = {
-  method: 'Real ready-phrase prefixes, >=2 completed words; correct = the entire proposed 1–4 word tail matches the next real words. Replay includes target; heldOut removes every normalized copy of the target from all phrase sources. Personal sources are empty, model bigrams are frozen. Routes are separate: phrasePrefix has a source starting with the whole input; chain has none (also counted when disabled). --with-chain repeats the measurement with fallback enabled in an isolated VM. Unweighted by real usage.',
+  method: 'Real ready-phrase prefixes, >=2 completed words; correct = the entire proposed 1–4 word tail matches the next real words. Replay includes target; heldOut removes every normalized copy of the target from all phrase sources. Personal sources are empty, model bigrams are frozen. Phrase admission requires the fixed MIN_PREFIX (MIN_PREFIX_OWN for own sources), at least half of every matching source rounded up, and unanimous next words. All >=2-word prefixes stay in the denominator, even when admission rejects them. Routes are separate: phrasePrefix has a source starting with the whole input; chain has none (also counted when disabled). --with-chain repeats the measurement with fallback enabled in an isolated VM. Unweighted by real usage.',
   limitations: 'Only Russian full phrases exist in this source set; English model loaded but accuracy not measured. No personal history available. Shared prefixes may have multiple valid meanings: another valid continuation is still a mismatch to this target. No independent natural-language test corpus or phone timing.',
   corpusRows, uniqueReadyPhrases: phrases.length, shippedChainTails, results
 };
