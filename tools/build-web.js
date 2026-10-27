@@ -27,7 +27,7 @@ const pond = [...kt('Pond.kt').matchAll(/Milestone\((\d+), "([^"]+)"\)/g)].map(m
 const jabWords = strings(kt('BubbleWords.kt').match(/val WORDS = listOf\(([\s\S]*?)\)/)[1]);
 const replacement = Object.fromEntries([...kt('ReplacementBank.kt').matchAll(/const val (\w+) = ([\d.]+)/g)].map(m => [m[1], Number(m[2])]));
 const completionSrc = kt('PhraseCompleter.kt');
-const completion = Object.fromEntries([...completionSrc.matchAll(/const val (\w+) = ([\d.]+)/g)].map(m => [m[1], Number(m[2])]));
+const completion = Object.fromEntries([...completionSrc.matchAll(/const val (\w+) = (true|false|[\d.]+)/g)].map(m => [m[1], JSON.parse(m[2])]));
 completion.QUESTION_MARKERS = strings(completionSrc.match(/val QUESTION_MARKERS = setOf\(([\s\S]*?)\)/)[1]);
 const data = { RU: table('RU'), EN: table('EN'), SYM: table('SYM'), quick, situations, day, themes: all.filter(t => t.title !== 'Игра'), play: all.find(t => t.title === 'Игра'), pond, jabWords, replacement, completion };
 const web = path.join(src, 'web');

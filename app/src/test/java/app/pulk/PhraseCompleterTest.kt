@@ -69,30 +69,36 @@ class PhraseCompleterTest {
         assertEquals(emptyList<String>(), c.punctuationHints(listOf("как", "дела?")))
     }
 
-    @Test fun uniquePairsChainButUnknownLeftContextAndStartFallbackDoNot() {
+    @Test fun newPrefixesStayQuietInBothProfilesEvenWithUniquePairs() {
         val w = words(listOf("^\tснова", "мы\tпочти", "почти\tуже", "уже\tдома", "дома\tвечером ночью"))
-        val c = PhraseCompleter(w, PhraseCompleter.Profile.WRITE, readyPhrases = emptyList())
-        assertEquals(listOf("уже", "дома"), c.suggest(listOf("мы", "почти"))!!.tail)
-        assertNull(c.suggest(listOf("не", "почти")))
-        assertNull(c.suggest(listOf("совсем", "неизвестно")))
-        assertNull(PhraseCompleter(w, readyPhrases = emptyList()).suggest(listOf("мы", "почти")))
+        for (profile in PhraseCompleter.Profile.values()) {
+            // Even an internal match in a known phrase is not its beginning.
+            val c = PhraseCompleter(w, profile, myPhrases = { listOf("вот мы почти уже дома") }, readyPhrases = listOf("сегодня мы почти уже дома"))
+            for (input in listOf(listOf("мы", "почти"), listOf("не", "почти"), listOf("совсем", "неизвестно")))
+                assertNull(c.suggest(input))
+        }
     }
 
-    @Test fun learnedPairsNeedRepeatEvidenceAndSpeakingStopsSooner() {
+    @Test fun repeatedLearnedPairsDoNotAuthorizeANewPhrase() {
         val w = words(listOf("мы\tпочти"))
         w.learnPair("почти", "дома")
-        val c = PhraseCompleter(w, readyPhrases = emptyList())
-        assertNull(c.suggest(listOf("мы", "почти")))
-        w.learnPair("почти", "дома")
-        assertEquals(listOf("дома"), c.suggest(listOf("мы", "почти"))!!.tail)
+        for (count in 1..3) {
+            for (profile in PhraseCompleter.Profile.values())
+                assertNull(PhraseCompleter(w, profile, readyPhrases = emptyList()).suggest(listOf("мы", "почти")))
+            w.learnPair("почти", "дома")
+        }
     }
 
-    @Test fun cyclesAndPairPunctuationStop() {
+    @Test fun cyclesAndPairPunctuationCannotExtendKnownPhrases() {
         val w = words(listOf("мы\tпочти", "почти\tдома", "дома\tпочти"))
-        val c = PhraseCompleter(w, PhraseCompleter.Profile.WRITE, readyPhrases = emptyList())
-        assertEquals(listOf("дома", "почти"), c.suggest(listOf("мы", "почти"))!!.tail)
-        w.loadNext(listOf("дома\tготово!"))
-        assertEquals(listOf("дома"), c.suggest(listOf("мы", "почти"))!!.tail)
+        for (profile in PhraseCompleter.Profile.values()) {
+            val c = PhraseCompleter(w, profile, myPhrases = { listOf("мы почти дома!") }, readyPhrases = emptyList())
+            assertEquals(listOf("дома"), c.suggest(listOf("мы", "почти"))!!.tail)
+            assertNull(c.suggest(listOf("мы", "почти", "дома")))
+            assertNull(PhraseCompleter(w, profile, readyPhrases = emptyList()).suggest(listOf("мы", "почти")))
+            w.loadNext(listOf("дома\tготово!"))
+            assertEquals(listOf("дома"), c.suggest(listOf("мы", "почти"))!!.tail)
+        }
     }
 
     @Test fun unsafeSourcesAndSentenceBoundariesAreNotRewritten() {

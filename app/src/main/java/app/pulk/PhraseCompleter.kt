@@ -34,6 +34,7 @@ class PhraseCompleter(
         add(readyPhrases, 1.0)
         var matching = sources.values.filter { starts(it.tokens, prefix) }
         val fromPhrases = matching.isNotEmpty()
+        if (!fromPhrases && !CHAIN_TAILS) return null
         // A bigram alone ignores the earlier intent. Require an unambiguous observed left pair.
         if (!fromPhrases && next(prefix[prefix.lastIndex - 1]).map(::normal) != listOf(normal(prefix.last()))) return null
         val context = prefix.toMutableList()
@@ -87,6 +88,8 @@ class PhraseCompleter(
     }
 
     companion object {
+        // выключено замером 27.10: 0 % точности на новых фразах; включать только при ≥80 % на отложенной выборке
+        const val CHAIN_TAILS = false
         const val MIN_CONTEXT = 2
         const val MAX_TAIL = 4
         const val OWN_WEIGHT = 2.0

@@ -235,6 +235,7 @@
       let matching = Array.from(sources.values()).filter(s => starts(s.tokens, prefix));
       const fromPhrases = matching.length > 0;
       if (!fromPhrases) {
+        if (!cfg.CHAIN_TAILS) return null;
         const left = next(prefix[prefix.length - 2]).map(normal);
         if (left.length !== 1 || left[0] !== normal(prefix[prefix.length - 1])) return null;
       }

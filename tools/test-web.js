@@ -65,22 +65,28 @@ test('completion: punctuation is separate and markers are whole words', () => {
   eq(c.punctuationHints(['whoever', 'dish']), ['.', '?', '!']); eq(c.punctuationHints([]), []);
   eq(c.punctuationHints(['как', 'дела?']), []);
 });
-test('completion: unique pairs chain, unknown context and start fallback do not', () => {
+test('completion: new prefixes stay quiet in both profiles even with unique pairs', () => {
   const w = completeWords(['^\tснова', 'мы\tпочти', 'почти\tуже', 'уже\tдома', 'дома\tвечером ночью']);
-  const c = new P.PhraseCompleter(w, 'write', true, () => [], []);
-  eq(c.suggest(['мы', 'почти']).tail, ['уже', 'дома']); eq(c.suggest(['не', 'почти']), null);
-  eq(c.suggest(['совсем', 'неизвестно']), null); eq(new P.PhraseCompleter(w, 'speak', true, () => [], []).suggest(['мы', 'почти']), null);
+  for (const profile of ['write', 'speak']) {
+    const c = new P.PhraseCompleter(w, profile, true, () => ['вот мы почти уже дома'], ['сегодня мы почти уже дома']);
+    for (const input of [['мы', 'почти'], ['не', 'почти'], ['совсем', 'неизвестно']]) eq(c.suggest(input), null);
+  }
 });
-test('completion: learned pairs need repeats in speak', () => {
+test('completion: repeated learned pairs do not authorize a new phrase', () => {
   const w = completeWords(['мы\tпочти']); w.pairs['почти'] = { 'дома': 1 };
-  const c = new P.PhraseCompleter(w, 'speak', true, () => [], []); eq(c.suggest(['мы', 'почти']), null);
-  w.pairs['почти']['дома'] = 2; eq(c.suggest(['мы', 'почти']).tail, ['дома']);
+  for (let count = 1; count <= 3; count++) {
+    w.pairs['почти']['дома'] = count;
+    for (const profile of ['write', 'speak']) eq(new P.PhraseCompleter(w, profile, true, () => [], []).suggest(['мы', 'почти']), null);
+  }
 });
-test('completion: cycles and pair punctuation stop', () => {
+test('completion: cycles and pair punctuation cannot extend known phrases', () => {
   const w = completeWords(['мы\tпочти', 'почти\tдома', 'дома\tпочти']);
-  const c = new P.PhraseCompleter(w, 'write', true, () => [], []);
-  eq(c.suggest(['мы', 'почти']).tail, ['дома', 'почти']);
-  w.loadNext(['дома\tготово!']); eq(c.suggest(['мы', 'почти']).tail, ['дома']);
+  for (const profile of ['write', 'speak']) {
+    const c = new P.PhraseCompleter(w, profile, true, () => ['мы почти дома!'], []);
+    eq(c.suggest(['мы', 'почти']).tail, ['дома']); eq(c.suggest(['мы', 'почти', 'дома']), null);
+    eq(new P.PhraseCompleter(w, profile, true, () => [], []).suggest(['мы', 'почти']), null);
+    w.loadNext(['дома\tготово!']); eq(c.suggest(['мы', 'почти']).tail, ['дома']);
+  }
 });
 test('completion: unsafe sources and sentence boundaries are not rewritten', () => {
   for (const phrase of ['мне пожалуйста воды. Потом чаю', 'мне пожалуйста 2 таблетки', 'мне пожалуйста сука'])
@@ -104,9 +110,37 @@ test('completion: default ready phrases and real corpora', () => {
 });
 test('completion: shared thresholds and question markers come from Kotlin', () => {
   const src = read(path.join(root, 'app/src/main/java/app/pulk/PhraseCompleter.kt'));
-  for (const m of src.matchAll(/const val (\w+) = ([\d.]+)/g)) eq(D.completion[m[1]], Number(m[2]), m[1]);
+  for (const m of src.matchAll(/const val (\w+) = (true|false|[\d.]+)/g)) eq(D.completion[m[1]], JSON.parse(m[2]), m[1]);
   const markers = [...src.match(/val QUESTION_MARKERS = setOf\(([\s\S]*?)\)/)[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
   eq(D.completion.QUESTION_MARKERS, markers);
+});
+test('completion: held-out benchmark separates phrase prefixes and diagnostic chains', () => {
+  const output = require('child_process').execFileSync(process.execPath, [path.join(root, 'tools/measure-complete.js'), '--with-chain'], { encoding: 'utf8' });
+  const report = JSON.parse(output);
+  eq(report.shippedChainTails, false); eq(report.results.length, 8);
+  for (const row of report.results) {
+    const routes = Object.values(row.routes);
+    for (const key of ['evaluated', 'proposed', 'correct', 'false', 'exactRemainder'])
+      eq(row[key], routes.reduce((sum, r) => sum + r[key], 0), key);
+    if (!row.chainTails) eq(row.routes.chain.proposed, 0);
+    const other = report.results.find(r => r.mode === row.mode && r.profile === row.profile && r.chainTails !== row.chainTails);
+    eq(row.routes.phrasePrefix, other.routes.phrasePrefix);
+    if (row.mode === 'heldOut') ok(row.routes.chain.evaluated > 0, 'excluded targets must leave prefixes without a phrase source');
+    else eq(row.routes.chain.evaluated, 0);
+  }
+});
+test('completion: diagnostic chain switch still enforces context, cycles and punctuation', () => {
+  const shipped = D.completion.CHAIN_TAILS;
+  try {
+    D.completion.CHAIN_TAILS = true;
+    const w = completeWords(['мы\tпочти', 'почти\tдома', 'дома\tпочти']);
+    const c = new P.PhraseCompleter(w, 'write', true, () => [], []);
+    eq(c.suggest(['мы', 'почти']).tail, ['дома', 'почти']); eq(c.suggest(['не', 'почти']), null);
+    w.loadNext(['дома\tготово!']); eq(c.suggest(['мы', 'почти']).tail, ['дома']);
+    const speak = new P.PhraseCompleter(w, 'speak', true, () => [], []);
+    w.pairs['почти'] = { 'дома': 1 }; eq(speak.suggest(['мы', 'почти']), null);
+    w.pairs['почти']['дома'] = 2; eq(speak.suggest(['мы', 'почти']).tail, ['дома']);
+  } finally { D.completion.CHAIN_TAILS = shipped; }
 });
 
 // Same scenarios as ReplacementBankTest.kt; indices refer to phrase words, not queue positions.
