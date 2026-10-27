@@ -1,0 +1,97 @@
+{
+  "method": "Real ready-phrase prefixes, >=2 completed words; correct = the entire proposed 1–4 word tail matches the next real words. Replay includes target; heldOut removes it. Unweighted by real usage. Ranked bigrams are model data, not invented reference sentences.",
+  "limitations": "Only Russian full phrases exist in this source set; English model loaded but accuracy not measured. No personal history available. Shared prefixes may have multiple valid meanings: another valid continuation is still a mismatch to this target. No independent natural-language test corpus or phone timing.",
+  "corpusRows": {
+    "ru": 12901,
+    "en": 12629
+  },
+  "uniqueReadyPhrases": 77,
+  "results": [
+    {
+      "mode": "replay",
+      "profile": "write",
+      "evaluated": 54,
+      "proposed": 43,
+      "correct": 43,
+      "false": 0,
+      "coveragePercent": 79.63,
+      "precisionPercent": 100,
+      "falseAmongProposalsPercent": 0,
+      "falseAmongAllPercent": 0,
+      "exactRemainder": 39,
+      "meanSuggestMs": 1.438,
+      "falseExamples": []
+    },
+    {
+      "mode": "replay",
+      "profile": "speak",
+      "evaluated": 54,
+      "proposed": 4,
+      "correct": 4,
+      "false": 0,
+      "coveragePercent": 7.41,
+      "precisionPercent": 100,
+      "falseAmongProposalsPercent": 0,
+      "falseAmongAllPercent": 0,
+      "exactRemainder": 0,
+      "meanSuggestMs": 1.158,
+      "falseExamples": []
+    },
+    {
+      "mode": "heldOut",
+      "profile": "write",
+      "evaluated": 54,
+      "proposed": 12,
+      "correct": 0,
+      "false": 12,
+      "coveragePercent": 22.22,
+      "precisionPercent": 0,
+      "falseAmongProposalsPercent": 100,
+      "falseAmongAllPercent": 22.22,
+      "exactRemainder": 0,
+      "meanSuggestMs": 1.14,
+      "falseExamples": [
+        {
+          "prefix": "я не",
+          "proposed": "могу говорить буду отвечать",
+          "real": "могу говорить но всё понимаю"
+        },
+        {
+          "prefix": "я не могу",
+          "proposed": "говорить буду отвечать текстом",
+          "real": "говорить но всё понимаю"
+        },
+        {
+          "prefix": "я не могу говорить",
+          "proposed": "буду отвечать текстом",
+          "real": "но всё понимаю"
+        },
+        {
+          "prefix": "у меня",
+          "proposed": "аллергия",
+          "real": "болит здесь"
+        },
+        {
+          "prefix": "у меня",
+          "proposed": "болит здесь",
+          "real": "аллергия"
+        }
+      ]
+    },
+    {
+      "mode": "heldOut",
+      "profile": "speak",
+      "evaluated": 54,
+      "proposed": 0,
+      "correct": 0,
+      "false": 0,
+      "coveragePercent": 0,
+      "precisionPercent": null,
+      "falseAmongProposalsPercent": null,
+      "falseAmongAllPercent": 0,
+      "exactRemainder": 0,
+      "meanSuggestMs": 1.144,
+      "falseExamples": []
+    }
+  ]
+}

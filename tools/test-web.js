@@ -21,6 +21,94 @@ function test(name, fn) {
 function eq(a, b, what) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((what ? what + ': ' : '') + 'got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b)); }
 function ok(c, what) { if (!c) throw new Error(what || 'not true'); }
 
+// Same scenarios as PhraseCompleterTest.kt: proposals never change input or apply punctuation.
+const completePrefix = ['мне', 'пожалуйста'];
+function completeWords(lines = []) { const w = new P.Words([], D.RU, bad); w.loadNext(lines); return w; }
+function completer(own = [], ready = [], profile = 'speak') { return new P.PhraseCompleter(completeWords(), profile, true, () => own, ready); }
+test('completion: own phrase is a proposal without a sign', () => {
+  const input = ['Мне,', 'пожалуйста,'], c = completer(['Мне, пожалуйста, стакан воды?!…']);
+  const result = c.suggest(input); eq(result, { tail: ['стакан', 'воды'], text: 'стакан воды' });
+  eq(input, ['Мне,', 'пожалуйста,']); eq(c.suggest(input), result);
+  result.tail.push('changed'); eq(c.suggest(input).tail, ['стакан', 'воды']);
+});
+test('completion: little or ambiguous data stays quiet', () => {
+  const c = completer(['мне пожалуйста воды', 'мне пожалуйста чаю']);
+  eq(c.suggest(completePrefix), null); eq(c.suggest(['мне']), null); eq(c.suggest([]), null);
+  eq(completer().suggest(completePrefix), null);
+  eq(completer(['мне пожалуйста воды']).suggest(['пожалуйста', 'воды']), null);
+});
+test('completion: shared tail stops at doubt and four words', () => {
+  eq(completer(['мне пожалуйста стакан воды', 'мне пожалуйста стакан чая']).suggest(completePrefix).tail, ['стакан']);
+  eq(completer(['мне пожалуйста один два три четыре пять']).suggest(completePrefix).tail, ['один', 'два', 'три', 'четыре']);
+});
+test('completion: phrase end is evidence and never falls back to pairs', () => {
+  eq(completer(['мне пожалуйста', 'мне пожалуйста воды']).suggest(completePrefix), null);
+  const c = new P.PhraseCompleter(completeWords(['пожалуйста\tводы', 'воды\tещё']), 'speak', true, () => ['мне пожалуйста воды'], []);
+  eq(c.suggest(completePrefix).tail, ['воды']); eq(c.suggest(completePrefix.concat('воды')), null);
+});
+test('completion: profile threshold and deduplication', () => {
+  const ready = ['мне пожалуйста воды'];
+  ok(completer([], ready, 'write').suggest(completePrefix)); eq(completer([], ready).suggest(completePrefix), null);
+  eq(completer([], ready.concat(ready)).suggest(completePrefix), null); ok(completer(ready, ready).suggest(completePrefix));
+});
+test('completion: passwords inspect neither words nor sources nor input', () => {
+  const secret = new Proxy({}, { get() { throw Error('password inspected'); } });
+  const c = new P.PhraseCompleter(secret, 'speak', false, () => { throw Error('private source'); });
+  eq(c.suggest(secret), null); eq(c.punctuationHints(secret), []);
+  const active = completer(['мне пожалуйста воды']); ok(active.suggest(completePrefix));
+  active.enabled = false; eq(active.suggest(completePrefix), null); eq(active.punctuationHints(completePrefix), []);
+  active.enabled = true; eq(active.suggest(['другой', 'текст']), null);
+});
+test('completion: punctuation is separate and markers are whole words', () => {
+  const c = completer();
+  for (const marker of D.completion.QUESTION_MARKERS) eq(c.punctuationHints([marker.toUpperCase(), 'ты'])[0], '?');
+  eq(c.punctuationHints(['whoever', 'dish']), ['.', '?', '!']); eq(c.punctuationHints([]), []);
+  eq(c.punctuationHints(['как', 'дела?']), []);
+});
+test('completion: unique pairs chain, unknown context and start fallback do not', () => {
+  const w = completeWords(['^\tснова', 'мы\tпочти', 'почти\tуже', 'уже\tдома', 'дома\tвечером ночью']);
+  const c = new P.PhraseCompleter(w, 'write', true, () => [], []);
+  eq(c.suggest(['мы', 'почти']).tail, ['уже', 'дома']); eq(c.suggest(['не', 'почти']), null);
+  eq(c.suggest(['совсем', 'неизвестно']), null); eq(new P.PhraseCompleter(w, 'speak', true, () => [], []).suggest(['мы', 'почти']), null);
+});
+test('completion: learned pairs need repeats in speak', () => {
+  const w = completeWords(['мы\tпочти']); w.pairs['почти'] = { 'дома': 1 };
+  const c = new P.PhraseCompleter(w, 'speak', true, () => [], []); eq(c.suggest(['мы', 'почти']), null);
+  w.pairs['почти']['дома'] = 2; eq(c.suggest(['мы', 'почти']).tail, ['дома']);
+});
+test('completion: cycles and pair punctuation stop', () => {
+  const w = completeWords(['мы\tпочти', 'почти\tдома', 'дома\tпочти']);
+  const c = new P.PhraseCompleter(w, 'write', true, () => [], []);
+  eq(c.suggest(['мы', 'почти']).tail, ['дома', 'почти']);
+  w.loadNext(['дома\tготово!']); eq(c.suggest(['мы', 'почти']).tail, ['дома']);
+});
+test('completion: unsafe sources and sentence boundaries are not rewritten', () => {
+  for (const phrase of ['мне пожалуйста воды. Потом чаю', 'мне пожалуйста 2 таблетки', 'мне пожалуйста сука'])
+    eq(completer([phrase]).suggest(completePrefix), null);
+  const c = completer(['мне пожалуйста воды']);
+  eq(c.suggest(['мне.', 'пожалуйста']), null); eq(c.suggest(['', 'пожалуйста']), null);
+});
+test('completion: fresh own provider, yo and English', () => {
+  let own = ['у ёлки тихо', 'could you help me?'];
+  const c = new P.PhraseCompleter(completeWords(), 'speak', true, () => own, []);
+  eq(c.suggest(['У', 'елки']).text, 'тихо'); eq(c.suggest(['Could', 'you']).text, 'help me');
+  own = []; eq(c.suggest(['could', 'you']), null);
+});
+test('completion: default ready phrases and real corpora', () => {
+  for (const lang of ['ru', 'en']) {
+    const w = new P.Words([], lang === 'ru' ? D.RU : D.EN, bad);
+    w.loadNext(read(path.join(root, 'app/src/main/assets', 'next_' + lang + '.txt')).split('\n'));
+    const c = new P.PhraseCompleter(w, 'write'); eq(c.suggest(['zzunknown', 'zzunknown']), null);
+    if (lang === 'ru') eq(c.suggest(['подожди', 'я']).text, 'печатаю');
+  }
+});
+test('completion: shared thresholds and question markers come from Kotlin', () => {
+  const src = read(path.join(root, 'app/src/main/java/app/pulk/PhraseCompleter.kt'));
+  for (const m of src.matchAll(/const val (\w+) = ([\d.]+)/g)) eq(D.completion[m[1]], Number(m[2]), m[1]);
+  const markers = [...src.match(/val QUESTION_MARKERS = setOf\(([\s\S]*?)\)/)[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  eq(D.completion.QUESTION_MARKERS, markers);
+});
+
 // Same scenarios as ReplacementBankTest.kt; indices refer to phrase words, not queue positions.
 const bankKey = new P.PetalIndex([], D.RU).key('дом');
 function bank(lines = ['том\tстоит'], profile = 'speak', enabled = true) {

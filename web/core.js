@@ -202,6 +202,80 @@
     };
   }
 
+  // As PhraseCompleter.kt: completed words from this sentence, no side effects or retained input.
+  // Supply myPhrases = () => mine().concat(history()); read afresh, never in password mode.
+  function PhraseCompleter(words, profile = 'speak', enabled = true, myPhrases = () => [], readyPhrases = null) {
+    const cfg = root.PULK.completion;
+    let stop = null;
+    const bad = word => { if (!stop) stop = Stop(root.PULK_STOP); return stop(word); };
+    const normal = w => fold(w.toLowerCase());
+    const clean = tokens => {
+      const out = tokens.map(w => w.trim().replace(/^[,;:«»“”"()]+|[,;:«»“”"()]+$/gu, '').toLowerCase());
+      return out.every(w => /^\p{L}+(?:['’-]\p{L}+)*$/u.test(w)) ? out : null;
+    };
+    const starts = (tokens, prefix) => tokens.length >= prefix.length && prefix.every((w, i) => normal(tokens[i]) === normal(w));
+    const next = w => words.next(w, Number.MAX_SAFE_INTEGER, false);
+    const result = tail => tail.length ? { tail: tail.slice(), text: tail.join(' ') } : null;
+    this.enabled = enabled;
+    this.suggest = input => {
+      if (!this.enabled) return null;
+      const prefix = clean(input);
+      if (!prefix || prefix.length < cfg.MIN_CONTEXT) return null;
+      const sources = new Map();
+      function add(phrases, weight) {
+        for (const phrase of phrases) {
+          const tokens = clean(phrase.trim().replace(/[.!?…]+$/u, '').split(/\s+/u));
+          if (!tokens || tokens.some(bad)) continue;
+          const key = JSON.stringify(tokens.map(normal));
+          if (!sources.has(key)) sources.set(key, { tokens, weight });
+        }
+      }
+      add(myPhrases(), cfg.OWN_WEIGHT);
+      add(readyPhrases === null ? root.PULK.quick.concat(root.PULK.situations.flatMap(s => s[1]), root.PULK.day.flatMap(d => d[2])) : readyPhrases, 1);
+      let matching = Array.from(sources.values()).filter(s => starts(s.tokens, prefix));
+      const fromPhrases = matching.length > 0;
+      if (!fromPhrases) {
+        const left = next(prefix[prefix.length - 2]).map(normal);
+        if (left.length !== 1 || left[0] !== normal(prefix[prefix.length - 1])) return null;
+      }
+      const context = prefix.slice(), tail = [], threshold = profile === 'write' ? cfg.WRITE_THRESHOLD : cfg.SPEAK_THRESHOLD;
+      for (let i = 0; i < cfg.MAX_TAIL; i++) {
+        let candidate, confidence;
+        if (fromPhrases) {
+          const votes = new Map();
+          for (const s of matching) {
+            const key = s.tokens[context.length] === undefined ? '' : normal(s.tokens[context.length]);
+            votes.set(key, (votes.get(key) || 0) + s.weight);
+          }
+          const best = Array.from(votes).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
+          if (!best[0]) return result(tail);
+          candidate = matching.find(s => s.tokens[context.length] !== undefined && normal(s.tokens[context.length]) === best[0]).tokens[context.length];
+          confidence = best[1] / (Array.from(votes.values()).reduce((a, b) => a + b, 0) + cfg.EVIDENCE_FLOOR);
+        } else {
+          const options = next(context[context.length - 1]);
+          if (options.length !== 1) return result(tail);
+          const tokens = clean(options);
+          if (!tokens) return result(tail);
+          candidate = tokens[0];
+          const count = own(own(words.pairs, normal(context[context.length - 1])) || {}, normal(candidate));
+          const evidence = count >= 2 ? count : 1;
+          confidence = evidence / (evidence + cfg.EVIDENCE_FLOOR);
+          if (tail.some(w => normal(w) === normal(candidate))) return result(tail);
+        }
+        if (confidence <= threshold || bad(candidate)) return result(tail);
+        tail.push(candidate); context.push(candidate);
+        if (fromPhrases) matching = matching.filter(s => starts(s.tokens, context));
+      }
+      return result(tail);
+    };
+    this.punctuationHints = input => {
+      if (!this.enabled) return [];
+      const tokens = clean(input);
+      if (!tokens || !tokens.length) return [];
+      return tokens.some(w => cfg.QUESTION_MARKERS.includes(normal(w))) ? ['?', '.', '!'] : ['.', '?', '!'];
+    };
+  }
+
   // Phrase-local proposals, as ReplacementBank.kt. Feed completed words; omit the key for firm words.
   // Every i is a stable zero-based WORD index. No voice, storage or text sink; the caller applies the
   // returned accept change to its editor and can compare textWords() after undo. Reset on external edits.
@@ -360,6 +434,7 @@
   root.PulkCore.PetalIndex = PetalIndex;
   root.PulkCore.jabPetal = jabPetal;
   root.PulkCore.ReplacementBank = ReplacementBank;
+  root.PulkCore.PhraseCompleter = PhraseCompleter;
 
   // Text typed since a boundary; proposal word indices never double as character offsets.
   function ReplacementInput(words, profile, enabled) {
