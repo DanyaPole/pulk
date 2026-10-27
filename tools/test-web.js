@@ -490,15 +490,16 @@ test('page startup supplies real word pairs and personal pairs to the bank in ei
 function petalPage(settings = {}) {
   const values = { mode: 'petals', ...settings }, spoken = [], handlers = {}, chips = [];
   const store = { get(k, d) { return Object.hasOwn(values, k) ? values[k] : d; }, set(k, v) { values[k] = v; } };
-  const elem = () => ({ setAttribute() {}, textContent: '', querySelector: () => null, open: false,
+  const elem = () => ({ attrs: {}, children: [], setAttribute(k, v) { this.attrs[k] = v; }, textContent: '', querySelector: () => null, open: false,
+    focus() {}, replaceChildren() { this.children = []; }, appendChild(b) { this.children.push(b); },
     showModal() { this.open = true; }, close() { this.open = false; } });
-  const nodes = Object.fromEntries(['text', 'replacementReview', 'replacementProgress', 'replacementPair', 'replacementContext', 'replacementListen', 'replacementAccept', 'replacementKeep', 'replacementKeepAll', 'replacementUndo', 'replacementBack', 'replacementNext', 'replacementClose'].map(id => [id, elem()]));
+  const nodes = Object.fromEntries(['text', 'replacementReview', 'replacementProgress', 'replacementPair', 'replacementContext', 'replacementListen', 'replacementAccept', 'replacementKeep', 'replacementKeepAll', 'replacementUndo', 'replacementBack', 'replacementNext', 'replacementClose', 'completionReview', 'completionTitle', 'completionProgress', 'completionPair', 'completionTailActions', 'completionSigns', 'completionListen', 'completionAccept', 'completionKeep', 'completionUndo', 'completionClose'].map(id => [id, elem()]));
   const svg = { addEventListener(k, f) { handlers[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
   const document = { addEventListener() {}, visibilityState: 'visible', createElement: elem };
   function block(start, end) { const a = appSource.indexOf(start), b = appSource.indexOf(end, a); ok(a >= 0 && b > a, start); return appSource.slice(a, b); }
   const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0, tab = 'speak', talking = false;
     const $ = id => nodes[id];
-    const FIX_GLOW_MS = 1500, P_MIN = P.P_MIN, HOLD_MS = P.HOLD_MS, ALT = P.ALT, Jabs = P.Jabs, jab = P.jab, resolve = P.resolve;
+    const FIX_GLOW_MS = 1500, P_MIN = P.P_MIN, HOLD_MS = P.HOLD_MS, ALT = P.ALT, Jabs = P.Jabs, jab = P.jab, resolve = P.resolve, fold = P.fold, own = P.own, shape = P.shape, soft = {};
     const bubble = elem(), bubbleText = elem(), trail = elem();
     const dict = new P.Words(store.get('dictionary', ['том', 'дом', 'мама', 'мыла', 'в', 'я', 'и']), D.RU, bad);
     dict.loadNext(store.get('pairs', []));
@@ -517,10 +518,15 @@ function petalPage(settings = {}) {
     ${block('  function typeLetter(v)', '  // a guided word:')}
     ${block('  // ---- «Толчки»: the cutting', '  // ---- a steadier hand')}
     ${block('  // ---- touch on the keyboard', '  // ---- a joystick,')}
-    return { handlers, state: () => ({text, key: petalKey, options: petalOptions, exactWord, petalTyping, pending: petalPending(), replacements: replacementPending(), review: nodes.replacementReview.open}),
+    return { handlers, state: () => ({text, key: petalKey, options: petalOptions, exactWord, petalTyping, pending: petalPending(), replacements: replacementPending(), review: nodes.replacementReview.open,
+      completion: nodes.completionReview.open, signStep: completion && completion.punctuation, proposal: nodes.completionPair.textContent}),
       review: openReplacementReview, sayAll, takeWord, accept: () => nodes.replacementAccept.onclick(),
-      keepAll: () => nodes.replacementKeepAll.onclick(), undo: () => nodes.replacementUndo.onclick(), close: closeReplacementReview,
+      keepAll: () => nodes.replacementKeepAll.onclick(), undo: () => nodes.replacementUndo.onclick(), close: () => nodes.replacementClose.onclick(),
       listen: () => nodes.replacementListen.onclick(),
+      complete: openCompletionReview, completionAccept: () => nodes.completionAccept.onclick(), completionKeep: () => nodes.completionKeep.onclick(),
+      completionUndo: () => nodes.completionUndo.onclick(), completionListen: () => nodes.completionListen.onclick(), completionClose: closeCompletionReview,
+      signs: () => nodes.completionSigns.children.map(b => ({text: b.textContent, label: b.attrs['aria-label']})),
+      sign: s => nodes.completionSigns.children.find(b => b.textContent.startsWith(s || 'Без знака')).onclick(),
       bankWords: () => replacementInput ? replacementInput.bank.textWords() : [],
       setPassword: () => { nodes.text.querySelector = () => ({type: 'password'}); syncReplacements(); },
       externalEdit: v => { text = v; resetReplacements(); },
@@ -543,6 +549,47 @@ function replacementPage() {
   const a = petalPage({ dictionary: ['дом', 'том', 'стоит'], pairs: ['том\tстоит'] });
   a.word('дом'); a.up(); a.takeWord('стоит'); return a;
 }
+function completionPage(prefix = 'мне пожалуйста') {
+  const a = petalPage({ mode: 'pulse', mine: ['мне пожалуйста воды', 'где моя чашка'], dictionary: ['мне', 'пожалуйста', 'воды', 'где', 'моя', 'чашка', 'хочу'] });
+  for (const c of prefix) { if (c === ' ') a.space(); else a.type(c); }
+  a.space(); return a;
+}
+test('completion UI: opening, listening, waiting and closing never edit the text', () => {
+  const a = completionPage(), before = a.state().text;
+  a.sayAll(); ok(a.state().completion); ok(!a.state().signStep); eq(a.state().proposal, 'Дописать: „воды“?'); eq(a.state().text, before); eq(a.spoken, []);
+  a.completionListen(); eq(a.spoken, ['воды']); eq(a.state().text, before);
+  a.completionClose(); eq(a.state().text, before); ok(!a.state().completion);
+  a.sayAll(); eq(a.spoken, ['воды', before.trim()]);
+});
+test('completion UI: accept adds words only, undo restores spacing, signs require another press', () => {
+  const a = completionPage(), before = a.state().text; a.complete(); a.completionAccept();
+  eq(a.state().text, 'Мне пожалуйста воды '); ok(a.state().signStep); eq(a.spoken, []);
+  a.completionAccept(); eq(a.state().text, 'Мне пожалуйста воды ');
+  a.completionUndo(); eq(a.state().text, before); ok(!a.state().signStep);
+  a.completionAccept(); a.sign('?'); eq(a.state().text, 'Мне пожалуйста воды? '); eq(a.spoken, []); ok(!a.state().completion);
+  a.sayAll(); eq(a.spoken, ['Мне пожалуйста воды?']);
+});
+test('completion UI: keep goes to signs, first hint is labelled and never selected automatically', () => {
+  const a = completionPage('где моя'), before = a.state().text; a.complete(); a.completionKeep();
+  eq(a.state().text, before); ok(a.state().signStep); eq(a.signs().map(b => b.label), ['вопрос, предложен первым', 'точка', 'восклицание', 'Без знака']);
+  a.sign(''); eq(a.state().text, before); eq(a.spoken, []);
+  const b = completionPage(); b.complete(); b.completionKeep(); b.sign('!'); eq(b.state().text, 'Мне пожалуйста! '); eq(b.spoken, []);
+});
+test('completion UI: replacements are reviewed first, then completion uses accepted words', () => {
+  const a = petalPage({ dictionary: ['дом', 'том', 'стоит'], pairs: ['том\tстоит'], mine: ['том стоит рядом'] });
+  a.word('дом'); a.up(); a.takeWord('стоит'); a.sayAll(); ok(a.state().review); ok(!a.state().completion);
+  a.accept(); a.close(); ok(a.state().completion); eq(a.state().proposal, 'Дописать: „рядом“?'); eq(a.state().text, 'Том стоит '); eq(a.spoken, []);
+});
+test('completion UI: password and stale editor actions cannot edit, speak or reopen', () => {
+  const a = completionPage(); a.complete(); a.setPassword(); const before = a.state().text;
+  a.completionAccept(); a.completionUndo(); a.completionListen(); a.sayAll(); ok(!a.complete()); eq(a.state().text, before); eq(a.spoken, []); ok(!a.state().completion);
+  const b = completionPage(); b.complete(); b.externalEdit('Другой текст'); b.completionAccept(); b.completionListen(); eq(b.state().text, 'Другой текст'); eq(b.spoken, []);
+});
+test('completion UI: no tail still offers signs, existing final sign is preserved, editing permits a new review', () => {
+  const a = completionPage('хочу'); a.sayAll(); ok(a.state().signStep); eq(a.spoken, []); a.completionClose();
+  a.type('в'); a.sayAll(); ok(a.state().completion); a.completionClose();
+  const b = completionPage(); b.type('?'); ok(!b.complete()); eq(b.state().text, 'Мне пожалуйста ?');
+});
 test('replacement UI: phrase end opens review, close and waiting never change text or speak', () => {
   const a = replacementPage(); eq(a.state().replacements.length, 1); eq(a.state().text, 'Дом стоит ');
   a.sayAll(); ok(a.state().review); eq(a.spoken, []); eq(a.state().text, 'Дом стоит ');
@@ -551,7 +598,7 @@ test('replacement UI: phrase end opens review, close and waiting never change te
 test('replacement UI: accept edits the real text, never speaks, and undo restores it', () => {
   const a = replacementPage(); a.review(); a.accept(); eq(a.state().text, 'Том стоит '); eq(a.spoken, []);
   eq(a.state().replacements, []); a.undo(); eq(a.state().text, 'Дом стоит '); eq(a.state().replacements.length, 1); eq(a.spoken, []);
-  a.accept(); a.close(); a.sayAll(); eq(a.spoken, ['Том стоит']); eq(a.state().text, '');
+  a.accept(); a.close(); a.sayAll(); a.sign(''); a.sayAll(); eq(a.spoken, ['Том стоит']); eq(a.state().text, '');
 });
 test('replacement UI: listen reads the pair only after a press and leaves the text intact', () => {
   const a = replacementPage(); a.review(); eq(a.spoken, []); a.listen();
@@ -559,7 +606,7 @@ test('replacement UI: listen reads the pair only after a press and leaves the te
 });
 test('replacement UI: keep all is silent, undoable and needs a separate say action', () => {
   const a = replacementPage(); a.review(); a.keepAll(); eq(a.state().text, 'Дом стоит '); eq(a.spoken, []); eq(a.state().replacements, []);
-  a.undo(); eq(a.state().replacements.length, 1); a.keepAll(); a.close(); a.sayAll(); eq(a.spoken, ['Дом стоит']);
+  a.undo(); eq(a.state().replacements.length, 1); a.keepAll(); a.close(); a.sayAll(); a.sign(''); a.sayAll(); eq(a.spoken, ['Дом стоит']);
 });
 test('replacement UI: external edits, deletion, manual alternatives and passwords retire proposals', () => {
   const a = replacementPage(); a.externalEdit('Другой текст'); eq(a.bankWords(), []); ok(!a.review());

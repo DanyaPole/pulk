@@ -242,8 +242,10 @@
   let text = '', onEnter = null, lastFix = null;
   // ---- replacement review: text changes only through the explicit accept/undo buttons ----
   let replacementInput = null, replacementSeen = '', replacementLang = '', replacementProfile = '', replacementPosition = 0;
+  let completion = null, completionReviewed = null, continuePhraseReview = false;
   function replacementSecure() { const t = $('text'), f = t && t.querySelector('input'); return !!(f && f.type === 'password'); }
   function resetReplacements() {
+    completion = null; completionReviewed = null; continuePhraseReview = false; closeCompletionDialog();
     if (replacementInput) replacementInput.endPhrase();
     replacementInput = null; replacementSeen = text; closeReplacementReview();
   }
@@ -270,6 +272,7 @@
     $('replacementPair').textContent = p ? p.before + ' → ' + p.after : 'Можно вернуться к набору';
     $('replacementPair').setAttribute('aria-label', p ? 'Вышло „' + p.before + '“. Заменить на „' + p.after + '“?' : 'Всё разобрано');
     $('replacementContext').textContent = p ? p.context : '';
+    $('replacementClose').textContent = continuePhraseReview && !ps.length ? 'К завершению' : 'К набору';
     ['replacementListen', 'replacementAccept', 'replacementKeep'].forEach(id => { $(id).disabled = !p; });
     $('replacementBack').disabled = replacementPosition === 0;
     $('replacementNext').disabled = replacementPosition >= ps.length - 1;
@@ -292,11 +295,89 @@
     $('replacementUndo').onclick = function () { replacementAction(r => r.undo()); };
     $('replacementBack').onclick = function () { replacementPosition--; paintReplacementReview(); };
     $('replacementNext').onclick = function () { replacementPosition++; paintReplacementReview(); };
-    $('replacementClose').onclick = closeReplacementReview;
-    d.oncancel = function (e) { e.preventDefault(); closeReplacementReview(); };
+    $('replacementClose').onclick = function () {
+      const next = continuePhraseReview && !replacementPending().length;
+      continuePhraseReview = false; closeReplacementReview();
+      if (next) openCompletionReview();
+    };
+    d.oncancel = function (e) { e.preventDefault(); continuePhraseReview = false; closeReplacementReview(); };
     paintReplacementReview(); if (!d.open) d.showModal(); return true;
   }
   function lockSpokenWords() { if (replacementInput) replacementInput.bank.lock(replacementInput.bank.textWords().length - 1); }
+  function phraseWords(t) { const s = t.split(/[.!?…\r\n]/).at(-1).trim(); return s ? s.split(/\s+/) : []; }
+  function phraseCompleter() {
+    return new P.PhraseCompleter(words(), replacementProfile, !replacementSecure(), () => store.get('mine', []).concat(store.get('phrases', [])));
+  }
+  function reviewPhraseEnd() {
+    if (completion) return true;
+    if (openReplacementReview()) { continuePhraseReview = true; return true; }
+    return openCompletionReview();
+  }
+  function closeCompletionDialog() { const d = $('completionReview'); if (d && d.open) d.close(); }
+  function closeCompletionReview() {
+    if (completion) completionReviewed = completion.expected;
+    completion = null; closeCompletionDialog();
+  }
+  function validCompletion() {
+    if (!completion) return false;
+    if (replacementSecure() || completion.expected !== text || !replacementInput || replacementSeen !== text || !text.endsWith(replacementInput.text)) {
+      resetReplacements(); return false;
+    }
+    return true;
+  }
+  function editCompletion(next) {
+    if (!validCompletion()) return;
+    text = next; completion.expected = next;
+    replacementInput.endPhrase(); replacementInput.append(next); replacementInput.finishWord(); replacementSeen = next;
+    lastFix = null; clearPetals(); render();
+  }
+  function paintCompletionReview() {
+    if (!validCompletion()) return;
+    const signStep = completion.punctuation;
+    $('completionTitle').textContent = signStep ? 'Знак' : 'Допиши фразу';
+    $('completionProgress').textContent = signStep ? 'Шаг 2 из 2' : 'Шаг 1 из 2';
+    $('completionPair').textContent = signStep ? 'Выбери знак или оставь без знака' : 'Дописать: „' + completion.tail + '“?';
+    $('completionTailActions').hidden = signStep; $('completionSigns').hidden = !signStep;
+    $('completionSigns').replaceChildren();
+    if (signStep) {
+      const hints = phraseCompleter().punctuationHints(phraseWords(text));
+      hints.concat('').forEach((sign, i) => {
+        const b = document.createElement('button'), name = { '.': 'точка', '?': 'вопрос', '!': 'восклицание', '': 'Без знака' }[sign];
+        b.textContent = sign ? sign + (i === 0 ? ' · подсказка' : '') : name;
+        b.setAttribute('aria-label', name + (i === 0 ? ', предложен первым' : ''));
+        if (i === 0) b.className = 'main';
+        b.onclick = function () {
+          if (!validCompletion()) return;
+          if (sign) editCompletion(text.trimEnd() + sign + ' ');
+          closeCompletionReview();
+        };
+        $('completionSigns').appendChild(b);
+      });
+    }
+    $('completionTitle').focus();
+  }
+  function openCompletionReview() {
+    syncReplacements(null, true);
+    if (!replacementInput || replacementSecure() || completionReviewed === text) return false;
+    const engine = phraseCompleter(), input = phraseWords(replacementInput.text);
+    if (!engine.punctuationHints(input).length) return false;
+    const proposal = engine.suggest(input);
+    completion = { before: text, expected: text, tail: proposal && proposal.text, punctuation: !proposal };
+    const d = $('completionReview');
+    $('completionListen').onclick = function () { if (validCompletion() && !completion.punctuation) say(completion.tail, true); };
+    $('completionAccept').onclick = function () {
+      if (!validCompletion() || completion.punctuation) return;
+      completion.punctuation = true; editCompletion(completion.before.trimEnd() + ' ' + completion.tail + ' '); paintCompletionReview();
+    };
+    $('completionKeep').onclick = function () { if (validCompletion()) { completion.punctuation = true; paintCompletionReview(); } };
+    $('completionUndo').onclick = function () {
+      if (!validCompletion()) return;
+      completion.punctuation = !completion.tail; editCompletion(completion.before); paintCompletionReview();
+    };
+    $('completionClose').onclick = closeCompletionReview;
+    d.oncancel = function (e) { e.preventDefault(); closeCompletionReview(); };
+    if (!d.open) d.showModal(); paintCompletionReview(); return true;
+  }
   // ---- typing display ----
   const FIX_GLOW_MS = 1500;
   function render() {
@@ -528,7 +609,7 @@
         case 'shift': shiftOnce = !shiftOnce; lastFix = null; paintLabels(); break;
         case 'lang': resetReplacements(); clearPetals(); exactWord = false; lang = lang === 'ru' ? 'en' : 'ru'; symbols = false; lastFix = null; loadDict(lang); render(); break;
         case 'sym': clearPetals(); exactWord = false; symbols = !symbols; lastFix = null; render(); break;
-        case 'say': if (!text.trim()) say(lastSaid); else if (!openReplacementReview()) { lockSpokenWords(); say(text.trim()); } break;
+        case 'say': if (!text.trim()) say(lastSaid); else if (!reviewPhraseEnd()) { lockSpokenWords(); say(text.trim()); } break;
       }
       return;
     }
@@ -750,7 +831,7 @@
   function sayAll() {
     if (replacementSecure()) { resetReplacements(); return; }
     const fix = fixLastWord(); if (fix) lastFix = null;   // a slip in the last word is fixed before it is said aloud
-    if (replacementSecure() || openReplacementReview()) return;
+    if (replacementSecure() || reviewPhraseEnd()) return;
     const t = text.trim(); if (!t) return;
     lockSpokenWords(); say(t); remember(t); text = ''; resetReplacements(); lastFix = null;
     if (tab === 'speak') { talk('me', t); if (talking) talkScreen(); else speakScreen(true); } else render();

@@ -139,6 +139,19 @@
   body.left-hand #replacementActions { direction: rtl; }
   #replacementActions button { direction: ltr; }
   #replacementActions button:disabled { color: var(--muted); background: var(--panel); border-style: dashed; }
+  #completionReview { width: min(100%, 540px); max-height: calc(100dvh - 16px); margin: auto 0 0 auto; padding: 16px 12px max(12px, env(safe-area-inset-bottom, 0px)); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 20px 20px 0 0; }
+  #completionReview[open] { display: flex; flex-direction: column; }
+  #completionReview::backdrop { background: rgba(15,30,38,.35); }
+  #completionReading { overflow-y: auto; min-height: 0; }
+  #completionPair { font-size: 26px; font-weight: 700; overflow-wrap: anywhere; margin: 8px 0; }
+  #completionActions { margin-top: 12px; flex: 0 0 auto; }
+  #completionTailActions, #completionSigns, #completionFooter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  #completionActions [hidden] { display: none; }
+  #completionFooter { margin-top: 6px; }
+  #completionActions button { min-height: 56px; padding: 8px 6px; direction: ltr; }
+  #completionAccept { min-height: 64px !important; }
+  body.left-hand #completionReview { margin-left: 0; margin-right: auto; }
+  body.left-hand #completionTailActions, body.left-hand #completionSigns, body.left-hand #completionFooter { direction: rtl; }
 </style>
 </head>
 <body>
@@ -152,6 +165,14 @@
     <button id="replacementKeep">Оставить</button><button id="replacementUndo">Вернуть</button>
     <button id="replacementBack">Назад</button><button id="replacementNext">Дальше</button>
     <button id="replacementKeepAll">Оставить всё</button><button id="replacementClose">К набору</button>
+  </div>
+</dialog>
+<dialog id="completionReview" aria-labelledby="completionTitle" aria-describedby="completionPair">
+  <div id="completionReading"><h1 id="completionTitle" tabindex="-1">Допиши фразу</h1><p id="completionProgress" class="note"></p><p id="completionPair" aria-live="polite"></p><p class="note">Сказать фразу можно после выбора обычным действием.</p></div>
+  <div id="completionActions">
+    <div id="completionTailActions"><button id="completionListen">Услышать</button><button id="completionAccept" class="main">Принять</button><button id="completionKeep">Оставить</button></div>
+    <div id="completionSigns" hidden></div>
+    <div id="completionFooter"><button id="completionUndo">Вернуть</button><button id="completionClose">К набору</button></div>
   </div>
 </dialog>
 <div id="tabs">

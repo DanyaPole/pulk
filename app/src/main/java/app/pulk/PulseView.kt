@@ -32,7 +32,7 @@ import kotlin.math.sqrt
 class PulseView(context: Context, private val svc: PulkService) : android.widget.FrameLayout(context) {
     private val handler = Handler(Looper.getMainLooper())
     private val density = resources.displayMetrics.density
-    private var replacementPanel: ReplacementPanel? = null
+    private var replacementPanel: android.widget.LinearLayout? = null
     private val replacementBadge = Ui(context).button("") { svc.reviewReplacements() }.apply {
         visibility = GONE
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -56,7 +56,8 @@ class PulseView(context: Context, private val svc: PulkService) : android.widget
         replacementBadge.contentDescription = "Замен: $n. Разобрать замены"
         val v = if (n > 0 && isOpen && replacementPanel == null) VISIBLE else GONE
         if (replacementBadge.visibility != v) { replacementBadge.visibility = v; requestLayout(); svc.insetsChanged() }
-        replacementPanel?.refresh()
+        (replacementPanel as? ReplacementPanel)?.refresh()
+        (replacementPanel as? CompletionPanel)?.refresh()
     }
     internal fun showReplacements() {
         if (replacementPanel != null) return
@@ -64,7 +65,7 @@ class PulseView(context: Context, private val svc: PulkService) : android.widget
         cancelTouches()
         handler.removeCallbacks(scanTick); scanning = false
         replacementPanel = ReplacementPanel(context, svc.prefs, bank, svc::listenReplacement, svc::acceptReplacement,
-            svc::keepReplacement, svc::keepAllReplacements, svc::undoReplacement, ::closeReplacements).also { addView(it) }
+            svc::keepReplacement, svc::keepAllReplacements, svc::undoReplacement, svc::finishReplacementReview, svc.finishingPhrase).also { addView(it) }
         updateReplacementUi(); requestLayout(); svc.insetsChanged()
     }
     internal fun closeReplacements() {
@@ -72,6 +73,13 @@ class PulseView(context: Context, private val svc: PulkService) : android.widget
         updateReplacementUi(); requestLayout(); svc.insetsChanged()
     }
     internal val reviewingReplacements get() = replacementPanel != null
+    internal val reviewingCompletion get() = replacementPanel is CompletionPanel
+    internal fun showCompletion() {
+        closeReplacements(); cancelTouches()
+        handler.removeCallbacks(scanTick); scanning = false
+        replacementPanel = CompletionPanel(context, svc).also { addView(it) }
+        updateReplacementUi(); requestLayout(); svc.insetsChanged()
+    }
 
     private class Colors(val bg: Int, val key: Int, val fn: Int, val zone: Int, val press: Int, val line: Int,
                          val fg: Int, val muted: Int, val accent: Int, val accentFg: Int, val halo: Int, val glassEdge: Int)
@@ -973,6 +981,7 @@ class PulseView(context: Context, private val svc: PulkService) : android.widget
 
     override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
+        (replacementPanel as? CompletionPanel)?.addActions(info)
         if ((svc.replacements?.bank?.count() ?: 0) > 0) {
             info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00003, "Разобрать замены"))
             info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(0x00f00004, "Оставить всё"))
@@ -983,6 +992,8 @@ class PulseView(context: Context, private val svc: PulkService) : android.widget
         }
     }
     override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
+        if (action in 0x00f00100..0x00f00110 && replacementPanel is CompletionPanel)
+            return replacementPanel!!.performAccessibilityAction(action, arguments)
         if (action == 0x00f00003) return svc.reviewReplacements()
         if (action == 0x00f00004) { svc.keepAllReplacements(); return true }
         if (svc.petalsMode() && svc.petalPending) {

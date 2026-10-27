@@ -78,7 +78,8 @@ class ReplacementUiTest {
         assertTrue(view.reviewingReplacements); assertTrue(field.actions.isEmpty()); assertEquals("дом стоит ", field.text)
         button("Принять").performClick(); assertEquals("том стоит ", field.text); assertTrue(trace.none { it.startsWith("say ") })
         button("Вернуть").performClick(); assertEquals("дом стоит ", field.text)
-        button("Принять").performClick(); button("К набору").performClick(); svc.enter()
+        button("Принять").performClick(); button("К завершению").performClick(); svc.enter()
+        layout(); button("Без знака").performClick(); svc.enter()
         assertEquals(listOf(EditorInfo.IME_ACTION_SEND), field.actions)
         svc.onDestroy()
     }

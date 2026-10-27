@@ -9,7 +9,8 @@ import android.widget.ScrollView
 /** A review stays open until the person closes it. No delayed actions and no phrase speech here. */
 internal class ReplacementPanel(context: Context, prefs: Prefs,
     private val bank: ReplacementBank, listen: (Int) -> Unit, accept: (Int) -> Unit,
-    keep: (Int) -> Unit, keepAll: () -> Unit, undo: () -> Unit, close: () -> Unit
+    keep: (Int) -> Unit, keepAll: () -> Unit, undo: () -> Unit, close: () -> Unit,
+    private val finishing: Boolean = false
 ) : LinearLayout(context) {
     private val ui = Ui(context)
     private var position = 0
@@ -56,6 +57,10 @@ internal class ReplacementPanel(context: Context, prefs: Prefs,
         pair.text = p?.let { "${it.before} → ${it.after}" } ?: "Можно вернуться к набору"
         pair.contentDescription = p?.let { "Вышло „${it.before}“. Заменить на „${it.after}“?" } ?: pair.text
         contextText.text = p?.context.orEmpty()
+        buttons["К набору"]?.apply {
+            text = if (finishing && pending.isEmpty()) "К завершению" else "К набору"
+            contentDescription = text
+        }
         for (label in listOf("Услышать", "Принять", "Оставить")) buttons[label]?.isEnabled = p != null
         buttons["Назад"]?.isEnabled = position > 0
         buttons["Дальше"]?.isEnabled = position < pending.lastIndex

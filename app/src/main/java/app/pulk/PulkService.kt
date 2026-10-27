@@ -60,15 +60,30 @@ class PulkService : InputMethodService() {
     internal var replacements: ReplacementInput? = null; private set
     private var replacementKey: String? = null
     private var applyingReplacement = false
+    internal class CompletionReview(val before: String, val tail: String?) {
+        var expected = before
+        var punctuation = tail == null
+    }
+    internal var completion: CompletionReview? = null; private set
+    private var completer: PhraseCompleter? = null
+    private var completionReviewed: String? = null
+    private var continuePhraseReview = false
+    internal val finishingPhrase get() = continuePhraseReview
     private fun cached(s: TextSink) = CachedText(s).apply {
         onCommit = { text -> if (!applyingReplacement) { replacements?.append(text, replacementKey); replacementKey = null } }
         onDelete = { n -> if (!applyingReplacement) replacements?.trim(n) }
     }
-    internal fun endReplacements() { replacements?.endPhrase(); view?.closeReplacements(); view?.updateReplacementUi() }
+    internal fun endReplacements() {
+        completion = null; completionReviewed = null; continuePhraseReview = false
+        replacements?.endPhrase(); view?.closeReplacements(); view?.updateReplacementUi()
+    }
     private fun replacementInput() {
         val enabled = prose && !secure && !coaching()
         val profile = if (ownField && editor?.fieldId in listOf(Ui.ID_SPEAK, Ui.ID_TALK_CHILD)) ReplacementBank.Profile.SPEAK else ReplacementBank.Profile.WRITE
         replacements = ReplacementInput(if (enabled) words(lang) else Words(emptyList(), lang), profile, enabled)
+        completer = PhraseCompleter(if (enabled) words(lang) else Words(emptyList(), lang),
+            if (profile == ReplacementBank.Profile.SPEAK) PhraseCompleter.Profile.SPEAK else PhraseCompleter.Profile.WRITE,
+            enabled, { prefs.myPhrases + prefs.phrases })
     }
     private fun validReplacements(): Boolean {
         val r = replacements ?: return false
@@ -86,6 +101,76 @@ class PulkService : InputMethodService() {
         if (!isInputViewShown) requestShowSelf(0)
         return true
     }
+    internal fun reviewPhraseEnd(): Boolean {
+        if (completion != null) return true
+        continuePhraseReview = true
+        if (reviewReplacements()) return true
+        continuePhraseReview = false
+        return reviewCompletion()
+    }
+    internal fun finishReplacementReview() {
+        val next = continuePhraseReview && replacements?.bank?.count() == 0
+        continuePhraseReview = false; view?.closeReplacements()
+        if (next) reviewCompletion()
+    }
+    private fun phraseWords(text: String) = text.split(Regex("[.!?…\\r\\n]")).last().trim()
+        .let { if (it.isEmpty()) emptyList() else it.split(Regex("\\s+")) }
+    internal fun reviewCompletion(): Boolean {
+        if (!validReplacements()) return false
+        val r = replacements ?: return false
+        r.finishWord()
+        if (r.text == completionReviewed || completionHintsFor(r.text).isEmpty()) return false
+        val tail = completer?.suggest(phraseWords(r.text))?.text
+        completion = CompletionReview(r.text, tail)
+        feedback.hush(); feedback.replacement()
+        view?.showCompletion() ?: run { completion = null; return false }
+        if (!isInputViewShown) requestShowSelf(0)
+        return true
+    }
+    private fun validCompletion(): CompletionReview? {
+        val c = completion ?: return null
+        if (!validReplacements()) return null
+        if (replacements?.text != c.expected) { endReplacements(); return null }
+        return c
+    }
+    private fun completionHintsFor(text: String) = completer?.punctuationHints(phraseWords(text)).orEmpty()
+    internal fun completionHints() = completionHintsFor(completion?.expected.orEmpty())
+    private fun editCompletion(next: String) {
+        val c = validCompletion() ?: return
+        val r = replacements ?: return
+        val before = r.text
+        r.endPhrase(); r.append(next); r.finishWord(); c.expected = next
+        replaceTrackedText(before, next); feedback.replacement(); after()
+    }
+    internal fun acceptCompletion() {
+        val c = validCompletion() ?: return
+        if (c.punctuation || c.tail == null) return
+        c.punctuation = true
+        editCompletion(c.before.trimEnd() + " " + c.tail + " ")
+    }
+    internal fun keepCompletion() {
+        val c = validCompletion() ?: return
+        c.punctuation = true; feedback.hush(); after()
+    }
+    internal fun undoCompletion() {
+        val c = validCompletion() ?: return
+        c.punctuation = c.tail == null
+        editCompletion(c.before)
+    }
+    internal fun listenCompletion() {
+        val c = validCompletion() ?: return
+        if (!c.punctuation) c.tail?.let { feedback.say(it) }
+    }
+    internal fun choosePunctuation(sign: String) {
+        val c = validCompletion() ?: return
+        if (!c.punctuation || (sign.isNotEmpty() && sign !in completionHints())) return
+        if (sign.isNotEmpty()) editCompletion(c.expected.trimEnd() + sign + " ")
+        closeCompletion()
+    }
+    internal fun closeCompletion() {
+        completionReviewed = completion?.expected
+        completion = null; feedback.hush(); view?.closeReplacements()
+    }
     internal fun acceptReplacement(i: Int) = editReplacement { it.accept(i) }
     internal fun undoReplacement() = editReplacement { it.undo() }
     private fun editReplacement(edit: (ReplacementInput) -> Boolean) {
@@ -93,15 +178,18 @@ class PulkService : InputMethodService() {
         val r = replacements ?: return
         val before = r.text
         if (!edit(r)) return
-        if (before != r.text) {
+        replaceTrackedText(before, r.text)
+        after()
+    }
+    private fun replaceTrackedText(before: String, next: String) {
+        if (before != next) {
             applyingReplacement = true
             val ic = if (sink === realSink) currentInputConnection else null
             ic?.beginBatchEdit()
-            try { io.deleteBefore(before.length); io.commit(r.text) }
+            try { io.deleteBefore(before.length); io.commit(next) }
             finally { ic?.endBatchEdit(); applyingReplacement = false }
             clearPetals(); undo = null
         }
-        after()
     }
     internal fun keepReplacement(i: Int) { if (validReplacements()) replacements?.bank?.keep(i); after() }
     internal fun keepAllReplacements() { if (validReplacements()) replacements?.bank?.keepAll(); after() }
@@ -113,14 +201,15 @@ class PulkService : InputMethodService() {
     }
     private fun lockSpokenWords() { replacements?.let { it.bank.lock(it.bank.textWords().lastIndex) } }
     internal fun readPhrase() {
-        if (secure || reviewReplacements()) return
-        lockSpokenWords(); feedback.say(textBefore + textAfter, 1.1f)
+        if (secure || reviewPhraseEnd()) return
+        // A deliberate speech gesture also works when the optional text window is hidden.
+        lockSpokenWords(); feedback.say(io.before(160) + io.after(60), 1.1f)
     }
     private fun matches(field: android.widget.EditText) = editor?.packageName == packageName && editor?.fieldId == field.id
     companion object {
         private var active = java.lang.ref.WeakReference<PulkService>(null)
         internal val changingReplacement get() = active.get()?.applyingReplacement == true
-        internal fun beforeSpeak(field: android.widget.EditText): Boolean = active.get()?.takeIf { it.matches(field) }?.reviewReplacements() ?: false
+        internal fun beforeSpeak(field: android.widget.EditText): Boolean = active.get()?.takeIf { it.matches(field) }?.reviewPhraseEnd() ?: false
         internal fun wordSpoken(field: android.widget.EditText) { active.get()?.takeIf { it.matches(field) }?.lockSpokenWords() }
         internal fun phraseSpoken(field: android.widget.EditText) { active.get()?.takeIf { it.matches(field) }?.let { it.lockSpokenWords(); it.endReplacements() } }
     }
@@ -244,7 +333,11 @@ class PulkService : InputMethodService() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val v = view
         if (v?.reviewingReplacements == true) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) { v.closeReplacements(); return true }
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                continuePhraseReview = false
+                if (completion != null) closeCompletion() else v.closeReplacements()
+                return true
+            }
             return true
         }
         if (prefs.mode == "scan" && isInputViewShown && v != null &&
@@ -347,7 +440,8 @@ class PulkService : InputMethodService() {
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
-        if (finishingInput) endReplacements() else view?.closeReplacements()
+        continuePhraseReview = false
+        if (finishingInput) endReplacements() else if (completion != null) closeCompletion() else view?.closeReplacements()
         traceInputActive = false
         traceSession++
         save(); keyStar.reset(); stickJabs = null   // a key or stick held as the field closed types nothing later
@@ -645,7 +739,7 @@ class PulkService : InputMethodService() {
     fun enter() {
         clearPetals(); exactWord = false
         replacements?.finishWord()
-        if (reviewReplacements()) return
+        if (reviewPhraseEnd()) return
         val info = editor ?: currentInputEditorInfo
         val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
         val noAction = (info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
