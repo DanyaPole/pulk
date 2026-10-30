@@ -624,9 +624,7 @@
   // star would wait for it forever and ignore every later touch
   svg.addEventListener('lostpointercapture', function (e) { endTouch(e, true); });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState !== 'visible' && touch) endTouch({ pointerId: touch.id }, true); });
-  // Safari on iPhone zooms with two fingers whatever the page asks: a zoomed page cuts the screens and the star
-  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
-  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  // Page magnification belongs to the browser. Only the keyboard itself owns its pointer gestures (touch-action: none).
 
   // ---- a joystick, a gamepad or a keyboard as the star — nothing to set up. A stick works as «Толчки»: a push out
   // and back is a letter, a short push the letter at the centre, a push that turns the letter with a turn. Keys:

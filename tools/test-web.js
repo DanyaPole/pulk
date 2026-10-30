@@ -495,7 +495,8 @@ function petalPage(settings = {}) {
     showModal() { this.open = true; }, close() { this.open = false; } });
   const nodes = Object.fromEntries(['text', 'replacementReview', 'replacementProgress', 'replacementPair', 'replacementContext', 'replacementListen', 'replacementAccept', 'replacementKeep', 'replacementKeepAll', 'replacementUndo', 'replacementBack', 'replacementNext', 'replacementClose', 'completionReview', 'completionTitle', 'completionProgress', 'completionPair', 'completionTailActions', 'completionSigns', 'completionListen', 'completionAccept', 'completionKeep', 'completionUndo', 'completionClose'].map(id => [id, elem()]));
   const svg = { addEventListener(k, f) { handlers[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
-  const document = { addEventListener() {}, visibilityState: 'visible', createElement: elem };
+  const documentHandlers = {};
+  const document = { addEventListener(name, fn) { (documentHandlers[name] ||= []).push(fn); }, visibilityState: 'visible', createElement: elem };
   function block(start, end) { const a = appSource.indexOf(start), b = appSource.indexOf(end, a); ok(a >= 0 && b > a, start); return appSource.slice(a, b); }
   const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0, tab = 'speak', talking = false;
     const $ = id => nodes[id];
@@ -542,8 +543,18 @@ function petalPage(settings = {}) {
   api.push = p => { for (const r of [6, 12, 18, 24, 18, 12, 6, 0]) api.move(Math.cos(p * Math.PI / 4) * r, Math.sin(p * Math.PI / 4) * r); };
   api.word = w => { const key = new P.PetalIndex([], D.RU).key(w); api.down(); for (const p of key) api.push(+p); };
   api.tap = () => { api.down(); api.up(); };
-  return { ...api, spoken, values, chips };
+  return { ...api, spoken, values, chips, documentEvent(name, event) { (documentHandlers[name] || []).forEach(fn => fn(event)); } };
 }
+
+test('page gestures outside the keyboard permit browser magnification without typing', () => {
+  const page = petalPage(), before = page.state().text;
+  for (const name of ['gesturestart', 'touchmove']) {
+    let cancelled = false;
+    page.documentEvent(name, { touches: [{}, {}], preventDefault() { cancelled = true; } });
+    ok(!cancelled, name + ' must remain available for browser magnification');
+    eq(page.state().text, before, 'magnification never types a letter');
+  }
+});
 
 function replacementPage() {
   const a = petalPage({ dictionary: ['дом', 'том', 'стоит'], pairs: ['том\tстоит'] });
