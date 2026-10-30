@@ -647,12 +647,23 @@
     if (fn === 'space') space(); else if (fn === 'bksp') backspace(); else if (fn === 'enter') { if (onEnter) onEnter(); }
     else if (fn === 'shift') { shiftOnce = !shiftOnce; lastFix = null; paintLabels(); }
   }
+  // Native controls and open reviews own their keys; page shortcuts must not edit behind them.
+  function pageKeyboardEvent(e) {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || document.querySelector('dialog[open]')) return false;
+    for (let n = e.target; n && n !== document.body; n = n.parentElement) {
+      if (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)) return false;
+      if (e.key === ' ' || e.key === 'Enter') {
+        const role = n.getAttribute && n.getAttribute('role');
+        if (/^(BUTTON|A|SUMMARY)$/.test(n.tagName) || /^(button|tab|checkbox|radio|switch)$/.test(role || '')) return false;
+      }
+    }
+    return true;
+  }
   const KEYDIR = { Numpad6: 0, Numpad9: 1, Numpad8: 2, Numpad7: 3, Numpad4: 4, Numpad1: 5, Numpad2: 6, Numpad3: 7, ArrowRight: 0, ArrowUp: 2, ArrowLeft: 4, ArrowDown: 6 };
   let pend = null;   // the direction key held down: its letter goes when the key is let go
   function flushPend() { if (!pend) return; const s = slot(table(), pend.p, pend.kind); pend = null; showCand(null); commitSlot(s); }
   document.addEventListener('keydown', function (e) {
-    const tg = e.target;
-    if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!pageKeyboardEvent(e)) return;
     if (document.body.classList.contains('welcome') || $('big').style.display === 'flex') return;
     const d = KEYDIR[e.code];
     if (d != null) {
@@ -678,7 +689,12 @@
       commitSlot({ petal: at ? at.p : 0, kind: at ? at.kind : 'c', v: ch });
     }
   });
-  document.addEventListener('keyup', function (e) { if (pend && e.code === pend.code) flushPend(); });
+  document.addEventListener('keyup', function (e) {
+    if (pend && e.code === pend.code) {
+      if (pageKeyboardEvent(e)) flushPend();
+      else { pend = null; showCand(null); }
+    }
+  });
 
   const pad = { raf: 0, j: null, btn: [] };
   function pollPad() {
@@ -914,6 +930,20 @@
   function dayNow() { let hr = new Date().getHours(), part = D.day[D.day.length - 1]; D.day.forEach(function (d) { if (hr >= d[1]) part = d; }); return ['Сейчас · ' + part[0], part[2]]; }
   // the family's own: words with photos (names, pets, favourite things) and the adult's own phrase groups
   function family() { return store.get('family', []); }
+  function removeFamilyWord(word) {
+    const k = norm(word);
+    store.set('family', family().filter(function (f) { return norm(f.w) !== k; }));
+    const u = Object.assign(Object.create(null), store.get('user', {}));
+    delete u[k]; store.set('user', u);
+    const before = store.get('pairs', {}), pairs = Object.create(null);
+    Object.keys(before).forEach(function (prev) {
+      if (prev === k) return;
+      const row = Object.assign(Object.create(null), before[prev]); delete row[k];
+      if (Object.keys(row).length) pairs[prev] = row;
+    });
+    store.set('pairs', pairs);
+    resetReplacements(); paintChips();
+  }
   function groups() { return store.get('groups', []); }
   function photoOf(word) { const n = norm(word), f = family().filter(function (x) { return norm(x.w) === n; })[0]; return f && f.img; }
   function situations() {
@@ -1402,12 +1432,12 @@
       family().forEach(function (f) {
         let armed = 0;
         const fb = photoButton(f.w + ' ✕', f.img, '', function () {
-          if (Date.now() - armed < 4000) { store.set('family', family().filter(function (x) { return x !== f; })); paintFamily(); return; }
-          armed = Date.now(); fb.lastChild.textContent = 'Убрать? Ещё раз'; fb.classList.add('urgent');   // a photo is hard to bring back
+          if (Date.now() - armed < 4000) { removeFamilyWord(f.w); paintFamily(); return; }
+          armed = Date.now(); fb.lastChild.textContent = 'Убрать из семьи и подсказок? Ещё раз'; fb.classList.add('urgent');   // a photo is hard to bring back
         });
         fl.appendChild(fb);
       });
-      if (family().length) fl.appendChild(h('p', 'Два касания по слову здесь — убрать его.', 'muted'));
+      if (family().length) fl.appendChild(h('p', 'Два касания уберут слово из семьи и личных подсказок. Если оно есть в своих фразах, Пульк продолжит его узнавать.', 'muted'));
     }
     paintFamily();
 

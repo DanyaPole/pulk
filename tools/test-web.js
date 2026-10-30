@@ -496,11 +496,13 @@ function petalPage(settings = {}) {
   const nodes = Object.fromEntries(['text', 'replacementReview', 'replacementProgress', 'replacementPair', 'replacementContext', 'replacementListen', 'replacementAccept', 'replacementKeep', 'replacementKeepAll', 'replacementUndo', 'replacementBack', 'replacementNext', 'replacementClose', 'completionReview', 'completionTitle', 'completionProgress', 'completionPair', 'completionTailActions', 'completionSigns', 'completionListen', 'completionAccept', 'completionKeep', 'completionUndo', 'completionClose'].map(id => [id, elem()]));
   const svg = { addEventListener(k, f) { handlers[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
   const documentHandlers = {};
-  const document = { addEventListener(name, fn) { (documentHandlers[name] ||= []).push(fn); }, visibilityState: 'visible', createElement: elem };
+  nodes.big = { style: { display: 'none' } };
+  const document = { addEventListener(name, fn) { (documentHandlers[name] ||= []).push(fn); }, visibilityState: 'visible', createElement: elem,
+    body: { classList: { contains() { return false; } } }, querySelector() { return Object.values(nodes).find(n => n.open) || null; } };
   function block(start, end) { const a = appSource.indexOf(start), b = appSource.indexOf(end, a); ok(a >= 0 && b > a, start); return appSource.slice(a, b); }
-  const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0, tab = 'speak', talking = false;
+  const code = `let text = '', shiftOnce = false, lastFix = null, lang = 'ru', symbols = false, game = null, guided = null, probe = null, onEnter = null, relayout = false, lastEnd = 0, tab = 'speak', talking = false, left = false;
     const $ = id => nodes[id];
-    const FIX_GLOW_MS = 1500, P_MIN = P.P_MIN, HOLD_MS = P.HOLD_MS, ALT = P.ALT, Jabs = P.Jabs, jab = P.jab, resolve = P.resolve, fold = P.fold, own = P.own, shape = P.shape, soft = {};
+    const FIX_GLOW_MS = 1500, P_MIN = P.P_MIN, HOLD_MS = P.HOLD_MS, ALT = P.ALT, Jabs = P.Jabs, jab = P.jab, resolve = P.resolve, fold = P.fold, own = P.own, shape = P.shape, slot = P.slot, SPACE = P.SPACE, soft = {};
     const bubble = elem(), bubbleText = elem(), trail = elem();
     const dict = new P.Words(store.get('dictionary', ['том', 'дом', 'мама', 'мыла', 'в', 'я', 'и']), D.RU, bad);
     dict.loadNext(store.get('pairs', []));
@@ -519,6 +521,7 @@ function petalPage(settings = {}) {
     ${block('  function typeLetter(v)', '  // a guided word:')}
     ${block('  // ---- «Толчки»: the cutting', '  // ---- a steadier hand')}
     ${block('  // ---- touch on the keyboard', '  // ---- a joystick,')}
+    ${block('  function commitSlot(s)', '  const pad =')}
     return { handlers, state: () => ({text, key: petalKey, options: petalOptions, exactWord, petalTyping, pending: petalPending(), replacements: replacementPending(), review: nodes.replacementReview.open,
       completion: nodes.completionReview.open, signStep: completion && completion.punctuation, proposal: nodes.completionPair.textContent}),
       review: openReplacementReview, sayAll, takeWord, accept: () => nodes.replacementAccept.onclick(),
@@ -565,6 +568,35 @@ function completionPage(prefix = 'мне пожалуйста') {
   for (const c of prefix) { if (c === ' ') a.space(); else a.type(c); }
   a.space(); return a;
 }
+
+function keyEvent(key, tag = 'BODY', parent = null) {
+  return { key, code: key === ' ' ? 'Space' : key, target: { tagName: tag, parentElement: parent, getAttribute() { return null; } },
+    defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+}
+test('keyboard: Enter and Space keep native button activation, letters still type after a button click', () => {
+  const a = petalPage();
+  for (const key of ['Enter', ' ']) {
+    for (const e of [keyEvent(key, 'BUTTON'), keyEvent(key, 'SPAN', { tagName: 'BUTTON', getAttribute() { return null; } })]) {
+      const before = a.state().text; a.documentEvent('keydown', e);
+      ok(!e.defaultPrevented, key + ' belongs to the focused button'); eq(a.state().text, before);
+    }
+  }
+  a.documentEvent('keydown', keyEvent('p', 'BUTTON')); eq(a.state().text, 'P');
+});
+test('keyboard: form fields and editable ancestors keep their own input', () => {
+  const a = petalPage();
+  for (const e of [keyEvent('p', 'INPUT'), keyEvent('p', 'TEXTAREA'), keyEvent('p', 'SELECT'),
+    keyEvent('p', 'SPAN', { tagName: 'DIV', isContentEditable: true, getAttribute() { return null; } })]) {
+    a.documentEvent('keydown', e); ok(!e.defaultPrevented); eq(a.state().text, '');
+  }
+});
+test('keyboard: review dialogs own keys and discard an arrow released after the dialog opens', () => {
+  const a = completionPage(), before = a.state().text;
+  a.documentEvent('keydown', keyEvent('ArrowRight')); a.complete();
+  for (const key of ['p', 'Backspace', ' ', 'Enter']) { const e = keyEvent(key); a.documentEvent('keydown', e); ok(!e.defaultPrevented); eq(a.state().text, before); }
+  a.documentEvent('keyup', keyEvent('ArrowRight')); eq(a.state().text, before);
+  a.completionClose(); a.documentEvent('keydown', keyEvent('p')); eq(a.state().text, before + 'p');
+});
 test('completion UI: opening, listening, waiting and closing never edit the text', () => {
   const a = completionPage(), before = a.state().text;
   a.sayAll(); ok(a.state().completion); ok(!a.state().signStep); eq(a.state().proposal, 'Дописать: „воды“?'); eq(a.state().text, before); eq(a.spoken, []);
@@ -955,6 +987,38 @@ test('both dictionaries are kept for use without internet', () => {
 
 test('the page script parses', () => {
   for (const f of ['web/app.js']) new Function(read(path.join(root, f)));
+});
+
+function familyPage(initial) {
+  const data = initial, cards = [];
+  const store = { get(k, d) { return Object.hasOwn(data, k) ? data[k] : d; }, set(k, v) { data[k] = v; return true; } };
+  const fl = { appendChild(c) { if (c && c.click) cards.push(c); } };
+  Object.defineProperty(fl, 'innerHTML', { set() { cards.length = 0; } });
+  const a = appSource.indexOf('  function family()'), b = appSource.indexOf('  function groups()', a);
+  const c = appSource.indexOf('    function paintFamily()'), d = appSource.indexOf('\n    paintFamily();', c);
+  const u = appSource.indexOf('  function userWords()'), v = appSource.indexOf('  function learnText(', u);
+  ok(a >= 0 && b > a && c >= 0 && d > c && u >= 0 && v > u);
+  const photoButton = (label, img, cls, click) => ({ label, click, lastChild: { textContent: label }, classList: { add() {} } });
+  const api = new Function('store', 'norm', 'fold', 'own', 'fl', 'photoButton', 'h', 'Date', 'resetReplacements', 'paintChips',
+    appSource.slice(u, v) + appSource.slice(a, b) + appSource.slice(c, d) + '\npaintFamily(); return {userWords};')(
+    store, s => P.fold(s.toLowerCase()).trim(), P.fold, P.own, fl, photoButton, () => null, { now: () => 100000 }, () => {}, () => {});
+  return { ...api, data, cards };
+}
+test('family deletion: two touches remove its personal suggestion weight and word pairs, preserving other words', () => {
+  const k = P.fold('ёлдик'), data = { family: [{ w: 'Ёлдик', img: 'photo' }], user: { [k]: 5, мама: 9 },
+    pairs: { '^': { [k]: 4, мама: 3 }, [k]: { рядом: 2 }, мама: { [k]: 2, дома: 3 } } };
+  const a = familyPage(data), card = a.cards[0], words = new P.Words([], D.RU, bad);
+  ok(words.suggest(k.slice(0, 2), 4, a.userWords()).includes(k));
+  card.click(); eq(data.family.length, 1, 'first touch only asks'); eq(data.user[k], 5);
+  card.click(); eq(data.family.length, 0); eq(P.own(data.user, k), 0, 'remove persisted family boost');
+  eq(words.suggest(k.slice(0, 2), 4, a.userWords()), []);
+  eq(data.user.мама, 9); eq(data.pairs['^'], { мама: 3 }); eq(P.own(data.pairs, k), 0); eq(data.pairs.мама, { дома: 3 });
+});
+test('family deletion: an independently kept phrase still knows its words', () => {
+  const k = P.fold('ёлдик'), data = { family: [{ w: 'Ёлдик' }], user: { [k]: 5 }, mine: ['Ёлдик рядом'], groups: [{ list: ['Ёлдик дома'] }], pairs: {} };
+  const a = familyPage(data), card = a.cards[0]; card.click(); card.click();
+  eq(data.family, []); eq(P.own(data.user, k), 0); eq(P.own(a.userWords(), k), 5);
+  eq(data.mine, ['Ёлдик рядом']); eq(data.groups, [{ list: ['Ёлдик дома'] }]);
 });
 
 console.log('Пульк в браузере: ' + passed + ' tests, ' + failed + ' failed');
