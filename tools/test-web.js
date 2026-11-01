@@ -567,6 +567,18 @@ test('a password letter is never shown in the big bubble', () => {
   }
 });
 
+test('a password letter is never shown in the big bubble: a jab in progress and a held direction key', () => {
+  const letter = /[а-яa-z]/i, key = { code: 'Numpad8', repeat: false, preventDefault() {} };
+  const open = petalPage({ mode: 'jabs' }); open.down(); open.move(14, 0);
+  ok(letter.test(open.bubbleText()), 'control: a jab shows its letter outside a password, got «' + open.bubbleText() + '»');
+  const jab = petalPage({ mode: 'jabs' }); jab.setPassword(); jab.down(); jab.move(14, 0);
+  eq(jab.bubbleText(), '•', 'jab in a password field');
+  const free = petalPage({ mode: 'pulse' }); free.documentEvent('keydown', key);
+  ok(letter.test(free.bubbleText()), 'control: a held key shows its letter outside a password, got «' + free.bubbleText() + '»');
+  const held = petalPage({ mode: 'pulse' }); held.setPassword(); held.documentEvent('keydown', key);
+  eq(held.bubbleText(), '•', 'held direction key in a password field');
+});
+
 test('page gestures outside the keyboard permit browser magnification without typing', () => {
   const page = petalPage(), before = page.state().text;
   for (const name of ['gesturestart', 'touchmove']) {
