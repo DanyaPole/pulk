@@ -27,7 +27,7 @@ class SpeedActivity : Activity() {
     private fun intro() {
         val body = ui.column(40)
         body.addView(ui.title("Проверка скорости"))
-        body.addView(ui.text("Три короткие фразы. Печатай как обычно — быстро, но без спешки. Ошибки можно исправлять."))
+        body.addView(ui.text("Три короткие фразы. Печатай как обычно — быстро, но без спешки. Опечатки можно стирать ⌫."))
         body.addView(ui.note("Сейчас способ набора: ${Speed.modeName(prefs.mode)}. Сменить можно в настройках — и сравнить."))
         history(body)
         val bottom = ui.bottomBar()
