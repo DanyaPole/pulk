@@ -40,6 +40,8 @@ class OptionsActivity : Activity() {
         body.addView(ui.note("Весь экран: смах начинается где угодно, звезда появляется под пальцем. Пока клавиатура открыта, приложение за ней не нажимается: чтобы нажать «Отправить», спрячь клавиатуру ⌄."))
         body.addView(ui.choice("Звук", listOf("off" to "Без звука", "clicks" to "Щелчки", "voice" to "Голос"), { prefs.sound }) { prefs.sound = it })
         body.addView(ui.onOff("Вибрация", { prefs.haptics }) { prefs.haptics = it })
+        body.addView(ui.onOff("Подтверждать нажатия в паролях вибрацией", { prefs.passwordHaptics }) { prefs.passwordHaptics = it })
+        body.addView(ui.note("В паролях «Лепестки» молчат, чтобы никто не угадал, что вы набираете. Если включить, каждое нажатие подтвердит только вибрация: без звука, без голоса, без показа буквы. Работает, когда «Вибрация» включена."))
         body.addView(ui.choice("Вид звезды", listOf("petals" to "Лепестки", "ripples" to "Круги на воде"), { prefs.look }) { prefs.look = it })
         body.addView(ui.choice("Тема", listOf("auto" to "Как в телефоне", "contrast" to "Контраст"), { prefs.theme }) { prefs.theme = it })
         body.addView(ui.note("Контраст — для слабого зрения: чёрное и белое, янтарный акцент, жирные буквы, почти непрозрачные клавиши."))

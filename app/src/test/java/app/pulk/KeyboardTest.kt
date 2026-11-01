@@ -464,6 +464,24 @@ class KeyboardTest {
         assertEquals("м ", field.sb.toString()); assertTrue(heard.toString(), heard.isEmpty()); assertTrue(svc.cands.isEmpty())
     }
 
+    @Test fun passwordInPetalsIsSilentByDefaultAndBuzzesOnlyWhenAsked() {
+        svc.prefs.mode = "petals"; svc.prefs.sound = "voice"; svc.prefs.haptics = true
+        assertFalse(svc.prefs.passwordHaptics)
+        val heard = arrayListOf<String>(); svc.feedback.trace = { heard.add(it) }
+        val password = EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        svc.startInput(password)
+        letter("м"); idle(500)
+        assertTrue("by default: nothing at all $heard", heard.isEmpty())
+        svc.prefs.passwordHaptics = true
+        svc.startInput(password)
+        letter("м"); idle(500)
+        assertTrue("setting on: a buzz $heard", heard.any { it.startsWith("buzz") })
+        assertTrue("setting on: no sound, no speech, no letter $heard", heard.none { it.startsWith("tone") || it.startsWith("say") || it.contains("м") })
+        svc.prefs.haptics = false; heard.clear()
+        letter("м"); idle(500)
+        assertTrue("vibration off stays off $heard", heard.isEmpty())
+    }
+
     @Test fun firstOutwardPetalTypesSingleLetterWords() {
         svc.prefs.mode = "petals"
         for (w in listOf("в", "я", "и")) {

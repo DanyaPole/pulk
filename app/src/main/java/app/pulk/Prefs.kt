@@ -24,6 +24,10 @@ class Prefs(ctx: Context) {
     var haptics: Boolean
         get() = sp.getBoolean("haptics", true)
         set(v) = sp.edit().putBoolean("haptics", v).apply()
+    /** In passwords «Лепестки» stay silent; this adds only a vibration per key (never a sound, speech or the letter). */
+    var passwordHaptics: Boolean
+        get() = sp.getBoolean("password_haptics", false)
+        set(v) = sp.edit().putBoolean("password_haptics", v).apply()
     /** Eyes-free: a bigger star, a tap anywhere is a space. */
     var blind: Boolean
         get() = sp.getBoolean("blind", false)

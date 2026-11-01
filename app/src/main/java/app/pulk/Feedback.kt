@@ -35,7 +35,8 @@ class Feedback(private val ctx: Context, private val prefs: Prefs) {
 
     // ---- vibration ----
     private fun buzz(vararg pattern: Long) {
-        if (silent()) return
+        // «Лепестки» in a password are silent; only the vibration may come back, and only when the person turned it on
+        if (silent() && !prefs.passwordHaptics) return
         if (!prefs.haptics) return
         trace?.invoke("buzz " + pattern.joinToString(","))
         val v = vib ?: return
