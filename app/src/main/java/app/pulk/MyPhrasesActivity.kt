@@ -133,6 +133,7 @@ class MyPhrasesActivity : Activity() {
         if (fam.isEmpty()) famBox.addView(ui.note("Пока пусто. Слова появятся в «Говорить» во вкладке «Семья»."))
         for (f in fam) famBox.addView(removable("✕  ${f.word}" + if (f.photo.isNotEmpty()) " · фото" else "", f.word) {
             prefs.family = Together.familyLines(Together.family(prefs.family).filter { it.word != f.word })
+            PulkService.forgetWord(this, f.word)
             if (f.photo.isNotEmpty()) File(f.photo).delete()
             paintFamily()
         })

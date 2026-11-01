@@ -48,7 +48,7 @@ object Comfort {
         if (p.guard > 0) on.add("защита от случайных касаний" + if (p.guard == 2) " (сильная)" else "")
         if (p.smooth > 0f) on.add("сглаживание дрожи")
         if (p.calibrated) on.add("подстроено под руку")
-        when (p.mode) { "taps" -> on.add("набор касаниями"); "jabs" -> on.add("«Толчки»"); "scan" -> on.add("сканирование"); "classic" -> on.add("привычная клавиатура") }
+        when (p.mode) { "taps" -> on.add("набор касаниями"); "jabs" -> on.add("«Толчки»"); "scan" -> on.add("сканирование"); "classic" -> on.add("привычная клавиатура"); "petals" -> on.add("«Лепестки»") }
         if (p.size > 100) on.add("крупная звезда")
         if (p.contrast) on.add("контрастная тема")
         if (p.bigText) on.add("крупный текст")

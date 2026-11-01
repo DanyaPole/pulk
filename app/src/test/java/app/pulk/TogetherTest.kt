@@ -36,6 +36,29 @@ class TogetherTest {
         assertEquals(100, (1..150).fold(emptyList<String>()) { a, i -> Together.said(a, true, "$i") }.size)
     }
 
+    @Test fun aRemovedFamilyWordIsForgottenInMemoryAndOnDisk() {
+        val app = org.robolectric.RuntimeEnvironment.getApplication(); val p = prefs()
+        p.family = Together.familyLines(listOf(Together.Word("Барсик", "")))
+        java.io.File(app.filesDir, "words_ru.txt").writeText("барсик\t9\nмама\t3")
+        java.io.File(app.filesDir, "pairs_ru.txt").writeText("мама\tбарсик\t2\nмама\tпапа\t2")
+        val svc = Robolectric.setupService(PulkService::class.java)
+        svc.startInput(android.view.inputmethod.EditorInfo())
+        assertTrue(svc.words("ru").user.containsKey("барсик"))
+        val adult = Robolectric.buildActivity(MyPhrasesActivity::class.java).setup().get()
+        val del = all(adult.window.decorView).filterIsInstance<Button>().first { it.text.toString() == "✕  Барсик" }
+        del.performClick(); del.performClick()
+        assertEquals(0, Together.family(p.family).size)
+        assertFalse(svc.words("ru").user.containsKey("барсик"))
+        assertFalse(svc.words("ru").pairs.values.any { it.containsKey("барсик") })
+        assertEquals("мама\t3", java.io.File(app.filesDir, "words_ru.txt").readText())
+        assertEquals("мама\tпапа\t2", java.io.File(app.filesDir, "pairs_ru.txt").readText())
+    }
+
+    @Test fun theSummaryOfSettingsNamesPetals() {
+        val p = prefs(); p.mode = "petals"
+        assertTrue(Comfort.summary(p).contains("«Лепестки»"))
+    }
+
     @Test fun theAdultOffersAChoiceAndTheChildAnswers() {
         val p = prefs(); p.choice = ""; p.talk = emptyList(); p.family = Together.familyLines(listOf(Together.Word("Барсик", "")))
         val adult = Robolectric.buildActivity(MyPhrasesActivity::class.java).setup().get()

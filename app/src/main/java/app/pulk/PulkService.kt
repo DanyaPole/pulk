@@ -211,6 +211,16 @@ class PulkService : InputMethodService() {
         internal val changingReplacement get() = active.get()?.applyingReplacement == true
         internal fun beforeSpeak(field: android.widget.EditText): Boolean = active.get()?.takeIf { it.matches(field) }?.reviewPhraseEnd() ?: false
         internal fun wordSpoken(field: android.widget.EditText) { active.get()?.takeIf { it.matches(field) }?.lockSpokenWords() }
+        /** A word taken out of the family's list is forgotten everywhere: memory and both word files, so it is not suggested again. */
+        internal fun forgetWord(ctx: Context, word: String) {
+            val k = Words.fold(word.lowercase()).trim(); if (k.isEmpty()) return
+            active.get()?.dropWord(k)
+            for (l in listOf("ru", "en")) {
+                val uf = File(ctx.filesDir, "words_$l.txt"); val pf = File(ctx.filesDir, "pairs_$l.txt")
+                if (uf.exists()) uf.writeText(uf.readLines().filter { it.substringBefore('\t') != k }.joinToString("\n"))
+                if (pf.exists()) pf.writeText(pf.readLines().filter { val q = it.split('\t'); q.size == 3 && q[0] != k && q[1] != k }.joinToString("\n"))
+            }
+        }
         internal fun phraseSpoken(field: android.widget.EditText) { active.get()?.takeIf { it.matches(field) }?.let { it.lockSpokenWords(); it.endReplacements() } }
     }
 
@@ -557,6 +567,11 @@ class PulkService : InputMethodService() {
         for (phrase in prefs.myPhrases) for (m in Regex("[\\p{L}'-]+").findAll(phrase.lowercase())) {
             val k = Words.fold(m.value); w.user[k] = maxOf(w.user[k] ?: 0, 5)
         }
+    }
+    private fun dropWord(k: String) {
+        endReplacements()
+        synchronized(this) { dicts.values.forEach { w -> w.user.remove(k); w.pairs.remove(k); w.pairs.values.forEach { it.remove(k) } } }
+        refreshCands(); view?.invalidate()
     }
     internal fun mergeFamily() { for ((_, w) in synchronized(this) { dicts.toMap() }) familyInto(w) }
     private fun userFile(l: String) = File(filesDir, "words_$l.txt")
