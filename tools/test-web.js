@@ -546,7 +546,7 @@ function petalPage(settings = {}) {
       externalEdit: v => { text = v; resetReplacements(); },
       next: nextPetal, exact: exactPetal, type: typeLetter, space, backspace, setGame: g => {game = g;},
       setSymbols: v => {symbols = v;}, setMode: v => {store.set('mode', v);}, clear: clearPetals,
-      emptyOptions: () => {petalOptions = [];} };
+      emptyOptions: () => {petalOptions = [];}, bubbleText: () => bubbleText.textContent };
   `;
   const api = new Function('P', 'D', 'bad', 'store', 'spoken', 'svg', 'document', 'elem', 'chips', 'handlers', 'nodes', code)(P, D, bad, store, spoken, svg, document, elem, chips, handlers, nodes);
   const event = (x, y) => ({ pointerId: 1, clientX: x, clientY: y, timeStamp: Date.now(), preventDefault() {} });
@@ -558,6 +558,13 @@ function petalPage(settings = {}) {
   api.tap = () => { api.down(); api.up(); };
   return { ...api, spoken, values, chips, documentEvent(name, event) { (documentHandlers[name] || []).forEach(fn => fn(event)); } };
 }
+
+test('a password letter is never shown in the big bubble', () => {
+  for (const mode of ['pulse', 'petals']) {
+    const a = petalPage({ mode }); a.setPassword(); a.down(); a.push(1);
+    ok(!/[а-яa-z]/i.test(a.bubbleText()), mode + ' bubble shows «' + a.bubbleText() + '»');
+  }
+});
 
 test('page gestures outside the keyboard permit browser magnification without typing', () => {
   const page = petalPage(), before = page.state().text;

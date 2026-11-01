@@ -568,7 +568,7 @@
       const js = jab(table(), cur), pts = [];
       for (let i = 0; i < cur.length; i += 2) pts.push(xy(scr(cur[i], cur[i + 1])));
       light(js.petal); trail.setAttribute('points', pts.join(' ')); leanTo(scr(cur[cur.length - 2], cur[cur.length - 1]));
-      const jshown = touch.petals ? (petalOptions[0] || 'Лепесток') : caps() && !symbols ? js.v.toUpperCase() : js.v;
+      const jshown = replacementSecure() ? '•' : touch.petals ? (petalOptions[0] || 'Лепесток') : caps() && !symbols ? js.v.toUpperCase() : js.v;
       if (jshown !== touch.shown) { touch.shown = jshown; bubbleText.textContent = jshown; bubble.setAttribute('visibility', 'visible'); bubbleText.setAttribute('visibility', 'visible'); }
       return;
     }
@@ -577,8 +577,8 @@
     const s = resolve(table(), touch.pts);
     light(s.petal); leanTo(scr(b[0], b[1]));
     trail.setAttribute('points', touch.trail.join(' '));
-    let shown = s.petal < 0 ? '·' : (Date.now() - touch.still > HOLD_MS && ALT[s.v] ? ALT[s.v] : s.v);
-    if (caps() && !symbols) shown = shown.toUpperCase();
+    let shown = replacementSecure() ? '•' : s.petal < 0 ? '·' : (Date.now() - touch.still > HOLD_MS && ALT[s.v] ? ALT[s.v] : s.v);
+    if (!replacementSecure() && caps() && !symbols) shown = shown.toUpperCase();
     if (shown !== touch.shown) { touch.shown = shown; bubbleText.textContent = shown; }
     if (touch.trail.length === 2) { bubble.setAttribute('visibility', 'visible'); bubbleText.setAttribute('visibility', 'visible'); }
   });
@@ -638,7 +638,7 @@
   function showCand(s) {
     light(s ? s.petal : -1);
     if (!s) { bubble.setAttribute('visibility', 'hidden'); bubbleText.setAttribute('visibility', 'hidden'); return; }
-    bubbleText.textContent = caps() && !symbols ? s.v.toUpperCase() : s.v;
+    bubbleText.textContent = replacementSecure() ? '•' : caps() && !symbols ? s.v.toUpperCase() : s.v;
     bubble.setAttribute('visibility', 'visible'); bubbleText.setAttribute('visibility', 'visible');
   }
   function keyAction(fn) {
