@@ -9,7 +9,7 @@ const strings = s => [...s.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1].repla
 const pulse = kt('Pulse.kt');
 function table(name) {
   const body = pulse.match(new RegExp('private val ' + name + ' = arrayOf\\(([\\s\\S]*?)\\n    \\)'))[1];
-  return [...body.matchAll(/arrayOf\(([^)]*)\)/g)].map(m => strings(m[1]));
+  return [...body.matchAll(/arrayOf\(((?:"(?:[^"\\]|\\.)*"|[^)"])*)\)/g)].map(m => strings(m[1]));
 }
 const phrases = kt('Phrases.kt');
 const quick = strings(phrases.match(/val QUICK = listOf\(([^)]*)\)/)[1]);
@@ -19,7 +19,7 @@ const drillsSrc = kt('Drills.kt');
 function themes(block) {
   return [...block.matchAll(/Theme\("([^"]+)", "([^"]+)", listOf\(([\s\S]*?)\n\s*\)\)/g)].map(m => ({
     title: m[1], about: m[2],
-    tasks: [...m[3].matchAll(/Task\("([^"]+)", "([^"]+)", listOf\(([^)]*)\), listOf\(([^)]*)\)\)/g)].map(t => ({ scene: t[1], model: t[2], keys: strings(t[3]), choices: strings(t[4]) })),
+    tasks: [...m[3].matchAll(/Task\("([^"]+)",\s*"([^"]+)",\s*listOf\(([^)]*)\),\s*listOf\(([^)]*)\)\)/g)].map(t => ({ scene: t[1], model: t[2], keys: strings(t[3]), choices: strings(t[4]) })),
   }));
 }
 const all = themes(drillsSrc);

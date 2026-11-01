@@ -326,6 +326,16 @@ test('the data shared with the app is whole', () => {
   ok(D.themes.some(t => t.title === 'Разминка'), '«Разминка»'); ok(D.pond.length >= 4, 'pond');
 });
 
+test('the data shared with the app keeps every symbol and every drill task', () => {
+  eq(D.SYM.length, 8, 'SYM petals'); D.SYM.forEach((p, i) => eq(p.length, 4, 'SYM petal ' + i));
+  eq(D.SYM[1], ['2', '0', ')', '#'], 'SYM petal 1 keeps «)» and «#»');
+  eq(D.SYM[5], ['6', "'", '"', '/'], 'SYM petal 5');
+  for (const t of [].concat(D.themes, [D.play])) {
+    ok(t.tasks.length > 0, 'theme «' + t.title + '» has tasks');
+    for (const k of t.tasks) ok(k.scene && k.model, 'task in «' + t.title + '» is whole');
+  }
+});
+
 test('the drop leans after the finger a little, never further than its limit', () => {
   eq(P.lean(0, 0), [0, 0], 'no finger, no lean');
   const near = P.lean(20, 0); ok(Math.abs(near[0] - 20 * P.LEAN) < 1e-9 && near[1] === 0, 'a near finger: its share');
