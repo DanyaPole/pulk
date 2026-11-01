@@ -77,7 +77,8 @@ class Words(dict: List<String>, lang: String) {
         val t = fold(typed.lowercase())
         val best = ArrayList<Cand>()
         fun offer(c: Cand) {
-            if (best.any { it.word == c.word }) return
+            val same = best.indexOfFirst { it.word == c.word }
+            if (same >= 0) { if (c.score < best[same].score) best.removeAt(same) else return }
             best.add(c); best.sortBy { it.score }; if (best.size > n) best.removeAt(best.size - 1)
         }
         val allow = allowance(t.length)

@@ -10,6 +10,15 @@ class WordsTest {
     private val ru = Words(File("src/main/assets/dict_ru.txt").readLines(), "ru")
     private val en = Words(File("src/main/assets/dict_en.txt").readLines(), "en")
 
+    @Test fun aLearnedWordAlsoInTheDictionaryKeepsItsOwnBetterRank() {
+        val letters = ('а'..'я').toList()
+        val common = letters.flatMap { a -> letters.map { b -> "ба$a$b" } }   // common words: the ones below sit far down the dictionary
+        val w = Words(common + listOf("мишаа", "мишаб", "мишка"), "ru")
+        assertEquals("мишка", w.suggest("миш", 3).last())
+        w.user["мишка"] = 50
+        assertEquals("мишка", w.suggest("миш", 3)[0])
+    }
+
     @Test fun completesFrequentWords() {
         assertEquals("привет", ru.suggest("прив")[0])
         assertTrue(ru.suggest("спас").contains("спасибо"))
