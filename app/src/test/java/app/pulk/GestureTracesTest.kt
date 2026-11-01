@@ -68,6 +68,18 @@ class GestureTracesTest {
         assertNull(GestureTraces.snapshot(ctx))
     }
 
+    /** «Передать устройство чистым»: an earlier export link must die with everything else. */
+    @Test fun handingTheDeviceOnCleanKillsTheSharedTraceLink() {
+        GestureTraces.consent(ctx, true); record()
+        val link = GestureTraces.snapshot(ctx)!!
+        assertTrue(GestureTraces.isShareUri(ctx, link)); assertTrue(GestureTraces.sharedFile(ctx).length() > 0L)
+        Clean.all(ctx)
+        assertFalse("an old link still opens after cleaning", GestureTraces.isShareUri(ctx, link))
+        assertEquals(0L, GestureTraces.sharedFile(ctx).length())
+        assertEquals(0, GestureTraces.count(ctx)); assertNull(GestureTraces.snapshot(ctx))
+        Prefs(ctx).forget = false
+    }
+
     @Test fun formatHasRelativePointsAndCanBeReplayed() {
         GestureTraces.consent(ctx, true); Prefs(ctx).hand = "left"; Prefs(ctx).tol = 1.5f
         record()
