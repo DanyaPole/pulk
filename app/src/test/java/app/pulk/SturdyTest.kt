@@ -82,12 +82,14 @@ class SturdyTest {
         val p = Prefs(app).apply { wizardDone = true; aboutMe = "Меня зовут Костя"; phrases = listOf("Хочу пить"); drops = 12; hand = "left" }
         File(app.filesDir, "family").apply { mkdirs() }.resolve("1.jpg").writeBytes(byteArrayOf(1))
         File(app.filesDir, "words_ru.txt").writeText("барсик\t9")
+        app.getSharedPreferences("trace-share", android.content.Context.MODE_PRIVATE).edit().putString("token", "abc").commit()
         val a = Robolectric.buildActivity(OptionsActivity::class.java, android.content.Intent().putExtra(OptionsActivity.MORE, true)).setup().get()
         fun button() = all(a.window.decorView).filterIsInstance<android.widget.Button>().first { it.text.startsWith("Передать устройство") || it.text.startsWith("Точно стереть") }
         button().performClick()                                   // the first press only asks
         assertEquals("Меня зовут Костя", p.aboutMe)
         button().performClick()                                   // the second one cleans
         assertTrue(Clean.leftovers(app).isEmpty())
+        assertNull(app.getSharedPreferences("trace-share", android.content.Context.MODE_PRIVATE).getString("token", null))
         assertTrue(!p.wizardDone && p.aboutMe.isEmpty() && p.phrases.isEmpty() && p.drops == 0 && p.hand == "right" && p.forget)
         p.forget = false
     }

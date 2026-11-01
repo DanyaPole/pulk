@@ -10,6 +10,7 @@ import java.io.File
  */
 object Clean {
     fun all(ctx: Context) {
+        GestureTraces.clear(ctx)   // the shared copies of the finger's traces go first: a receiving app may still hold one open
         ctx.getSharedPreferences("pulk", Context.MODE_PRIVATE).edit().clear().commit()
         for (dir in listOf(ctx.filesDir, ctx.cacheDir)) dir.listFiles()?.forEach { it.deleteRecursively() }
         Prefs(ctx).forget = true   // the keyboard's words in memory: cleared as soon as it opens again
