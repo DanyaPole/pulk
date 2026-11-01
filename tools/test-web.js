@@ -50,8 +50,9 @@ test('completion: phrase end is evidence and never falls back to pairs', () => {
 });
 test('completion: profile threshold and deduplication', () => {
   const ready = ['мне пожалуйста стакан воды'], input = completePrefix.concat('стакан');
-  ok(completer([], ready, 'write').suggest(input)); eq(completer([], ready).suggest(input), null);
-  eq(completer([], ready.concat(ready)).suggest(input), null); ok(completer(ready, ready).suggest(input));
+  ok(completer([], ready, 'write').suggest(input)); eq(completer([], ready).suggest(input).text, 'воды');
+  eq(D.completion.SPEAK_THRESHOLD, 0.7); eq(completer([], ready.concat('мне пожалуйста стакан чая')).suggest(input), null);
+  eq(completer([], ready.concat(ready)).suggest(input).text, 'воды'); // a duplicate is not counted twice ok(completer(ready, ready).suggest(input));
 });
 test('completion: ready prefix needs three words and half rounded up', () => {
   const c = completer([], ['один два три четыре пять шесть семь'], 'write');
@@ -181,7 +182,7 @@ test('completion: diagnostic chain switch still enforces context, cycles and pun
     eq(c.suggest(['мы', 'почти']).tail, ['дома', 'почти']); eq(c.suggest(['не', 'почти']), null);
     w.loadNext(['дома\tготово!']); eq(c.suggest(['мы', 'почти']).tail, ['дома']);
     const speak = new P.PhraseCompleter(w, 'speak', true, () => [], []);
-    w.pairs['почти'] = { 'дома': 1 }; eq(speak.suggest(['мы', 'почти']), null);
+    w.pairs['почти'] = { 'дома': 1 }; eq(speak.suggest(['мы', 'почти']).tail, ['дома']); // 1/(1+0.25)=0.8 > 0.7
     w.pairs['почти']['дома'] = 2; eq(speak.suggest(['мы', 'почти']).tail, ['дома']);
   } finally { D.completion.CHAIN_TAILS = shipped; }
 });

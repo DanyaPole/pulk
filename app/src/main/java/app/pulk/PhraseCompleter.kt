@@ -106,7 +106,7 @@ class PhraseCompleter(
         // WRITE permits the former; SPEAK needs stronger evidence. No on-device calibration.
         const val EVIDENCE_FLOOR = 0.25
         const val WRITE_THRESHOLD = 0.75
-        const val SPEAK_THRESHOLD = 0.85
+        const val SPEAK_THRESHOLD = 0.7
         private val TOKEN = Regex("\\p{L}+(?:['’-]\\p{L}+)*")
         val QUESTION_MARKERS = setOf("как", "почему", "ли", "где", "кто", "зачем", "когда", "сколько", "что", "какой", "какая", "какие",
             "how", "why", "what", "where", "who", "when", "which", "whose", "whom", "do", "does", "did", "is", "are", "am", "was", "were", "can", "could", "will", "would", "should", "have", "has")

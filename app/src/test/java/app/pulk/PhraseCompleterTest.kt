@@ -46,8 +46,12 @@ class PhraseCompleterTest {
         val ready = listOf("мне пожалуйста стакан воды")
         val input = prefix + "стакан"
         assertNotNull(completer(ready = ready, profile = PhraseCompleter.Profile.WRITE).suggest(input))
-        assertNull(completer(ready = ready).suggest(input))
-        assertNull(completer(ready = ready + ready).suggest(input))
+        // «Говорить»: one ready phrase is enough (confidence 0.8 > 0.7), so the phrase is finished
+        assertEquals("воды", completer(ready = ready).suggest(input)!!.text)
+        assertEquals(0.7, PhraseCompleter.SPEAK_THRESHOLD, 0.0)
+        // a weak match stays quiet: two ready phrases that part ways give no sure continuation
+        assertNull(completer(ready = ready + "мне пожалуйста стакан чая").suggest(input))
+        assertEquals("воды", completer(ready = ready + ready).suggest(input)!!.text) // a duplicate is not counted twice
         assertNotNull(completer(ready, ready).suggest(input))
     }
 
