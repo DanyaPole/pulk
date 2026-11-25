@@ -15,6 +15,7 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Pulk.app Payload/
+          test -d Payload/Pulk.app/PlugIns/PulkKeyboard.appex
           zip -qry Pulk-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
         with:

@@ -12,7 +12,7 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         let js = JSContext()
         js?.evaluateScript("var window = this; window.PULK = {};")
-        for name in ["core", "data"] {
+        for name in ["data", "core"] {
             if let url = Bundle.main.url(forResource: name, withExtension: "js"),
                let script = try? String(contentsOf: url, encoding: .utf8) {
                 js?.evaluateScript(script)
@@ -53,12 +53,14 @@ final class KeyboardViewController: UIInputViewController {
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
+        let starHeight = starView.heightAnchor.constraint(equalToConstant: 240)
+        starHeight.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             stack.topAnchor.constraint(equalTo: view.topAnchor),
             stack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            starView.heightAnchor.constraint(equalToConstant: 240)
+            starHeight
         ])
         updateTable()
     }
@@ -81,8 +83,10 @@ final class KeyboardViewController: UIInputViewController {
         guard let js = context,
               let core = js.objectForKeyedSubscript("PulkCore"),
               let table = js.objectForKeyedSubscript("PULK")?.objectForKeyedSubscript(symbols ? "SYM" : language),
+              !table.isUndefined, !table.isNull,
               let result = core.invokeMethod("resolve", withArguments: [table, points]),
-              let value = result.objectForKeyedSubscript("v")?.toString() else { return }
+              let cell = result.objectForKeyedSubscript("v"), cell.isString,
+              let value = cell.toString() else { return }
         textDocumentProxy.insertText(shifted && !symbols ? value.uppercased() : value)
         shifted = false
         updateTable()
@@ -104,7 +108,18 @@ private final class StarView: UIView {
     private var points: [Double] = []
     private var activeTouch: UITouch?
 
-    private var scale: CGFloat { min(bounds.width, bounds.height) / 210 }
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentMode = .redraw
+        isAccessibilityElement = true
+        accessibilityLabel = "Звезда букв Пульк"
+        accessibilityHint = "Проведи пальцем от центра к букве"
+        accessibilityTraits = .allowsDirectInteraction
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    private var scale: CGFloat { max(min(bounds.width, bounds.height) / 210, 0.01) }
     private var centerPoint: CGPoint { CGPoint(x: bounds.midX, y: bounds.midY) }
 
     private func corePoint(_ point: CGPoint) -> [Double] {
@@ -118,8 +133,7 @@ private final class StarView: UIView {
               let core = js.objectForKeyedSubscript("PulkCore"),
               let ph = core.objectForKeyedSubscript("PH")?.toArray() as? [Double],
               let radius = core.objectForKeyedSubscript("R")?.toDouble(),
-              let table = js.objectForKeyedSubscript("PULK")?.objectForKeyedSubscript(tableName),
-              let cg = UIGraphicsGetCurrentContext() else { return }
+              let table = js.objectForKeyedSubscript("PULK")?.objectForKeyedSubscript(tableName) else { return }
         let c = centerPoint
         for petal in 0..<8 {
             let path = UIBezierPath()
@@ -136,7 +150,8 @@ private final class StarView: UIView {
             path.stroke()
             for (index, kind) in ["c", "l", "r", "b"].enumerated() {
                 guard let pos = core.invokeMethod("spot", withArguments: [petal, kind])?.toArray() as? [Double],
-                      let value = table.atIndex(petal)?.atIndex(index)?.toString(), !value.isEmpty else { continue }
+                      let cell = table.atIndex(petal)?.atIndex(index), cell.isString,
+                      let value = cell.toString(), !value.isEmpty else { continue }
                 let label = shifted ? value.uppercased() : value
                 let font = UIFont.systemFont(ofSize: index == 0 ? 19 : 12, weight: index == 0 ? .bold : .regular)
                 let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.label]
@@ -146,7 +161,6 @@ private final class StarView: UIView {
                 (label as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
             }
         }
-        cg.setStrokeColor(UIColor.separator.cgColor)
     }
 
     private func append(_ touch: UITouch) {
