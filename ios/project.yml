@@ -1,0 +1,55 @@
+name: Pulk
+options:
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Pulk:
+    type: application
+    platform: iOS
+    sources: [Pulk]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pulk.ios
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    dependencies:
+      - target: PulkKeyboard
+        embed: true
+  PulkKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PulkKeyboard
+      - path: ../web/core.js
+        buildPhase: resources
+      - path: ../web/data.js
+        buildPhase: resources
+      - path: ../web/dict_ru.txt
+        buildPhase: resources
+      - path: ../web/dict_en.txt
+        buildPhase: resources
+      - path: ../web/next_ru.txt
+        buildPhase: resources
+      - path: ../web/next_en.txt
+        buildPhase: resources
+    info:
+      path: PulkKeyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Пульк
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrimaryLanguage: ru-RU
+            RequestsOpenAccess: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pulk.ios.keyboard
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES

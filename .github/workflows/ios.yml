@@ -1,0 +1,22 @@
+name: iOS
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - working-directory: ios
+        run: xcodegen generate
+      - working-directory: ios
+        run: xcodebuild -project Pulk.xcodeproj -scheme Pulk -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - working-directory: ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Pulk.app Payload/
+          zip -qry Pulk-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pulk-unsigned
+          path: ios/Pulk-unsigned.ipa
