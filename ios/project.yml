@@ -21,6 +21,9 @@ targets:
       - target: PulkKeyboard
         embed: true
         codeSign: false
+    scheme:
+      testTargets:
+        - PulkTests
   PulkKeyboard:
     type: app-extension
     platform: iOS
@@ -29,6 +32,8 @@ targets:
       - path: ../web/core.js
         buildPhase: resources
       - path: ../web/data.js
+        buildPhase: resources
+      - path: ../web/stopwords.js
         buildPhase: resources
       - path: ../web/dict_ru.txt
         buildPhase: resources
@@ -56,3 +61,26 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.pulk.ios.keyboard
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
+  # Logic test: no application dependency, so XcodeGen does not set TEST_HOST.
+  # PulkKeyboard sources are not linked. If the runner rejects a hostless iOS
+  # test, add: dependencies: [{target: Pulk}]
+  PulkTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PulkTests
+      - path: ../web/core.js
+        buildPhase: resources
+      - path: ../web/data.js
+        buildPhase: resources
+      - path: ../web/stopwords.js
+        buildPhase: resources
+      # optional: a missing file must not fail `xcodegen` in the ipa job.
+      # When the file exists at generate time it is copied into the test bundle.
+      - path: ../shared/strokes.golden.json
+        buildPhase: resources
+        optional: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pulk.ios.tests
+        GENERATE_INFOPLIST_FILE: YES

@@ -3,7 +3,16 @@ on:
   workflow_dispatch:
   push:
     branches: [feat/pulk-ios-20261126]
-    paths: ['ios/**', 'web/core.js', 'web/data.js', '.github/workflows/ios.yml']
+    paths:
+      - 'ios/**'
+      - 'web/core.js'
+      - 'web/data.js'
+      - 'web/stopwords.js'
+      - 'web/dict_*.txt'
+      - 'web/next_*.txt'
+      - 'shared/**'
+      - 'tools/**'
+      - '.github/workflows/ios.yml'
 jobs:
   build:
     runs-on: macos-latest
@@ -24,3 +33,120 @@ jobs:
         with:
           name: Pulk-unsigned
           path: ios/Pulk-unsigned.ipa
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node tools/test-golden.js
+      - run: node tools/test-web.js
+      - run: brew install xcodegen
+      - working-directory: ios
+        run: xcodegen generate
+      - id: sim
+        run: |
+          UDID=$(node <<'NODE'
+          const {execFileSync} = require('child_process');
+          const raw = execFileSync('xcrun', ['simctl', 'list', 'devices', 'available', '-j'], {encoding: 'utf8'});
+          const data = JSON.parse(raw);
+          const found = [];
+          for (const runtime of Object.keys(data.devices || {})) {
+            if (runtime.indexOf('iOS') < 0) continue;
+            const devices = data.devices[runtime] || [];
+            for (let i = 0; i < devices.length; i++) {
+              const d = devices[i];
+              if (!d.isAvailable || !d.udid) continue;
+              if (String(d.name).indexOf('iPhone') < 0) continue;
+              found.push({runtime: runtime, name: d.name, udid: d.udid});
+            }
+          }
+          if (!found.length) {
+            console.error('no available iPhone simulator');
+            process.exit(1);
+          }
+          function version(runtime) {
+            const m = runtime.match(/iOS-(\d+)(?:-(\d+))?(?:-(\d+))?/);
+            if (!m) return [0, 0, 0];
+            return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
+          }
+          function plain(name) {
+            return /SE|Pro|Plus|mini|Air|Duo/.test(name) ? 0 : 1;
+          }
+          found.sort(function (a, b) {
+            const av = version(a.runtime), bv = version(b.runtime);
+            for (let i = 0; i < 3; i++) if (av[i] !== bv[i]) return av[i] - bv[i];
+            const ap = plain(a.name), bp = plain(b.name);
+            if (ap !== bp) return ap - bp;
+            if (a.name < b.name) return -1;
+            if (a.name > b.name) return 1;
+            return 0;
+          });
+          const pick = found[found.length - 1];
+          console.error('simulator ' + pick.name + ' ' + pick.runtime);
+          process.stdout.write(pick.udid);
+          NODE
+          )
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+      - working-directory: ios
+        run: xcodebuild test -project Pulk.xcodeproj -scheme Pulk -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath build -resultBundlePath build/Pulk.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - if: always()
+        run: |
+          set +e
+          mkdir -p ios/test-log
+          XC=ios/build/Pulk.xcresult
+          {
+            echo "udid=${{ steps.sim.outputs.udid }}"
+            if [ -d "$XC" ]; then
+              xcrun xcresulttool get test-results summary --path "$XC" \
+                || xcrun xcresulttool get --legacy --format json --path "$XC" \
+                || echo "xcresulttool could not read $XC"
+            else
+              echo "no xcresult at $XC"
+            fi
+          } > ios/test-log/summary.txt 2>&1
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Pulk-test-log
+          path: ios/test-log/summary.txt
+      - if: always() && steps.sim.outputs.udid != ''
+        working-directory: ios
+        run: |
+          set +e
+          UDID="${{ steps.sim.outputs.udid }}"
+          mkdir -p shots
+          APP=$(find build/Build/Products -type d -name 'Pulk.app' | head -n 1)
+          if [ -z "$APP" ]; then
+            echo "Pulk.app was not built"
+            exit 1
+          fi
+          xcrun simctl bootstatus "$UDID" -b
+          BOOT=$?
+          xcrun simctl install "$UDID" "$APP"
+          INSTALL=$?
+          xcrun simctl launch "$UDID" app.pulk.ios
+          LAUNCH=$?
+          sleep 5
+          xcrun simctl io "$UDID" screenshot shots/portrait.png
+          SHOT=$?
+          xcrun devicectl device orientation set --device "$UDID" landscapeLeft
+          ROT=$?
+          if [ $ROT -eq 0 ]; then
+            sleep 2
+            xcrun simctl io "$UDID" screenshot shots/landscape.png
+            LAND=$?
+            xcrun devicectl device orientation set --device "$UDID" portrait
+          else
+            LAND=0
+            echo "landscape skipped: simctl has no rotate command; devicectl device orientation set failed"
+          fi
+          echo "boot=$BOOT install=$INSTALL launch=$LAUNCH portrait=$SHOT rotate=$ROT landscape=$LAND"
+          if [ $BOOT -ne 0 ] || [ $INSTALL -ne 0 ] || [ $LAUNCH -ne 0 ] || [ $SHOT -ne 0 ] || [ $LAND -ne 0 ]; then
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Pulk-screens
+          path: ios/shots/*.png
+          if-no-files-found: warn
