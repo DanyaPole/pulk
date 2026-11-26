@@ -27,6 +27,7 @@ final class StarView: UIView {
     private let highlight = CAShapeLayer()
     private var points: [Double] = []
     private var activeTouch: UITouch?
+    private var spaceOnlyTouch = false
     private var stillPoint = CGPoint.zero
     private var stillSince: TimeInterval = 0
     private var trailPath = UIBezierPath()
@@ -150,7 +151,8 @@ final class StarView: UIView {
         trailPath.addLine(to: location)
         trail.path = trailPath.cgPath
         let dx = Double(p.x) - bridge.ph[0], dy = Double(p.y) - bridge.ph[1]
-        if hypot(dx, dy) >= 15 {
+        let d = hypot(dx, dy)
+        if d >= 15 && d <= bridge.radius + 10 {
             let petal = (Int((atan2(dy, dx) / (Double.pi / 4)).rounded()) + 8) % 8
             highlight.path = petalPath(petal).cgPath
         } else { highlight.path = nil }
@@ -158,20 +160,34 @@ final class StarView: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard bridge.isReady, activeTouch == nil, let touch = touches.first else { return }
         let p = core(touch.location(in: self))
+        let dx = Double(p.x) - bridge.ph[0]
+        let dy = Double(p.y) - bridge.ph[1]
         activeTouch = touch
-        points = []
         stillPoint = p
         stillSince = touch.timestamp
+        trail.path = nil
+        highlight.path = nil
+        spaceOnlyTouch = hypot(dx, dy) > bridge.radius + 10
+        if spaceOnlyTouch {
+            points = [Double(p.x), Double(p.y)]
+            return
+        }
+        points = []
         trailPath = UIBezierPath()
         trailPath.move(to: touch.location(in: self))
         append(touch)
     }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = activeTouch, touches.contains(touch) else { return }
+        guard let touch = activeTouch, touches.contains(touch), !spaceOnlyTouch else { return }
         append(touch)
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = activeTouch, touches.contains(touch) else { return }
+        if spaceOnlyTouch {
+            onStroke?(points, false)
+            clearTouch()
+            return
+        }
         let end = core(touch.location(in: self))
         let originX = points.count >= 2 ? points[0] : Double(end.x)
         let originY = points.count >= 2 ? points[1] : Double(end.y)
@@ -187,6 +203,7 @@ final class StarView: UIView {
     }
     func clearTouch() {
         activeTouch = nil
+        spaceOnlyTouch = false
         points = []
         trail.path = nil
         highlight.path = nil

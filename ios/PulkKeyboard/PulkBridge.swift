@@ -2,7 +2,8 @@ import Foundation
 import JavaScriptCore
 
 final class PulkBridge {
-    private let context: JSContext
+    let context: JSContext
+    let bundle: Bundle
     private var tables: [String: [[String]]] = [:]
     private(set) var lastError: String?
     private(set) var isReady = false
@@ -10,8 +11,11 @@ final class PulkBridge {
     private(set) var radius: Double = 0
     private(set) var holdMilliseconds: Double = 0
     private(set) var spots: [[[Double]]] = []
+    var wordsLanguage: String?
+    var wordsLoadGeneration = 0
 
     init(bundle: Bundle) {
+        self.bundle = bundle
         context = JSContext()!
         context.exceptionHandler = { [weak self] _, exception in
             self?.lastError = exception?.toString() ?? "JavaScript exception"
