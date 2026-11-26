@@ -11,7 +11,17 @@ targets:
   Pulk:
     type: application
     platform: iOS
-    sources: [Pulk]
+    sources:
+      - path: Pulk
+      - path: PulkKeyboard/PulkBridge.swift
+      - path: PulkKeyboard/StarView.swift
+      - path: PulkKeyboard/KeyboardSettings.swift
+      - path: ../web/core.js
+        buildPhase: resources
+      - path: ../web/data.js
+        buildPhase: resources
+      - path: ../web/stopwords.js
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.pulk.ios
@@ -79,7 +89,10 @@ targets:
       # When the file exists at generate time it is copied into the test bundle.
       - path: ../shared/strokes.golden.json
         buildPhase: resources
-        optional: true
+      - path: ../web/dict_ru.txt
+        buildPhase: resources
+      - path: ../web/next_ru.txt
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.pulk.ios.tests
