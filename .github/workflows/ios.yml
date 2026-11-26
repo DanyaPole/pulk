@@ -1,6 +1,9 @@
 name: iOS
 on:
   workflow_dispatch:
+  push:
+    branches: [feat/pulk-ios-20261126]
+    paths: ['ios/**', 'web/core.js', 'web/data.js', '.github/workflows/ios.yml']
 jobs:
   build:
     runs-on: macos-latest
